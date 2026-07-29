@@ -1573,6 +1573,8 @@ Solo Track では撤退判断が遅れると回復できない。次に該当し
 
 **ADR-023**（S0 における事業判断） — 告示の溶け込み現行全文は提供せず、原文（案文）＋改正履歴の提示に留める（案B）。詳細は [docs/adr/ADR-023-notification-consolidation-policy.md](adr/ADR-023-notification-consolidation-policy.md)。
 
+**ADR-024**（S0 完了判定） — S0 Corpus Feasibility の9項目（F-1〜F-9）と3択（O-1）が完了し、中止条件に非該当。S1 へ進む。詳細は [docs/adr/ADR-024-s0-exit.md](adr/ADR-024-s0-exit.md)。
+
 ---
 
 ## 18. 実装順序の固定
