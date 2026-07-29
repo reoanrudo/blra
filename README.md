@@ -24,7 +24,7 @@
 
 | # | 内容 | 種別 | 成果物 | 状態 |
 |---|---|---|---|---|
-| F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | 未着手 |
+| F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | **国法令は確定 / 告示は調査中** |
 | F-2 | e-Gov Parser Spike（条項号抽出率 99% 以上） | コード | [s0-findings/F-2-parser.md](s0-findings/F-2-parser.md) | **PASS 3/3** |
 | F-3 | 告示 Parser Spike（50件中45件以上） | コード | `spikes/src/f2-egov-parser/`（拡張） | 未着手 |
 | F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-4-consolidation.md](s0-findings/F-4-consolidation.md) | 未着手 |
