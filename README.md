@@ -26,7 +26,7 @@
 |---|---|---|---|---|
 | F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | **国法令は確定 / 告示は調査中** |
 | F-2 | e-Gov Parser Spike（条項号抽出率 99% 以上） | コード | [s0-findings/F-2-parser.md](s0-findings/F-2-parser.md) | **PASS 3/3** |
-| F-3 | 告示 Parser Spike（50件中45件以上） | コード | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **見通し良好・本検証未実施** |
+| F-3 | 告示 Parser Spike（50件中45件以上） | コード | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **PASS 54/60（90%）** |
 | F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **完了・案B 採用（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）** |
 | F-5 | Version Diff Spike | コード | [s0-findings/F-5-version-diff.md](s0-findings/F-5-version-diff.md) | **PASS** |
 | F-6 | Citation Resolver Spike（実引用200件で解決率90%以上） | コード | [s0-findings/F-6-citation-resolver.md](s0-findings/F-6-citation-resolver.md) | **PASS 99.6%** |

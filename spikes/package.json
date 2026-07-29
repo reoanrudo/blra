@@ -5,6 +5,7 @@
   "description": "S0 Corpus Feasibility の検証コード。使い捨て前提であり本実装へ持ち込まない。",
   "scripts": {
     "f2": "tsx src/f2-egov-parser/index.ts",
+    "f3": "tsx src/f3-notification-parser/index.ts",
     "typecheck": "tsc --noEmit",
     "f7:export": "tsx src/f7-search/export.ts",
     "f6": "tsx src/f6-citation-resolver/index.ts",
