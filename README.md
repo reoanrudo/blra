@@ -30,7 +30,7 @@
 | F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-4-consolidation.md](s0-findings/F-4-consolidation.md) | 未着手 |
 | F-5 | Version Diff Spike | コード | `spikes/src/f5-version-diff/` | 未着手 |
 | F-6 | Citation Resolver Spike（実引用200件で解決率90%以上） | コード | `spikes/src/f6-citation-resolver/` | 未着手 |
-| F-7 | 検索基盤と拡張の可用性確認（pg_bigm / PGroonga / btree_gist） | 検証 | [s0-findings/F-7-search-infra.md](s0-findings/F-7-search-infra.md) | 未着手 |
+| F-7 | 検索基盤と拡張の可用性確認（pg_bigm / PGroonga / btree_gist） | 検証 | [s0-findings/F-7-search-infra.md](s0-findings/F-7-search-infra.md) | **PASS** |
 | F-8 | 利用条件の法的確認 | 調査 | [s0-findings/F-8-legal-terms.md](s0-findings/F-8-legal-terms.md) | 未着手 |
 | F-9 | 履歴版の遡及範囲実測（`coverage_from` の初期値確定） | 検証 | [s0-findings/F-9-coverage.md](s0-findings/F-9-coverage.md) | **完了・要判断** |
 
@@ -68,7 +68,7 @@ cd spikes && npm install
 ```
 
 ```bash
-cd spikes && npm run f2 -- --law 325AC0000000201
+cd spikes && npm run f2
 ```
 
 ## 技術選定

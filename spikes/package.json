@@ -6,7 +6,8 @@
   "scripts": {
     "f2": "tsx src/f2-egov-parser/index.ts",
     "f9": "tsx src/f9-coverage/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "f7:export": "tsx src/f7-search/export.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
