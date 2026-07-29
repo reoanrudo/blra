@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# spike の取得物と出力（再取得可能なため追跡しない）
+spikes/out/
+spikes/fixtures/raw/
+
+# 大きな調査記録は追跡するが、エディタの一時ファイルは除く
+*.swp
+*~
