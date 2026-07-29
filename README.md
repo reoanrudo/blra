@@ -42,8 +42,6 @@ S0 の主要な結論:
 
 ### S0 Exit Criteria
 
-- F-1〜F-9 を完了する
-- ~~上記3択のいずれを採るかを決定し、ADR に記録する~~ **→ 完了（案B、[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
 - ~~F-1〜F-9 を完了する~~ **→ 完了（全項目 PASS）**
 - ~~上記3択のいずれを採るかを決定し、ADR に記録する~~ **→ 完了（案B、[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
 - **中止条件**（設計書 §15.9.1）: 告示の統合が1件あたり2時間を超える、または対象法令の5%以上で条項構造を抽出できない場合、S1 へ進まず判断へ戻る → **両方とも非該当（[ADR-024](docs/adr/ADR-024-s0-exit.md)）**
