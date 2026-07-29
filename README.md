@@ -18,7 +18,7 @@
 2. 告示は原文のみ提供し、統合は利用者に委ねる（価値提案が弱まる）
 3. 対象テーマを、告示依存の少ない領域へ変更する
 
-この判断が出るまで S1 へ進まない。
+**2026-07-29 付で O-1 = 案B と決定した（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）。** 告示は案文（`OFFICIAL_AS_ENACTED`）と改正履歴の提示に留め、溶け込み現行全文は提供しない。
 
 ### S0 の実施項目
 
@@ -27,7 +27,7 @@
 | F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | **国法令は確定 / 告示は調査中** |
 | F-2 | e-Gov Parser Spike（条項号抽出率 99% 以上） | コード | [s0-findings/F-2-parser.md](s0-findings/F-2-parser.md) | **PASS 3/3** |
 | F-3 | 告示 Parser Spike（50件中45件以上） | コード | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **見通し良好・本検証未実施** |
-| F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **公式の現行全文なし・要判断** |
+| F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **完了・案B 採用（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）** |
 | F-5 | Version Diff Spike | コード | [s0-findings/F-5-version-diff.md](s0-findings/F-5-version-diff.md) | **PASS** |
 | F-6 | Citation Resolver Spike（実引用200件で解決率90%以上） | コード | [s0-findings/F-6-citation-resolver.md](s0-findings/F-6-citation-resolver.md) | **PASS 99.6%** |
 | F-7 | 検索基盤と拡張の可用性確認（pg_bigm / PGroonga / btree_gist） | 検証 | [s0-findings/F-7-search-infra.md](s0-findings/F-7-search-infra.md) | **PASS** |
@@ -39,13 +39,13 @@
 ### S0 Exit Criteria
 
 - F-1〜F-9 を完了する
-- 上記3択のいずれを採るかを決定し、ADR に記録する
+- ~~上記3択のいずれを採るかを決定し、ADR に記録する~~ **→ 完了（案B、[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
 - **中止条件**（設計書 §15.9.1）: 告示の統合が1件あたり2時間を超える、または対象法令の5%以上で条項構造を抽出できない場合、S1 へ進まず判断へ戻る
 
 ### S1 着手前に必須の前提
 
 - [ ] **建築法令 Domain Reviewer の確保**（外部1〜2名・有償・兼任不可）。設計書 ADR-016 により、未確保のまま S1 へ進まない
-- [ ] O-1（告示の入手可否）の決定
+- [x] ~~O-1（告示の入手可否）の決定~~ **→ 案B（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
 - [ ] O-2（日本語検索基盤）の決定
 - [ ] O-3（対象テーマの確定）
 
