@@ -8,23 +8,27 @@
 
 ---
 
-## 現在地: S0 — Corpus Feasibility
+## 現在地: S0 完了 → S1 着手準備
 
-**まだアプリケーションを作らない。** 現在は S0（3週間）であり、目的は「対象コーパスを正確に構造化して提供できるか」を実測することだけである。
+**S0 Corpus Feasibility が完了した（[ADR-024](docs/adr/ADR-024-s0-exit.md)）。** F-1〜F-9 の全項目が合格基準を満たし、中止条件に非該当。3択（O-1）は案Bに決定した（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）。
 
-設計書 §15.2 のとおり、S0 の結果次第でプロダクト定義そのものが変わる。告示の溶け込み済み現行全文が入手できない場合、次の3択のいずれかを選ぶ事業判断が発生する。
+S1（Corpus Foundation）へ進む前提は次のとおり。
 
-1. 自製の編集現行版を人手確認込みで提供する（運用コストを商品原価に組み込む）
-2. 告示は原文のみ提供し、統合は利用者に委ねる（価値提案が弱まる）
-3. 対象テーマを、告示依存の少ない領域へ変更する
+- [ ] **建築法令 Domain Reviewer の確保**（外部1〜2名・有償・兼任不可）。設計書 ADR-016 により、未確保のまま S1 へ進まない。**これが唯一のハードブロッカー**
+- [ ] U-1（実務者ヒアリング）で「告示の現行全文が読めないツールに価値があるか」を確認する
+- [ ] O-3（対象テーマの確定）。F-9 の結果を踏まえ、新築の防火・避難に寄せる方向
 
-**2026-07-29 付で O-1 = 案B と決定した（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）。** 告示は案文（`OFFICIAL_AS_ENACTED`）と改正履歴の提示に留め、溶け込み現行全文は提供しない。
+S0 の主要な結論:
+- **国法令**: e-Gov API v2 から溶け込み済み現行全文が取得可能。構造化 99.97%、版管理・差分・Anchor 移行も実測で成立
+- **告示**: テキストPDF で取得可能（OCR 不要）。ただし公式の溶け込み済み現行全文は存在しない。案文＋改正履歴の提示に留める（案B）
+- **利用条件**: e-Gov・国交省は PDL1.0（CC BY 4.0 互換）で自由利用。自治体例規は自治体ごとに異なる
+- **検索基盤**: pg_bigm で日本語全文検索が成立
 
 ### S0 の実施項目
 
 | # | 内容 | 種別 | 成果物 | 状態 |
 |---|---|---|---|---|
-| F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | **国法令は確定 / 告示は調査中** |
+| F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | **完了** |
 | F-2 | e-Gov Parser Spike（条項号抽出率 99% 以上） | コード | [s0-findings/F-2-parser.md](s0-findings/F-2-parser.md) | **PASS 3/3** |
 | F-3 | 告示 Parser Spike（50件中45件以上） | コード | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **PASS 54/60（90%）** |
 | F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **完了・案B 採用（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）** |
@@ -32,7 +36,7 @@
 | F-6 | Citation Resolver Spike（実引用200件で解決率90%以上） | コード | [s0-findings/F-6-citation-resolver.md](s0-findings/F-6-citation-resolver.md) | **PASS 99.6%** |
 | F-7 | 検索基盤と拡張の可用性確認（pg_bigm / PGroonga / btree_gist） | 検証 | [s0-findings/F-7-search-infra.md](s0-findings/F-7-search-infra.md) | **PASS** |
 | F-8 | 利用条件の法的確認 | 調査 | [s0-findings/F-8-legal-terms.md](s0-findings/F-8-legal-terms.md) | **完了（一次情報で確認）** |
-| F-9 | 履歴版の遡及範囲実測（`coverage_from` の初期値確定） | 検証 | [s0-findings/F-9-coverage.md](s0-findings/F-9-coverage.md) | **完了・要判断** |
+| F-9 | 履歴版の遡及範囲実測（`coverage_from` の初期値確定） | 検証 | [s0-findings/F-9-coverage.md](s0-findings/F-9-coverage.md) | **完了（法=2016, 令・規則=2017）** |
 
 並行して U-1〜U-4（実務者ヒアリング、Baseline計測、検索課題30件、Design Partner確保）を進める。設計書 §15.3・§15.9。
 
@@ -40,14 +44,16 @@
 
 - F-1〜F-9 を完了する
 - ~~上記3択のいずれを採るかを決定し、ADR に記録する~~ **→ 完了（案B、[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
-- **中止条件**（設計書 §15.9.1）: 告示の統合が1件あたり2時間を超える、または対象法令の5%以上で条項構造を抽出できない場合、S1 へ進まず判断へ戻る
+- ~~F-1〜F-9 を完了する~~ **→ 完了（全項目 PASS）**
+- ~~上記3択のいずれを採るかを決定し、ADR に記録する~~ **→ 完了（案B、[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
+- **中止条件**（設計書 §15.9.1）: 告示の統合が1件あたり2時間を超える、または対象法令の5%以上で条項構造を抽出できない場合、S1 へ進まず判断へ戻る → **両方とも非該当（[ADR-024](docs/adr/ADR-024-s0-exit.md)）**
 
 ### S1 着手前に必須の前提
 
-- [ ] **建築法令 Domain Reviewer の確保**（外部1〜2名・有償・兼任不可）。設計書 ADR-016 により、未確保のまま S1 へ進まない
+- [ ] **建築法令 Domain Reviewer の確保**（外部1〜2名・有償・兼任不可）。設計書 ADR-016 により、未確保のまま S1 へ進まない。**唯一のハードブロッカー**
 - [x] ~~O-1（告示の入手可否）の決定~~ **→ 案B（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
-- [ ] O-2（日本語検索基盤）の決定
-- [ ] O-3（対象テーマの確定）
+- [ ] O-2（日本語検索基盤）の決定 → F-7 で pg_bigm 採用が実質決定。ADR 化は S1 着手時
+- [ ] O-3（対象テーマの確定）→ F-9 の結果を踏まえ新築防火・避難に寄せる方向。U-1 結果と合わせて最終決定
 
 ---
 
