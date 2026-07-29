@@ -404,6 +404,30 @@ Anchor は、Source 内の一時的な HTML id に依存させない。次の組
 - `text_quote_selector`: 前後文脈つき引用（W3C Web Annotation の TextQuoteSelector 相当）
 - `sequence`: Source 内の出現順
 
+#### 附則（Supplementary Provision）の canonical_path
+
+改正法ごとに附則が1つ置かれ、それぞれが第1条・第1項を持つ。建築基準法には SupplProvision が **120 個**あり、素の `art1/para1` では全て衝突する（F-2 で実測。重複 100 件以上）。
+
+附則の canonical_path には、どの改正法の附則かを識別する名前空間を含める。
+
+```text
+suppl:{amendment_law_id}/art{n}/para{m}     改正法の附則
+suppl:original/art{n}/para{m}               制定時附則（AmendLawNum なし）
+```
+
+`amendment_law_id` は当該附則の `SupplProvision/@AmendLawNum`（改正法令番号）を `law_revisions` の `amendment_law_id` に解決した値とする。全件での突合可能性は F-2 で未検証のため、S1 で検証する。
+
+#### 別表・様式の canonical_path
+
+別表・様式（`AppdxTable` / `AppdxStyle` 等）の canonical_path は、**出現順の連番ではなく、タイトルから生成する**（F-5 で実測）。連番は前方に条項が1つ追加されただけで全てずれ、版間追跡が壊れる。別表は法令本文から頻繁に参照されるため、影響が大きい。
+
+```text
+appdx-table-1        ← 「別表第一」から生成（連番 appdx2254 は不可）
+appdx-style-1-2      ← 「様式第一の二」から生成
+```
+
+タイトルが取れない、または重複する場合のみ連番へフォールバックし、その旨をメタデータに記録する。
+
 ### 6.2 Anchor の版間移行
 
 Source 改訂時、旧 Anchor が指していた箇所を新版で特定する。結果を 3 状態で表す。
@@ -428,12 +452,15 @@ resolve(text: string, context?: ProvisionVersionRef) -> CitationRef[]
 CitationRef {
   law_identity: string | null      // 未特定なら null
   provision_path: string | null
+  alternate_paths: string[]        // 項省略慣行等による代替パス（F-6 で実測）
   raw_text: string                 // 原文中の該当文字列
   span: [start, end]
   resolution_method: EXPLICIT | RELATIVE | ABBREVIATED | INFERRED
   confidence: float
 }
 ```
+
+`alternate_paths` は、法令の慣行で項番号が省略された参照を解決するために必要である。「第二条第九号」の実パスは `art2/para1/item9` だが、字面からは `para` が取れない。`item` があって `para` がない引用は、`art{n}/para1/item{m}` を第1候補、`art{n}/item{m}` を代替候補として返す（F-6 で実測。この補完がないと解決率が 71% に落ちる）。条のみの参照（「第三十五条」）も `art35` と `art35/para1` の両方を候補とする。
 
 **対応すべき表記**
 
@@ -460,6 +487,15 @@ NFKC 正規化
 ```
 
 相対参照（前条・同項等）と略称（法・令）は `context` なしには解決できない。`context` が渡されない呼び出しでは `resolution_method = RELATIVE` の候補を返し、解決済みとして扱わない。
+
+略称「法」「令」「規則」の解決先は、現在読んでいる法令の**種別（Act / CabinetOrder / MinisterialOrdinance）**に依存する（F-6 で実測）。施行令の条文中の「法第二条」は建築基準法を指し、施行令自身ではない。略称辞書は `context` の法令種別ごとに持つ必要がある。
+
+```text
+context 法令種別    「法」の解決先       「令」の解決先
+Act                 自身                施行令
+CabinetOrder        主幹法律             自身
+MinisterialOrdinance 主幹法律            施行令
+```
 
 Resolver は Golden Test を持つ。対象コーパスから抽出した 500 件以上の実引用に対して期待結果を固定し、CI で回帰を検出する。
 
@@ -602,6 +638,7 @@ Scheduler / Manual Trigger
 - 元号・西暦の相互展開
 - 法令略称の展開
 - 送り仮名の揺れ（「取り扱い」「取扱い」「取扱」）
+- **ルビの読み仮名（`Rt` / `Rp`）を本文へ含めない**（F-2 で実測）。含めると「建築物けんちくぶつ」となり、検索索引と Citation Validator が同時に壊れる
 
 同義語辞書は運用データとして管理し、コードに埋め込まない。Search Evaluation Harness（§9.5）で効果を測ってから追加する。
 
@@ -990,10 +1027,10 @@ CREATE TABLE source_version (
 CREATE TABLE provision (
   provision_id        uuid PRIMARY KEY,
   source_id           uuid NOT NULL REFERENCES source,
-  canonical_path      text NOT NULL,          -- art52-2/para1/item3
+  canonical_path      text NOT NULL,          -- art52-2/para1/item3 / suppl:{amendment_law_id}/art1/para1 / appdx-table-1
   provision_type      provision_type_enum NOT NULL,  -- ARTICLE/PARAGRAPH/ITEM/TABLE/SUPPLEMENTARY
   stable_label        text NOT NULL,          -- 第52条の2第1項第3号
-  UNIQUE (source_id, canonical_path)
+  UNIQUE (source_id, canonical_path)          -- 附則は suppl: 名前空間で一意化（§6.1）。別表はタイトルから生成（§6.1）
 );
 
 CREATE TABLE provision_version (
