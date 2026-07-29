@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"node -e \\\"const m=require('pdf-parse');console.log('type:',typeof m,'keys:',Object.keys(m).slice(0,10));console.log('ver:',require('pdf-parse/package.json').version)\\\"\",\"description\":\"Insp...",
+  "error": "Exit code 1\ntype: object keys: [\n  'AbortException',\n  'FormatError',\n  'InvalidPDFException',\n  'Line',\n  'LineDirection',\n  'LineStore',\n  'PDFParse',\n  'PasswordException',\n  'Point',\n  'Rectangle'\n]\nnode:internal/modules/cjs/loader:671\n      throw e;\n      ^\n\nError [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath './package.json' is not defined by \"exports\" in /Users/taguchireo/Downloads/blra/spikes/node_modules/pdf-parse/package.json\n    at exportsNotFound (node:internal/modules/esm/resolve...",
+  "timestamp": "2026-07-29T10:09:58.301Z",
+  "retry_count": 2
+}

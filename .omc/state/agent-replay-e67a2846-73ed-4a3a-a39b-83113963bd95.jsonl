@@ -21,3 +21,4 @@
 {"t":0,"agent":"aacf71b","agent_type":"unknown","event":"agent_stop","success":true}
 {"t":0,"agent":"aacf71b","agent_type":"unknown","event":"agent_stop","success":true}
 {"t":0,"agent":"aacf71b","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"search-research"}

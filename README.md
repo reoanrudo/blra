@@ -26,8 +26,8 @@
 |---|---|---|---|---|
 | F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | **国法令は確定 / 告示は調査中** |
 | F-2 | e-Gov Parser Spike（条項号抽出率 99% 以上） | コード | [s0-findings/F-2-parser.md](s0-findings/F-2-parser.md) | **PASS 3/3** |
-| F-3 | 告示 Parser Spike（50件中45件以上） | コード | `spikes/src/f2-egov-parser/`（拡張） | 未着手 |
-| F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-4-consolidation.md](s0-findings/F-4-consolidation.md) | 未着手 |
+| F-3 | 告示 Parser Spike（50件中45件以上） | コード | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **見通し良好・本検証未実施** |
+| F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **公式の現行全文なし・要判断** |
 | F-5 | Version Diff Spike | コード | [s0-findings/F-5-version-diff.md](s0-findings/F-5-version-diff.md) | **PASS** |
 | F-6 | Citation Resolver Spike（実引用200件で解決率90%以上） | コード | [s0-findings/F-6-citation-resolver.md](s0-findings/F-6-citation-resolver.md) | **PASS 99.6%** |
 | F-7 | 検索基盤と拡張の可用性確認（pg_bigm / PGroonga / btree_gist） | 検証 | [s0-findings/F-7-search-infra.md](s0-findings/F-7-search-infra.md) | **PASS** |
