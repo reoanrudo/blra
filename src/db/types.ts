@@ -67,6 +67,9 @@ export type EdgeType =
   | "DEFINES"
   | "EXCEPTS";
 
+// SCR-03: 参照の解決状態（migration 0008）
+export type ResolutionStatus = "RESOLVED" | "UNCONFIRMED" | "UNRESOLVED";
+
 // === Row 型 ===
 
 export interface SourceRow {
@@ -186,6 +189,20 @@ export interface OrganizationMemberRow {
   granted_at: Generated<Date>;
 }
 
+// === SCR-03: 参照エッジ（migration 0008）===
+
+export interface ReferenceEdgeRow {
+  edge_id: string;
+  source_provision_id: string;
+  target_provision_id: string | null;
+  target_label: string;
+  edge_type: EdgeType;
+  resolution_status: ResolutionStatus;
+  /** 原文座標 { start, end }。§6.2 */
+  source_text_span: { start: number; end: number } | null;
+  created_at: Generated<Date>;
+}
+
 // === Database 型（Kysely が全テーブルの集合として扱う）===
 
 export interface Database {
@@ -199,4 +216,6 @@ export interface Database {
   organization: OrganizationRow;
   app_user: AppUserRow;
   organization_member: OrganizationMemberRow;
+  // SCR-03: 参照エッジ
+  reference_edge: ReferenceEdgeRow;
 }

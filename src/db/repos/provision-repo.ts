@@ -16,6 +16,7 @@ import type {
   OnConflictUpdateBuilder,
   Selectable,
 } from "kysely";
+import { sql } from "kysely";
 import type { Database, ProvisionType } from "../types.js";
 import type { ProvisionSegment } from "../../parser/types.js";
 
@@ -153,4 +154,58 @@ export async function getProvisionCurrentVersion(
   }
 
   return { provision, currentVersion };
+}
+
+// === SCR-03 法令リーダー向け取得系 ===
+
+export interface ListProvisionsOptions {
+  /** sequence の開始位置（0始まり）。省略時は先頭から */
+  from?: number;
+  /** 取得件数上限。省略時は100 */
+  limit?: number;
+}
+
+/**
+ * 指定 source の provision 一覧を、現行版（valid_to IS NULL）とともに取得する。
+ * 法令リーダーが章・条単位で本文を表示するために使う（§19.10.2 条ブロック）。
+ *
+ * sequence 昇順で返す（Parser が付与した source 内の出現順）。
+ * 現行版を持たない provision は除外する（公開済みのみ §5.3）。
+ *
+ * 設計書 §19.22.2-(4): 本文以外のメタデータを別ペイロードにするため、
+ * 本関数は本文テキストのみを含む provision_version を返す（ハイライト・参照等は別途取得）。
+ */
+export async function listProvisionsWithCurrentVersion(
+  db: Kysely<Database>,
+  sourceId: string,
+  opts: ListProvisionsOptions = {},
+): Promise<ProvisionWithVersion[]> {
+  const from = Math.max(0, opts.from ?? 0);
+  // 上限を常識的な範囲に収める（法令1本全体の取得も許容するが、巨大法令での無制限取得を防ぐ）
+  const limit = Math.min(1000, Math.max(1, opts.limit ?? 100));
+
+  // LATERAL JOIN で各 provision の現行版を1件ずつ取得。
+  // to_jsonb で列名衝突を回避しつつ provision / currentVersion を分離して返す。
+  const rows = await sql<{ provision: Provision; current_version: ProvisionVersion }>`
+    SELECT
+      to_jsonb(p) AS provision,
+      to_jsonb(pv) AS current_version
+    FROM provision p
+    INNER JOIN LATERAL (
+      SELECT *
+      FROM provision_version
+      WHERE provision_id = p.provision_id
+        AND valid_to IS NULL
+      ORDER BY valid_from DESC
+      LIMIT 1
+    ) pv ON TRUE
+    WHERE p.source_id = ${sourceId}
+    ORDER BY pv.sequence ASC
+    OFFSET ${from} LIMIT ${limit}
+  `.execute(db);
+
+  return rows.rows.map((r) => ({
+    provision: r.provision,
+    currentVersion: r.current_version,
+  }));
 }
