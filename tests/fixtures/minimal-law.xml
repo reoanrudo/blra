@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Law>
+  <LawNum>昭和二十五年法律第二百一号</LawNum>
+  <LawBody>
+    <LawTitle>建築基準法</LawTitle>
+    <MainProvision>
+      <Chapter Num="1">
+        <ChapterTitle>第一章　総則</ChapterTitle>
+        <Article Num="1">
+          <ArticleCaption>（目的）</ArticleCaption>
+          <ArticleTitle>第一条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum>１</ParagraphNum>
+            <ParagraphSentence>
+              この法律は、建築物の敷地、構造、設備及び用途に関する最低の基準を定め、国民の生命、健康及び財産の保護を図り、もつて公共の福祉に資することを目的とする。
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="2">
+            <ParagraphNum>２</ParagraphNum>
+            <ParagraphSentence>
+              この法律の解釈その他これの適用に当たつては、第一項の規定の趣旨を十分に尊重しなければならない。
+            </ParagraphSentence>
+          </Paragraph>
+        </Article>
+        <Article Num="2">
+          <ArticleCaption>（定義）</ArticleCaption>
+          <ArticleTitle>第二条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum>１</ParagraphNum>
+            <ParagraphSentence>
+              この法律及びこれに基づく命令の規定の解釈に関する事項は、次のとおりである。
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                「建築物」とは、土地に定着して工作物のうち屋根及び柱若しくは壁を有するものをいう。
+              </ItemSentence>
+              <Subitem1 Num="1">
+                <Subitem1Title>イ</Subitem1Title>
+                <Subitem1Sentence>
+                  前号に規定する建築物には、付属建築物を含むものとする。
+                </Subitem1Sentence>
+              </Subitem1>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                「建築」とは、建築物を新築し、増築し、改築し、又は移転することをいう。
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+        </Article>
+      </Chapter>
+      <Chapter Num="2">
+        <ChapterTitle>第二章　建築物の敷地</ChapterTitle>
+        <Article Num="52">
+          <ArticleTitle>第五十二条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum>１</ParagraphNum>
+            <ParagraphSentence>
+              建築物の敷地は、道路に二メートル以上接しなければならない。
+            </ParagraphSentence>
+          </Paragraph>
+          <Paragraph Num="2">
+            <ParagraphNum>２</ParagraphNum>
+            <ParagraphSentence>
+              前項の規定は、次の各号のいずれかに該当する敷地については、適用しない。
+            </ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                当該敷地の周囲に広い空地を有する敷地で特定行政庁が指定するもの
+              </ItemSentence>
+            </Item>
+            <Item Num="2">
+              <ItemTitle>二</ItemTitle>
+              <ItemSentence>
+                周囲の状況により特定行政庁が交通上、安全上、防火上及び衛生上支障がないと認めて建築審査会の同意を得て許可したもの
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+        </Article>
+        <Article Num="52_2">
+          <ArticleCaption>（外壁の後退）</ArticleCaption>
+          <ArticleTitle>第五十二条の二</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum>１</ParagraphNum>
+            <ParagraphSentence>
+              建築物の外壁又はこれに代わる柱の面から道路境界線までの距離は、十分の七以上とし、幅員四メートル未満の道路にあつては一メートル以上としなければならない。
+            </ParagraphSentence>
+          </Paragraph>
+        </Article>
+      </Chapter>
+    </MainProvision>
+    <SupplProvision AmendLawNum="昭和二十五年法律第二百一号">
+      <SupplProvisionLabel>附　則</SupplProvisionLabel>
+      <Article Num="1">
+        <ArticleTitle>第一条</ArticleTitle>
+        <Paragraph Num="1">
+          <ParagraphNum>１</ParagraphNum>
+          <ParagraphSentence>
+            この法律は、公布の日から起算して六月を経過した日から施行する。
+          </ParagraphSentence>
+        </Paragraph>
+      </Article>
+    </SupplProvision>
+    <SupplProvision AmendLawNum="平成十二年法律第百十五号">
+      <SupplProvisionLabel>附　則</SupplProvisionLabel>
+      <Article Num="1">
+        <ArticleTitle>第一条</ArticleTitle>
+        <Paragraph Num="1">
+          <ParagraphNum>１</ParagraphNum>
+          <ParagraphSentence>
+            この法律は、平成十三年四月一日から施行する。
+          </ParagraphSentence>
+        </Paragraph>
+      </Article>
+    </SupplProvision>
+    <AppdxTable>
+      <AppdxTableTitle>別表第一</AppdxTableTitle>
+      <TableStruct>
+        <Table>
+          一　防火地域内の建築物の構造
+        </Table>
+      </TableStruct>
+    </AppdxTable>
+  </LawBody>
+</Law>
