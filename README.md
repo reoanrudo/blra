@@ -9,9 +9,14 @@
 
 ---
 
-## 現在地: S1 M5 完了・次は法令リーダー
+## 現在地: S2 SCR-03 法令リーダー実装中（Phase 0/1 完了）
 
-**S1（Corpus Foundation）の M1〜M5 が完了。** 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish → HTTP API（認証・認可付き）経由で参照・操作できる。次は法令リーダー（SCR-03）の実装。
+**S2 法令リーダー（SCR-03）の Phase 0（バックエンド拡張）+ Phase 1（フロント基盤+静的デザイン）が完了。** 次は Phase 2（API接続+6状態インフラ）。
+
+- **Phase 0 完了**: `reference_edge` テーブル、`GET /sources/:id/provisions`（条一括取得）、`GET /provisions/:id/references`（参照エッジ）を追加。テスト136件。
+- **Phase 1 完了**: `web/` に React 18 + Vite 6 + TanStack を導入。DESIGN.md 通りの紙の法令集デザインをサンプルデータで再現。
+
+S1（Corpus Foundation）の M1〜M5 は完了済み。建築基準法1本を e-Gov API → 取込 → 構造化 → Publish → HTTP API（認証・認可付き）経由で参照・操作できる。
 
 S0（Corpus Feasibility）は完了済み（[ADR-024](docs/adr/ADR-024-s0-exit.md)）。
 
