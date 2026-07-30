@@ -1,0 +1,497 @@
+/**
+ * グローバルスタイル。
+ *
+ * DESIGN.md の「やってはいけないこと」を厳守:
+ *   1. 本文は明朝体（ゴシック本文禁止）
+ *   2. 角丸カード化しない
+ *   3. 主スクロールは1つ（本文の中に別スクロールを作らない）
+ *   6. 紫・グラデーション・絵文字を使わない
+ *   7. ダークモードは作らない
+ */
+
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* UI の基本はゴシック。本文（.law-body）のみ明朝に上書き */
+  font-family: var(--font-ui);
+  color: var(--law-ink);
+  /* 机の上に紙が置かれている感じ。本文外周の淡い背景 */
+  background: var(--desk-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* === 本文明朝体（DESIGN.md: 本文は明朝が正） === */
+.law-body {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--line-height-body);
+  color: var(--law-ink);
+}
+
+/* === 紙面 === */
+.law-paper {
+  background: var(--law-paper);
+  /* 外周の淡い影のみ（DESIGN.md: 影は紙面の外周のみ） */
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.12);
+  /* 角丸なし・カード化しない */
+}
+
+/* === 柱（ランニングヘッダー）=== */
+.law-runner {
+  font-family: var(--font-ui);
+  font-size: var(--text-runner);
+  font-weight: 700;
+  color: var(--law-muted);
+}
+
+/* === 条見出し（かっこ書き）・章節見出しは赤 === */
+.law-caption {
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+  font-weight: 800;
+  color: var(--law-accent);
+}
+
+.law-chapter-heading {
+  font-family: var(--font-ui);
+  font-size: var(--text-chapter);
+  font-weight: 800;
+  color: var(--law-accent);
+  border-top: 1px solid var(--law-hairline);
+  padding-top: 0.5em;
+}
+
+/* === 条番号見出し（ゴシック・太字）=== */
+.law-article-num {
+  font-family: var(--font-ui);
+  font-size: var(--text-article-num);
+  font-weight: 800;
+  color: var(--law-ink);
+}
+
+/* === リンク（2色刷りの赤） === */
+.law-link {
+  color: var(--law-accent);
+  text-decoration: none;
+}
+
+.law-link:hover {
+  text-decoration: underline;
+}
+
+/* === 確認済み参照: 赤の下線 === */
+.ref-resolved {
+  color: var(--law-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ref-resolved:hover {
+  background: rgba(217, 47, 126, 0.08);
+}
+
+/* === 未確認の参照候補: 点線 === */
+.ref-unconfirmed {
+  border-bottom: 1px dotted var(--law-muted);
+  cursor: help;
+}
+
+/* === 未解決の参照: 下線なし（DESIGN.md: 見えている参照を黙って消さない） === */
+/* 右ペインの未解決欄で列挙される。本文中は通常テキストと同じ */
+
+/* === 細罫線 === */
+.law-hairline {
+  border-color: var(--law-hairline);
+}
+
+.law-rule {
+  border-color: var(--law-rule);
+}
+
+/* === スクロール制御: 主スクロールは中央のみ === */
+/* 左右パネルは sticky で独立スクロールを作らない（DESIGN.md #5） */
+
+/* === 法令リーダー レイアウト === */
+
+.reader-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* グローバルヘッダー（56px・ゴシック） */
+.global-header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  gap: 24px;
+}
+
+.global-header__brand {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+
+.global-header__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--law-muted);
+  flex: 1;
+  max-width: 320px;
+}
+
+.global-header__search kbd {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  background: var(--surface-sub);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+.global-header__right {
+  margin-left: auto;
+  display: flex;
+  gap: 20px;
+  color: var(--law-muted);
+}
+
+.global-header__project {
+  color: var(--law-ink);
+}
+
+/* 適用時点バー（40px・常時表示） */
+.asof-bar {
+  height: var(--asof-bar-height);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background: var(--surface-sub);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--law-ink);
+  gap: 4px;
+}
+
+.asof-bar__date {
+  font-weight: 700;
+  /* 日付を隠さない（DESIGN.md 原則5） */
+}
+
+.asof-bar__sep {
+  color: var(--law-muted);
+  margin: 0 8px;
+}
+
+.asof-bar__back {
+  color: var(--law-muted);
+}
+
+/* 3カラム本文領域 */
+.reader-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--col-toc) 1fr var(--col-support);
+  align-items: start;
+}
+
+/* 左: 目次 */
+.toc-pane {
+  position: sticky;
+  top: 0;
+  height: calc(100vh - var(--header-height) - var(--asof-bar-height));
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow-y: auto;
+  padding: 16px 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc-item {
+  padding: 6px 20px;
+  color: var(--law-ink);
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+.toc-item--chapter {
+  font-weight: 700;
+  color: var(--law-accent);
+  margin-top: 8px;
+}
+
+.toc-item:not(.toc-item--chapter) {
+  padding-left: 36px;
+  font-size: 12.5px;
+}
+
+.toc-item--current {
+  background: rgba(217, 47, 126, 0.06);
+  border-left: 3px solid var(--law-accent);
+  padding-left: 33px;
+  font-weight: 600;
+}
+
+.toc-item:hover {
+  background: var(--surface-sub);
+}
+
+/* 中: 本文（主スクロール・唯一） */
+.body-pane {
+  /* 中央寄せ・紙面 max 720px */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: calc(100vh - var(--header-height) - var(--asof-bar-height));
+  padding: 0 32px 64px;
+}
+
+/* 柱（ランニングヘッダー）sticky・細い表示・下に太い罫線 */
+.runner {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  max-width: var(--col-body-max);
+  background: var(--desk-bg);
+  padding: 8px 0;
+  border-bottom: 2px solid var(--law-rule);
+  z-index: 10;
+  font-size: var(--text-runner);
+}
+
+.runner__sep {
+  color: var(--law-muted);
+}
+
+/* 紙面 */
+.paper-inner {
+  width: 100%;
+  max-width: var(--col-body-max);
+  margin-top: 16px;
+  padding: 32px 40px 48px;
+  /* 角丸なし（カード化しない） */
+}
+
+/* 出典バッジ */
+.source-badges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.source-badge {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  /* 角丸最小限（バッジは文書要素でないので許容） */
+  border-radius: 2px;
+  background: var(--surface);
+}
+
+.source-badge--primary {
+  background: var(--law-ink);
+  color: var(--surface);
+  border-color: var(--law-ink);
+}
+
+.source-badge--version {
+  color: var(--law-ink);
+  border-color: var(--law-ink);
+}
+
+.source-badge--verified {
+  color: #1a6b3c;
+  border-color: #1a6b3c;
+  background: #ecf7f0;
+}
+
+/* 注意帯 NoticeBand */
+.notice-band {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid;
+}
+
+.notice-band--caution {
+  background: var(--caution-bg);
+  color: var(--caution-fg);
+  border-left-color: var(--caution-fg);
+}
+
+.notice-band--info {
+  background: var(--info-bg);
+  color: var(--info-fg);
+  border-left-color: var(--info-fg);
+}
+
+.notice-band__icon {
+  font-style: normal;
+  font-weight: 700;
+}
+
+.notice-band__action {
+  margin-left: auto;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+/* 条文ブロック */
+.provision {
+  margin: 0;
+}
+
+.provision__body {
+  margin: 8px 0 16px;
+  /* 本文明朝体は .law-body から継承 */
+  text-indent: 1em;
+}
+
+.provision-divider {
+  border: none;
+  border-top: 1px solid var(--law-hairline);
+  margin: 24px 0;
+}
+
+/* フッター免責 */
+.paper-footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--law-hairline);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--law-muted);
+  line-height: 1.6;
+}
+
+/* 右: サポートペイン（336px・sticky） */
+.support-pane {
+  position: sticky;
+  top: 0;
+  height: calc(100vh - var(--header-height) - var(--asof-bar-height));
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow-y: auto;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.support-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.support-tab {
+  flex: 1;
+  padding: 12px 8px;
+  background: none;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--law-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.support-tab--active {
+  color: var(--law-ink);
+  border-bottom-color: var(--law-accent);
+}
+
+/* 関連ペイン（型ラベル付き §19.5） */
+.related-pane {
+  padding: 16px 16px 32px;
+}
+
+.related-group {
+  margin-bottom: 20px;
+}
+
+.related-group__label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--law-accent-deep);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.related-item {
+  padding: 6px 8px;
+  border-left: 2px solid var(--border);
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.related-item__label {
+  color: var(--law-ink);
+  display: block;
+}
+
+.related-item--unconfirmed {
+  color: var(--law-muted);
+}
+
+.related-item--unresolved {
+  color: var(--law-muted);
+}
+
+.related-item__note {
+  font-size: 11px;
+  color: var(--law-muted);
+}
+
+/* 空状態 */
+.empty-pane {
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty-pane__text {
+  margin: 0;
+  color: var(--law-muted);
+  font-size: 12px;
+}

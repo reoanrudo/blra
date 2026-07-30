@@ -6,6 +6,13 @@ dist/
 .env.*
 !.env.example
 
+# web/ フロントエンドのビルド成果物とキャッシュ
+web/dist/
+web/tsconfig.tsbuildinfo
+
+# ZCode セッション状態（プロジェクト成果物ではない）
+.zcode/
+
 # spike の取得物と出力（再取得可能なため追跡しない）
 spikes/out/
 spikes/fixtures/raw/

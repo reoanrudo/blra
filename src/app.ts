@@ -10,6 +10,8 @@
 import Fastify, { type FastifyInstance, type FastifyError } from "fastify";
 import { sql } from "kysely";
 import path from "node:path";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import type { Kysely } from "kysely";
 import type { Database } from "./db/types.js";
 import { config } from "./config.js";
@@ -85,6 +87,59 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     prefix: "/",
     decorateReply: false,
   });
+
+  // SCR-03 法令リーダー（React SPA）配信。
+  // web/dist が存在する場合（npm run build 済み）のみ配信。
+  // ADR-030: 素のHTMLフォーム（public/）は残置。両者は別パス衝突しない。
+  const webDistPath = path.resolve(process.cwd(), "web", "dist");
+  if (existsSync(webDistPath)) {
+    await app.register(fastifyStatic, {
+      root: webDistPath,
+      prefix: "/",
+      decorateReply: false,
+      // 既存の public/ 配信や API ルートと衝突しないよう、
+      // ファイルが存在しない場合は次のハンドラへ委譲
+      wildcard: false,
+    });
+
+    // SPA fallback: API ルートと静的ファイル以外の未知パスは index.html へ。
+    // TanStack Router 等のクライアントサイドルーティングを支える。
+    app.setNotFoundHandler(async (request, reply) => {
+      // API パス（/sources, /provisions, /me, /auth, /admin 等）は JSON エラーのまま
+      const apiPrefixes = [
+        "/sources",
+        "/provisions",
+        "/me",
+        "/auth",
+        "/admin",
+        "/health",
+        "/ready",
+      ];
+      if (apiPrefixes.some((p) => request.url.startsWith(p))) {
+        return reply
+          .status(404)
+          .send(apiError("NOT_FOUND", "リソースが見つかりません"));
+      }
+      // 拡張子付きリクエスト（.js, .css, .png 等）は静的ファイルNotFound
+      if (path.extname(request.url)) {
+        return reply
+          .status(404)
+          .send(apiError("NOT_FOUND", "ファイルが見つかりません"));
+      }
+      // それ以外（/, /reader/xxx 等）は index.html へフォールバック
+      try {
+        const indexHtml = await readFile(
+          path.join(webDistPath, "index.html"),
+          "utf-8",
+        );
+        reply.type("text/html").send(indexHtml);
+      } catch {
+        reply
+          .status(404)
+          .send(apiError("NOT_FOUND", "フロントエンドがビルドされていません"));
+      }
+    });
+  }
 
   // M5: /me エンドポイント
   await app.register(async (instance) => {
