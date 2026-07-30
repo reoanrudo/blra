@@ -38,6 +38,15 @@ export const ALREADY_PUBLISHED = apiError(
 export const CONFLICT = (detail: string): ApiErrorResponse =>
   apiError("CONFLICT", detail);
 
+// M5: 認証・認可エラー
+export const UNAUTHORIZED = apiError(
+  "UNAUTHORIZED",
+  "ログインが必要です",
+);
+
+export const FORBIDDEN = (detail?: string): ApiErrorResponse =>
+  apiError("FORBIDDEN", detail ?? "この操作には権限が不足しています");
+
 export const INTERNAL_ERROR = apiError(
   "INTERNAL_ERROR",
   "内部エラーが発生しました",

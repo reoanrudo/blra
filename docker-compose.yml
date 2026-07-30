@@ -25,5 +25,20 @@ services:
       timeout: 5s
       retries: 5
 
+  # Keycloak（M5: 認証基盤 OIDC）
+  # 開発モード（start-dev）で HTTPS 不要。本番では start + TLS 証明書が必要。
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: blra-keycloak
+    command: start-dev
+    ports:
+      - "8080:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    volumes:
+      - blra-keycloak:/opt/keycloak/data
+
 volumes:
   blra-pgdata:
+  blra-keycloak:

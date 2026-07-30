@@ -9,11 +9,16 @@
 
 import Fastify, { type FastifyInstance, type FastifyError } from "fastify";
 import { sql } from "kysely";
+import path from "node:path";
 import type { Kysely } from "kysely";
 import type { Database } from "./db/types.js";
 import { config } from "./config.js";
 import { corpusRoutes } from "./routes/corpus.js";
 import { adminRoutes, type AdminRouteOptions } from "./routes/admin.js";
+import { meRoutes } from "./routes/me.js";
+import { memberRoutes } from "./routes/members.js";
+import { registerSession } from "./auth/session.js";
+import { authRoutes } from "./auth/routes.js";
 import { apiError, INTERNAL_ERROR } from "./http/errors.js";
 
 export interface BuildAppOptions {
@@ -60,9 +65,40 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Corpus API（Source Registry 参照系）— 設計書 §12.2 # Corpus
   await app.register(corpusRoutes, { db, prefix: "" });
 
+  // M5: セッション・認証（OIDC 有効時のみ登録）
+  await registerSession(app);
+  await app.register(async (instance) => {
+    await authRoutes(instance, { db });
+  }, { prefix: "" });
+
+  // スタブモード（OIDC無効）時: テストヘルパーが stubSessionUser を設定可能
+  // OIDC有効時は使用されない（request.session が優先される）
+  if (!config.oidc.enabled) {
+    app.decorate("stubSessionUser", null);
+  }
+
+  // M5: 素のHTMLフォーム配信（SCR-00 ログイン、SCR-10/12/20 管理画面）
+  // プロジェクトルートの public/ から配信
+  const { default: fastifyStatic } = await import("@fastify/static");
+  await app.register(fastifyStatic, {
+    root: path.resolve(process.cwd(), "public"),
+    prefix: "/",
+    decorateReply: false,
+  });
+
+  // M5: /me エンドポイント
+  await app.register(async (instance) => {
+    await meRoutes(instance);
+  }, { prefix: "" });
+
   // Admin API（書き込み系 + 監査）— 設計書 §12.2 # Admin
   await app.register(async (instance) => {
     await adminRoutes(instance, { db, ...options.admin });
+  }, { prefix: "" });
+
+  // M5: 組織・メンバー管理 API（SCR-20）
+  await app.register(async (instance) => {
+    await memberRoutes(instance, { db });
   }, { prefix: "" });
 
   // エラーハンドラー: Fastify 標準エラー（バリデーション等）を統一形式へ

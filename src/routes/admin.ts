@@ -2,12 +2,15 @@
  * Admin API ルート（書き込み系 + 監査 + 取込トリガー）。
  * 設計書 §12.2 # Admin。
  *
- * M4 で実装する3エンドポイント:
- *   POST /admin/ingest                         取込トリガー（ingestSourceVersion の HTTP ラッパー）
- *   POST /admin/source-versions/:id/publish    要Review版の手動Publish
- *   GET  /admin/audit                          監査ログ検索
+ * M5 拡張: 認証・認可（RBAC）を組み込む。
+ *   POST /admin/ingest                         CORPUS_EDITOR
+ *   POST /admin/source-versions/:id/publish    CORPUS_EDITOR
+ *   GET  /admin/audit                          SYSTEM_ADMIN
+ *   GET  /admin/ingestion-jobs                 CORPUS_EDITOR（SCR-10）
+ *   GET  /admin/source-versions/:id            CORPUS_EDITOR（SCR-12 詳細）
  *
- * M4 時点では認証未実装（M5 OIDC）。監査の actor_id は NULL で記録。
+ * 監査の actor_id / organization_id はセッションから取得して記録する。
+ * スタブモード（OIDC無効）の場合は null で記録し、M4 までのテスト互換を保つ。
  */
 
 import type { FastifyInstance } from "fastify";
@@ -33,6 +36,10 @@ import {
   INTERNAL_ERROR,
   isValidUuid,
 } from "../http/errors.js";
+import {
+  requireRoles,
+  getSessionUser,
+} from "../auth/require-roles.js";
 
 /**
  * correlation_id は UUID 型。request.id が UUID でない場合は null にする。
@@ -63,11 +70,13 @@ export async function adminRoutes(
   // POST /admin/ingest — 取込トリガー
   // body: { lawId: string }
   // 同期待ち: ingestSourceVersion() の完了を待って結果を返す。
+  // M5: CORPUS_EDITOR ロール必須
   app.post<{
     Body: { lawId?: string };
   }>(
     "/admin/ingest",
     {
+      preHandler: requireRoles("CORPUS_EDITOR"),
       schema: {
         body: {
           type: "object",
@@ -96,6 +105,7 @@ export async function adminRoutes(
       }
 
       const { lawId } = request.body;
+      const sessionUser = getSessionUser(request);
 
       try {
         const ingestOptions: IngestOptions = {};
@@ -118,6 +128,8 @@ export async function adminRoutes(
             segmentCount: result.segmentCount,
             extractionRate: result.extractionRate,
           },
+          actorId: sessionUser?.userId ?? null,
+          organizationId: sessionUser?.organizationId ?? null,
         });
 
         const status = result.status === "PENDING_REVIEW" ? 202 : 200;
@@ -145,10 +157,13 @@ export async function adminRoutes(
   );
 
   // POST /admin/source-versions/:id/publish — 手動Publish
+  // M5: CORPUS_EDITOR ロール必須（§5.4 Publish は Corpus Editor）
   app.post<{ Params: { id: string } }>(
     "/admin/source-versions/:id/publish",
+    { preHandler: requireRoles("CORPUS_EDITOR") },
     async (request, reply) => {
       const { id } = request.params;
+      const sessionUser = getSessionUser(request);
 
       if (!isValidUuid(id)) {
         return reply.status(404).send(NOT_FOUND("SourceVersion"));
@@ -183,6 +198,8 @@ export async function adminRoutes(
         beforeHash,
         afterHash: sourceVersion.content_hash,
         correlationId: toCorrelationId(request.id),
+        actorId: sessionUser?.userId ?? null,
+        organizationId: sessionUser?.organizationId ?? null,
       });
 
       return reply.send(
@@ -200,6 +217,7 @@ export async function adminRoutes(
   );
 
   // GET /admin/audit — 監査ログ検索
+  // M5: SYSTEM_ADMIN ロール必須（監査ログはシステム運用者のみ）
   // クエリパラメータ: from, to, action, resourceType, resourceId, limit
   app.get<{
     Querystring: {
@@ -212,6 +230,7 @@ export async function adminRoutes(
     };
   }>(
     "/admin/audit",
+    { preHandler: requireRoles("SYSTEM_ADMIN") },
     async (request, reply) => {
       const qs = request.query;
       const filters: AuditQueryFilters = {};
@@ -268,4 +287,57 @@ export async function adminRoutes(
       );
     },
   );
+
+  // GET /admin/source-versions/:id — SourceVersion 詳細（SCR-12）
+  // CORPUS_EDITOR 必須。メタデータ・consolidation_state・verification_status を返す。
+  app.get<{ Params: { id: string } }>(
+    "/admin/source-versions/:id",
+    { preHandler: requireRoles("CORPUS_EDITOR") },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      if (!isValidUuid(id)) {
+        return reply.status(404).send(NOT_FOUND("SourceVersion"));
+      }
+
+      const sv = await getSourceVersionById(db, id);
+      if (!sv) {
+        return reply.status(404).send(NOT_FOUND("SourceVersion"));
+      }
+
+      // §5.4: DERIVED_CONSOLIDATED かつ verification_status < HUMAN_REVIEWED は
+      // Publish ボタン無効（canPublish = false）
+      const canPublish =
+        sv.published_at === null &&
+        !(
+          sv.consolidation_state === "DERIVED_CONSOLIDATED" &&
+          sv.verification_status !== "HUMAN_REVIEWED" &&
+          sv.verification_status !== "GAZETTE_VERIFIED"
+        );
+
+      return reply.send(
+        wrapResponse(
+          {
+            source_version_id: sv.source_version_id,
+            source_id: sv.source_id,
+            content_hash: sv.content_hash,
+            consolidation_state: sv.consolidation_state,
+            verification_status: sv.verification_status,
+            promulgated_at: sv.promulgated_at,
+            valid_from: sv.valid_from,
+            valid_from_status: sv.valid_from_status,
+            valid_to: sv.valid_to,
+            retrieved_at: sv.retrieved_at,
+            recorded_at: sv.recorded_at,
+            published_at: sv.published_at,
+            processing_status: sv.processing_status,
+            can_publish: canPublish,
+          },
+          generateRequestId(request.id),
+          new Date().toISOString(),
+        ),
+      );
+    },
+  );
 }
+

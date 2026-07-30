@@ -44,6 +44,15 @@ export type VerificationStatus =
 
 export type ValidFromStatus = "FIXED" | "UNDETERMINED" | "ESTIMATED";
 
+// === M5: Identity 系 ===
+// 設計書 §12.3 の5ロール
+export type RoleEnum =
+  | "ORGANIZATION_ADMIN"
+  | "RESEARCHER"
+  | "REVIEWER"
+  | "CORPUS_EDITOR"
+  | "SYSTEM_ADMIN";
+
 export type ProvisionType =
   | "ARTICLE"
   | "PARAGRAPH"
@@ -148,6 +157,35 @@ export interface IngestionJobRow {
   created_at: Date;
 }
 
+// === M5: Identity 系 Row 型 ===
+
+export interface OrganizationRow {
+  organization_id: string;
+  name: string;
+  status: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface AppUserRow {
+  user_id: string;
+  oidc_issuer: string;
+  oidc_sub: string;
+  email: string;
+  display_name: string;
+  status: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface OrganizationMemberRow {
+  organization_id: string;
+  user_id: string;
+  role: RoleEnum;
+  granted_by: string | null;
+  granted_at: Generated<Date>;
+}
+
 // === Database 型（Kysely が全テーブルの集合として扱う）===
 
 export interface Database {
@@ -157,4 +195,8 @@ export interface Database {
   provision_version: ProvisionVersionRow;
   audit_record: AuditRecordRow;
   ingestion_job: IngestionJobRow;
+  // M5: Identity 系
+  organization: OrganizationRow;
+  app_user: AppUserRow;
+  organization_member: OrganizationMemberRow;
 }

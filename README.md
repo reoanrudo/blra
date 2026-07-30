@@ -9,9 +9,9 @@
 
 ---
 
-## 現在地: S1 M4 完了・M5 着手
+## 現在地: S1 M5 完了・次は法令リーダー
 
-**S1（Corpus Foundation）の M1〜M4 が完了。** 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish → HTTP API 経由で参照・操作できる（S1 Exit 条件をほぼ達成）。次は M5（認証基盤 OIDC + Admin画面最小限）。
+**S1（Corpus Foundation）の M1〜M5 が完了。** 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish → HTTP API（認証・認可付き）経由で参照・操作できる。次は法令リーダー（SCR-03）の実装。
 
 S0（Corpus Feasibility）は完了済み（[ADR-024](docs/adr/ADR-024-s0-exit.md)）。
 
@@ -21,10 +21,10 @@ S0（Corpus Feasibility）は完了済み（[ADR-024](docs/adr/ADR-024-s0-exit.m
 | M2 | e-Gov Parser + 条項分割 + canonical_path生成 | 1.5週 | **完了** |
 | M3 | 取込パイプライン（Fetcher→Raw保存→Parser→Validation→Publish） | 1.0週 | **完了** |
 | M4 | Publish API + Source Registry API + 監査 | 0.5週 | **完了** |
-| M5 | 認証基盤（OIDC）+ Admin画面（最小限） | 1.0週 | **次** |
+| M5 | 認証基盤（OIDC + RBAC）+ 素のHTMLフォーム（Admin画面） | 1.0週 | **完了** |
 | M6 | E2Eテスト + SourceVersion不変性テスト + ドキュメント | 1.0週 | 未着手 |
 
-**M4 実績（2026-07-30）**: HTTP API 7エンドポイント完成。curl/ブラウザから法令データの参照・取込トリガー・Publish・監査ログ検索が可能。テスト104件全合格。
+**M5 実績（2026-07-30）**: Keycloak（Docker）+ openid-client（認可コード+PKCE）+ @fastify/secure-session（暗号化Cookie）+ RBAC（5ロール・preHandler）+ JITプロビジョニング + identity系テーブル（organization/app_user/organization_member）+ RLS基盤。Admin画面は素のHTMLフォーム（React/Viteは次フェーズの法令リーダーで導入）。テスト123件全合格。
 
 対象テーマは確定済み（[ADR-026](docs/adr/ADR-026-target-domain.md)）: **就寝用途のある福祉施設（老人ホーム等）の、新築における防火・避難**。
 
@@ -39,7 +39,7 @@ S1 と並行して進める項目（いずれも S1 を止めない）:
 docker compose up -d      # PostgreSQL 起動（ポート5433。初回は pg_bigm ビルドで数分）
 cp .env.example .env      # .env 準備
 npm run migrate           # マイグレーション
-npm test                  # テスト（74件・Vitest）
+npm test                  # テスト（123件・Vitest）
 npm run typecheck         # 型チェック
 npm run dev               # サーバー起動（ポート3000）
 npm run ingest            # 建築基準法の取込（M3 パイプライン）
@@ -56,20 +56,24 @@ npm run ingest            # 建築基準法の取込（M3 パイプライン）
 - **マイグレーション**: node-pg-migrate（生SQL。EXCLUDE制約・CHECK・enum を直接記述）
 - **検索**: pg_bigm（ADR-027。OpenSearch・PGroonga は不採用）
 - **テスト**: Vitest
-- **フロント**: React + Vite + TanStack（M5以降）
+- **フロント**: 素のHTMLフォーム（M5）。React + Vite + TanStack は法令リーダー実装時に導入
 
 ## ディレクトリ
 
 ```
-src/                  本実装（M1〜）
-  config.ts             環境変数読込
+src/                  本実装（M1〜M5）
+  config.ts             環境変数読込（M5: OIDC/Keycloak設定追加）
   server.ts             Fastify エントリ（/health, /ready）
+  app.ts                Fastify アプリ構築（M5: セッション・認証・静的配信登録）
+  auth/                 認証基盤（M5: OIDC, session, RBAC, JIT）
+  routes/               corpus, admin, me, members
   db/                   connection, types, repos/
-  parser/               e-Gov Parser（M2）
+  parser/               e-Gav Parser（M2）
   ingest/               取込パイプライン（M3）
   cli/                  ingest.ts（npm run ingest）
-migrations/           node-pg-migrate（生SQL）
-tests/                Vitest（74件）
+migrations/           node-pg-migrate（生SQL・0001〜0007）
+public/               素のHTMLフォーム（M5: login.html, admin.html）
+tests/                Vitest（123件）
 docs/                 設計正本・ADR・HANDOFF
 s0-findings/          S0 調査系成果物（F-1, F-4, F-7, F-8, F-9）
 spikes/               S0 コード系検証（使い捨て前提・本実装へ持ち込まない）

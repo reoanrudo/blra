@@ -27,16 +27,35 @@ export function createTestDb(): Kysely<Database> {
  * 全テーブルを TRUNCATE する（各テストの前に実行）。
  * RESTART IDENTITY でシーケンスもリセット。
  * CASCADE で外部キー依存をまとめて消す。
+ * M5: identity 系テーブル（organization_member, app_user, organization）を追加。
+ *     organization は RLS 有効のため、seed 投入時は row_security を一時バイパスする。
  */
 export async function truncateAll(db: Kysely<Database>): Promise<void> {
-  await sql`
-    TRUNCATE
-      provision_version,
-      provision,
-      source_version,
-      source,
-      audit_record,
-      ingestion_job
-    RESTART IDENTITY CASCADE
-  `.execute(db);
+  await db.connection().execute(async (conn) => {
+    await sql`SET row_security = off`.execute(conn);
+    await sql`
+      TRUNCATE
+        provision_version,
+        provision,
+        source_version,
+        source,
+        audit_record,
+        ingestion_job,
+        organization_member,
+        app_user,
+        organization
+      RESTART IDENTITY CASCADE
+    `.execute(conn);
+
+    // identity 系 seed の再投入
+    await sql`
+      INSERT INTO organization (organization_id, name, status) VALUES
+        ('00000000-0000-0000-0000-000000000001', 'SYSTEM', 'ACTIVE'),
+        ('00000000-0000-0000-0000-000000000002', 'DEFAULT', 'ACTIVE')
+    `.execute(conn);
+
+    await sql`SET row_security = on`.execute(conn);
+  });
 }
+
+
