@@ -2,90 +2,96 @@
 
 建築実務者が、適用時点と出典の確からしさを明示したまま法令原文をたどり、案件単位で根拠を保存し、第三者が再現できる形で共有するためのサービス。
 
-- 設計正本: [docs/design-spec.md](docs/design-spec.md)（v1.1・Normative）
+- 設計正本: [docs/design-spec.md](docs/design-spec.md)（**v1.2**・Normative）
+- 引き継ぎ: [docs/HANDOFF.md](docs/HANDOFF.md)
 - 調査記録: [docs/research-log.md](docs/research-log.md)（Informative。設計根拠）
 - 体制: Solo Track（実装1名＋AI支援）。設計書 §15.8
 
 ---
 
-## 現在地: S1 着手可能
+## 現在地: S1 M3 完了・M4 着手
 
-**S0 Corpus Feasibility が完了した（[ADR-024](docs/adr/ADR-024-s0-exit.md)）。** F-1〜F-9 の全項目が合格基準を満たし、中止条件に非該当。3択（O-1）は案Bに決定した（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）。
+**S1（Corpus Foundation）の M1〜M3 が完了。** 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish まで End-to-End で実行可能（S1 Exit 条件の主要部分を達成）。次は M4（Publish API + Source Registry API + 監査）。
 
-**ハードブロッカーは解除された（[ADR-025](docs/adr/ADR-025-domain-review-model.md)）。** 実装者が二級建築士・老人ホーム規模の設計実務経験者であることが確認され、日常のドメイン検証を自力で担保できるため、継続的な外部 Domain Reviewer は S1 の前提条件から外れた。
+S0（Corpus Feasibility）は完了済み（[ADR-024](docs/adr/ADR-024-s0-exit.md)）。
 
-対象テーマも確定した（[ADR-026](docs/adr/ADR-026-target-domain.md)）。
+| マイルストーン | 内容 | 期間 | 状態 |
+|---|---|---|---|
+| M1 | プロジェクト基盤 + 初期DB + Kysely検証 | 1.0週 | **完了** |
+| M2 | e-Gov Parser + 条項分割 + canonical_path生成 | 1.5週 | **完了** |
+| M3 | 取込パイプライン（Fetcher→Raw保存→Parser→Validation→Publish） | 1.0週 | **完了** |
+| M4 | Publish API + Source Registry API + 監査 | 0.5週 | **次** |
+| M5 | 認証基盤（OIDC）+ Admin画面（最小限） | 1.0週 | 未着手 |
+| M6 | E2Eテスト + SourceVersion不変性テスト + ドキュメント | 1.0週 | 未着手 |
 
-> **就寝用途のある福祉施設（老人ホーム等）の、新築における防火・避難**
+**M3 E2E 実績（2026-07-30）**: 建築基準法 2264 条項、抽出率 100%、自動 Publish 済み。冪等性確認済み。
 
-S1 と並行して進める項目。いずれも S1 を止めない。
+対象テーマは確定済み（[ADR-026](docs/adr/ADR-026-target-domain.md)）: **就寝用途のある福祉施設（老人ホーム等）の、新築における防火・避難**。
 
-- [ ] U-1（実務者ヒアリング）。案B の価値提案が成立するかを検証する。**n=1 では埋まらない唯一の論点** → [user-research/](user-research/README.md)
+S1 と並行して進める項目（いずれも S1 を止めない）:
+
+- [ ] U-1（実務者ヒアリング）。案B の価値提案が成立するかを検証する → [user-research/](user-research/README.md)
 - [ ] ゲート検査者の確保（8〜16時間・任意）→ [docs/domain-reviewer-role.md](docs/domain-reviewer-role.md)
 
-S0 の主要な結論:
-- **国法令**: e-Gov API v2 から溶け込み済み現行全文が取得可能。構造化 99.97%、版管理・差分・Anchor 移行も実測で成立
-- **告示**: テキストPDF で取得可能（OCR 不要）。ただし公式の溶け込み済み現行全文は存在しない。案文＋改正履歴の提示に留める（案B）
-- **利用条件**: e-Gov・国交省は PDL1.0（CC BY 4.0 互換）で自由利用。自治体例規は自治体ごとに異なる
-- **検索基盤**: pg_bigm で日本語全文検索が成立
+## 開発環境
 
-### S0 の実施項目
+```bash
+docker compose up -d      # PostgreSQL 起動（ポート5433。初回は pg_bigm ビルドで数分）
+cp .env.example .env      # .env 準備
+npm run migrate           # マイグレーション
+npm test                  # テスト（74件・Vitest）
+npm run typecheck         # 型チェック
+npm run dev               # サーバー起動（ポート3000）
+npm run ingest            # 建築基準法の取込（M3 パイプライン）
+```
 
-| # | 内容 | 種別 | 成果物 | 状態 |
-|---|---|---|---|---|
-| F-1 | Source Inventory | 調査 | [s0-findings/F-1-source-inventory.md](s0-findings/F-1-source-inventory.md) | **完了** |
-| F-2 | e-Gov Parser Spike（条項号抽出率 99% 以上） | コード | [s0-findings/F-2-parser.md](s0-findings/F-2-parser.md) | **PASS 3/3** |
-| F-3 | 告示 Parser Spike（50件中45件以上） | コード | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **PASS 54/60（90%）** |
-| F-4 | 溶け込み実現性（自製統合の所要工数実測） | 調査 | [s0-findings/F-3-F-4-notifications.md](s0-findings/F-3-F-4-notifications.md) | **完了・案B 採用（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）** |
-| F-5 | Version Diff Spike | コード | [s0-findings/F-5-version-diff.md](s0-findings/F-5-version-diff.md) | **PASS** |
-| F-6 | Citation Resolver Spike（実引用200件で解決率90%以上） | コード | [s0-findings/F-6-citation-resolver.md](s0-findings/F-6-citation-resolver.md) | **PASS 99.6%** |
-| F-7 | 検索基盤と拡張の可用性確認（pg_bigm / PGroonga / btree_gist） | 検証 | [s0-findings/F-7-search-infra.md](s0-findings/F-7-search-infra.md) | **PASS** |
-| F-8 | 利用条件の法的確認 | 調査 | [s0-findings/F-8-legal-terms.md](s0-findings/F-8-legal-terms.md) | **完了（一次情報で確認）** |
-| F-9 | 履歴版の遡及範囲実測（`coverage_from` の初期値確定） | 検証 | [s0-findings/F-9-coverage.md](s0-findings/F-9-coverage.md) | **完了（法=2016, 令・規則=2017）** |
+**注意**: Homebrew の PostgreSQL がポート 5432 を占有しているため、Docker 側は 5433 を使用。
 
-並行して U-1〜U-4（実務者ヒアリング、Baseline計測、検索課題30件、Design Partner確保）を進める。設計書 §15.3・§15.9。
+## 技術スタック（確定済み: ADR-022 + ADR-027 + ADR-030）
 
-### S0 Exit Criteria
-
-- ~~F-1〜F-9 を完了する~~ **→ 完了（全項目 PASS）**
-- ~~上記3択のいずれを採るかを決定し、ADR に記録する~~ **→ 完了（案B、[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
-- **中止条件**（設計書 §15.9.1）: 告示の統合が1件あたり2時間を超える、または対象法令の5%以上で条項構造を抽出できない場合、S1 へ進まず判断へ戻る → **両方とも非該当（[ADR-024](docs/adr/ADR-024-s0-exit.md)）**
-
-### S1 着手前の前提（すべて解消済み）
-
-- [x] ~~Domain Reviewer の確保~~ **→ 前提から除外（[ADR-025](docs/adr/ADR-025-domain-review-model.md)）。** 独立チェックはゲート時のサンプリング検査（8〜16時間）へ縮小し、S1 のブロッカーとしない
-- [x] ~~O-1（告示の入手可否）の決定~~ **→ 案B（[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）**
-- [x] ~~O-3（対象テーマの確定）~~ **→ 老人ホーム等の新築防火・避難（[ADR-026](docs/adr/ADR-026-target-domain.md)）**
-- [ ] O-2（日本語検索基盤）の ADR 化 → F-7 で pg_bigm 採用が実質決定。S1 着手時に確定させる
-
----
+- **言語**: TypeScript / Node 22（ADR-022・ADR-030 で変更しないと明記）
+- **HTTP**: Fastify
+- **DB**: PostgreSQL 16（Docker Compose）
+- **DBアクセス**: pg + Kysely（ORM不使用。型安全なSQLビルダ。EXCLUDE制約との組み合わせは M1 で実証済み）
+- **マイグレーション**: node-pg-migrate（生SQL。EXCLUDE制約・CHECK・enum を直接記述）
+- **検索**: pg_bigm（ADR-027。OpenSearch・PGroonga は不採用）
+- **テスト**: Vitest
+- **フロント**: React + Vite + TanStack（M5以降）
 
 ## ディレクトリ
 
 ```
-docs/          設計正本と調査記録、ADR
-s0-findings/   S0 の調査系成果物（F-1, F-4, F-7, F-8, F-9）
-spikes/        S0 のコード系検証（F-2, F-3, F-5, F-6）
+src/                  本実装（M1〜）
+  config.ts             環境変数読込
+  server.ts             Fastify エントリ（/health, /ready）
+  db/                   connection, types, repos/
+  parser/               e-Gov Parser（M2）
+  ingest/               取込パイプライン（M3）
+  cli/                  ingest.ts（npm run ingest）
+migrations/           node-pg-migrate（生SQL）
+tests/                Vitest（74件）
+docs/                 設計正本・ADR・HANDOFF
+s0-findings/          S0 調査系成果物（F-1, F-4, F-7, F-8, F-9）
+spikes/               S0 コード系検証（使い捨て前提・本実装へ持ち込まない）
+reference/hourei-rag/ 稼働中MVPのコードスナップショット（実装技法の参考）
+data/raw/             取込原本XML（.gitignore）
 ```
-
-`spikes/` は**使い捨て前提**である。ここのコードを本実装へそのまま持ち込まない。S0 で確かめたいのは「できるか」と「どれだけ手間がかかるか」であって、コードの完成度ではない。本実装は S1 で `src/` を新設して始める。
-
-## 開発
-
-```bash
-cd spikes && npm install
-```
-
-```bash
-cd spikes && npm run f2
-```
-
-## 技術選定
-
-TypeScript / Node 22。理由と代替案の評価は [docs/adr/ADR-022-language-and-stack.md](docs/adr/ADR-022-language-and-stack.md)。
 
 ## 最重要原則（設計書 §18）
 
 > 本サービスは、法令を自動判定することで信頼を得るのではない。法令原文、適用時点、出典の確からしさ、参照関係、調査根拠を正確に扱うことで信頼を獲得する。
 
 誤った条文を自信を持って表示した瞬間に、このプロダクトの存在価値は失われる。
+
+---
+
+## S0 Corpus Feasibility（完了）
+
+S0 は [ADR-024](docs/adr/ADR-024-s0-exit.md) で完了。F-1〜F-9 全項目 PASS、中止条件に非該当。詳細は各 ADR と `s0-findings/` を参照。
+
+主要な結論:
+
+- **国法令**: e-Gov API v2 から溶け込み済み現行全文が取得可能。構造化 99.97%、版管理・差分・Anchor 移行も実測で成立
+- **告示**: テキストPDF で取得可能（OCR 不要）。ただし公式の溶け込み済み現行全文は存在しない。案文＋改正履歴の提示に留める（案B・[ADR-023](docs/adr/ADR-023-notification-consolidation-policy.md)）
+- **利用条件**: e-Gov・国交省は PDL1.0（CC BY 4.0 互換）で自由利用。自治体例規は自治体ごとに異なる（[F-8](s0-findings/F-8-legal-terms.md)）
+- **検索基盤**: pg_bigm で日本語全文検索が成立（[F-7](s0-findings/F-7-search-infra.md)・ADR-027 で確定）
