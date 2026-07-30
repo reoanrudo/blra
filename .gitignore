@@ -16,3 +16,7 @@ spikes/fixtures/raw/
 
 # OMC のセッション状態（プロジェクト成果物ではない）
 .omc/
+
+# hourei-rag のコードスナップショット（実装技法の参考用・git管理外）
+# 設計文書は含めない。blra 設計書 v1.2 を正とする。
+reference/hourei-rag/
