@@ -35,6 +35,7 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
     await sql`SET row_security = off`.execute(conn);
     await sql`
       TRUNCATE
+        reference_edge,
         provision_version,
         provision,
         source_version,
