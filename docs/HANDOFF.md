@@ -184,6 +184,11 @@ M5 時点で `/provisions/:id`, `/sources`, `/sources/:id`, `/sources/:id/versio
 - Rule DSL / Compiler / Graph DB / Vector DB / Event Broker に手を出さない（ADR-006、ADR-015）
 - 設計書の「削らない4つ」（法令時間モデル / Consolidation State / Citation Anchor / Snapshot 不変性）を工数都合で削らない（ADR-017）
 - M5 で Keycloak 固有名を DB スキーマに使わない（`oidc_sub` + `oidc_issuer` で OIDC標準）
+- M5 Admin UI を素のHTMLフォームに縮小（[ADR-030](docs/adr/ADR-030-m5-admin-ui-scope-reduction.md)）。フロントエンド基盤は法令リーダーで導入
+
+## 宿題（M6 または S3 で対応）
+
+- **RLS テストの検証抜け**（[ADR-030 残課題](docs/adr/ADR-030-m5-admin-ui-scope-reduction.md#残課題-rls-テストの検証抜けm5-監査にて指摘)参照）: 現在の123件テストは `app.current_org` 未設定で走っており、RLS が効いている状態の挙動を一度も確かめていない。実害ゼロ（対象 `organization` 1テーブル・project/evidence 系は S3 以降）だが、「テストが通っている」を RLS 動作確認と誤解しないこと。T-03（テナント分離テスト）に相当する1本を M6 で追加推奨
 
 ## 設計書の未記載事項（実装時に補完済みまたは要補完）
 
