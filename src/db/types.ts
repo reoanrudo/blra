@@ -6,6 +6,8 @@
  * 設計書 §13.1（物理設計）に対応。
  */
 
+import type { Generated } from "kysely";
+
 // === enum のコード値 ===
 // 設計書 §5.2, §4.2, §6.3, §7.2, §8.4 から集約
 
@@ -70,8 +72,8 @@ export interface SourceRow {
   source_type: SourceType;
   coverage_from: Date | null;
   status: string;
-  created_at: Date;
-  updated_at: Date;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface SourceVersionRow {
@@ -88,7 +90,7 @@ export interface SourceVersionRow {
   valid_from_status: ValidFromStatus;
   valid_to: Date | null;
   retrieved_at: Date;
-  recorded_at: Date;
+  recorded_at: Generated<Date>;
   published_at: Date | null;
   processing_status: string;
 }
@@ -99,7 +101,7 @@ export interface ProvisionRow {
   canonical_path: string;
   provision_type: ProvisionType;
   stable_label: string;
-  created_at: Date;
+  created_at: Generated<Date>;
 }
 
 export interface ProvisionVersionRow {
