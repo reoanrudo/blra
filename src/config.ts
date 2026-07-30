@@ -25,4 +25,8 @@ export const config = {
   port: parseInt(optional("PORT", "3000"), 10),
   host: optional("HOST", "0.0.0.0"),
   logLevel: optional("LOG_LEVEL", "info"),
+  // e-Gov 法令API v2 のベースURL（認証不要）
+  egovApiBase: optional("EGOV_API_BASE", "https://laws.e-gov.go.jp/api/2"),
+  // 原本XMLの保存先ディレクトリ（ローカルFS。§8.2-2 原本は先に残す）
+  rawDataDir: optional("RAW_DATA_DIR", "data/raw"),
 } as const;
