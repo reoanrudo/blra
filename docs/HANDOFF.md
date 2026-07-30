@@ -1,4 +1,4 @@
-# 引き継ぎプロンプト（2026-07-29 時点）
+# 引き継ぎプロンプト（2026-07-30 時点）
 
 以下をそのまま新しいセッションに貼る。
 
@@ -9,70 +9,168 @@ BLRA（建築法令リファレンス）プロジェクトを引き継いでほ�
 ## 最初に読むもの（この順で）
 
 1. `README.md` — 現在地と S0 の進捗表
-2. `docs/design-spec.md` — 設計の正本（v1.1、Normative）。これと矛盾する実装をしない
-3. `s0-findings/` の各ファイル — F-1〜F-9 の実測結果。**推測ではなく実測値が入っている**
-4. `git log --oneline` — 各コミットメッセージに発見が要約してある
+2. `docs/design-spec.md` — 設計の正本（**v1.2**、2,303行、Normative）。これと矛盾する実装をしない
+3. `docs/HANDOFF.md` — 本ファイル。前回セッションの成果と次のタスク
+4. `git log --oneline` — 各コミットメッセージに発見・実装が要約してある
 
 `docs/research-log.md`（1.1MB）は調査記録であり Informative。設計根拠を辿るとき以外は読まなくてよい。
 
 ## 現在地
 
-**S0（Corpus Feasibility）完了（[ADR-024](adr/ADR-024-s0-exit.md)）。** F-1〜F-9 の全項目 PASS、中止条件に非該当。S1 着手準備へ。
+**S1（Corpus Foundation）の M1 完了。M2（e-Gov Parser）着手準備済み。**
 
-| 項目 | 状態 |
-|---|---|
-| F-1 Source Inventory | **完了** |
-| F-2 e-Gov Parser | PASS（抽出率 99.97〜100.00%） |
-| F-3 告示 Parser | **PASS（54/60 = 90%）** |
-| F-4 溶け込み実現性 | **完了・案B 採用（ADR-023）** |
-| F-5 Version Diff | PASS |
-| F-6 Citation Resolver | PASS（99.6%） |
-| F-7 検索基盤 | PASS（pg_bigm 採用） |
-| F-8 利用条件の法的確認 | **完了（一次情報で確認）** |
-| F-9 履歴の遡及範囲 | **完了（法=2016, 令・規則=2017）** |
+S0 は完了済み（ADR-024）。S1 を6マイルストーンに分割し、最初の M1（プロジェクト基盤 + 初期DB + Kysely動作検証）を完了した。
 
-**S1 着手のハードブロッカーは解除済み（ADR-025）。着手可能。**
+| マイルストーン | 内容 | 期間 | 状態 |
+|---|---|---|---|
+| M1 | プロジェクト基盤 + 初期DB + Kysely検証 | 1.0週 | **完了** |
+| M2 | e-Gov Parser + 条項分割 + canonical_path生成 | 1.5週 | **次** |
+| M3 | 取込パイプライン（Fetcher→Raw保存→Parser→Validation） | 1.0週 | 未着手 |
+| M4 | Publish API + Source Registry API + 監査 | 0.5週 | 未着手 |
+| M5 | 認証基盤（OIDC）+ Admin画面（最小限） | 1.0週 | 未着手 |
+| M6 | E2Eテスト + SourceVersion不変性テスト + ドキュメント | 1.0週 | 未着手 |
 
-対象テーマは老人ホーム等の新築防火・避難に確定（ADR-026）。実装者は二級建築士・老人ホーム設計の実務経験者であり、日常のドメイン検証を自力で担保する。独立チェックはゲート時のサンプリング検査（8〜16時間・任意）へ縮小した。
+**S1 Exit条件**: 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish まで End-to-End で実行できること。
 
-## ✅ 解決済み: O-1（告示の扱い）
+## 技術スタック（ADR-022 + ADR-027、ともに確定済み）
 
-**2026-07-29 付で案B に決定した（[ADR-023](adr/ADR-023-notification-consolidation-policy.md)）。** 告示の溶け込み現行全文は提供せず、案文（`OFFICIAL_AS_ENACTED`）＋改正履歴の提示に留める。README および設計書の O-1 記載は更新済み。
+- **言語**: TypeScript / Node 22（ADR-022、ADR-030 で変更しないと明記）
+- **HTTP**: Fastify
+- **DB**: PostgreSQL 16（Docker Compose、ポート 5433。Homebrew PG が 5432 を占有しているため）
+- **DBアクセス**: pg + Kysely（ORM不使用。型安全なSQLビルダ）
+- **マイグレーション**: node-pg-migrate（生SQL。EXCLUDE制約・CHECK・enum を直接記述）
+- **検索**: pg_bigm（ADR-027 で確定。OpenSearch・PGroonga は不採用）
+- **テスト**: Vitest
+- **フロント**: React + Vite + TanStack（M5以降）
 
-**残るリスク**: U-1（実務者ヒアリング）で「告示の現行全文が読めないツールに価値があるか」を必ず確認すること。芳しくなければ案A 限定適用または案C への再考を ADR 改訂として起す。
+**Kysely + EXCLUDE制約の組み合わせに問題ないことは M1 で実証済み。** ADR-022 の未検証事項は解消した。
+
+## 開発環境
+
+```bash
+# PostgreSQL 起動（初回はビルドに数分かかる）
+docker compose up -d
+
+# .env を準備
+cp .env.example .env
+
+# マイグレーション
+npm run migrate
+
+# テスト
+npm test
+
+# 型チェック
+npm run typecheck
+
+# サーバー起動（ポート3000）
+npm run dev
+```
+
+**注意**: Homebrew の PostgreSQL がポート 5432 を占有している。Docker 側は 5433 を使用。
+
+## M1 で作成したもの
+
+### データモデル（設計書 §13.1 + §4.6 + §12.3-4）
+
+6テーブル + 7種のenum型:
+
+| テーブル | 役割 | 制約 |
+|---|---|---|
+| `source` | 法令文書の同一性 | UNIQUE(canonical_uri)。`coverage_from` は §4.6/ADR-019 で第一級（設計書DDL漏れを補完済み） |
+| `source_version` | 取得した特定時点の版（不変） | CHECK(valid_from_status), UNIQUE(source_id, content_hash) |
+| `provision` | 条項号の同一性 | UNIQUE(source_id, canonical_path) |
+| `provision_version` | 特定時点の本文（不変） | **EXCLUDE制約** no_overlapping_validity（ADR-013。btree_gist が必要） |
+| `audit_record` | 監査ログ（追記専用） | §12.4 |
+| `ingestion_job` | 取込ジョブ | UNIQUE(source_id, idempotency_key) §8.2 |
+
+enum型: `authority_class_enum`, `source_type_enum`, `consolidation_state_enum`, `verification_status_enum`, `valid_from_status_enum`, `provision_type_enum`, `edge_type_enum`
+
+### プロジェクト骨格
+
+```
+src/
+  config.ts           環境変数読込（dotenv をここで読み込む。ESMのimport順序対応）
+  server.ts           Fastify エントリ（/health, /ready のみ）
+  migrate.ts          マイグレーション実行スクリプト
+  db/
+    connection.ts     pg Pool + Kysely インスタンス
+    types.ts          Kysely Row 型 + enum の union 型
+migrations/
+  0001_extensions_and_enums.ts
+  0002_source.ts
+  0003_source_version.ts
+  0004_provision.ts
+  0005_provision_version.ts
+  0006_operations_tables.ts
+tests/
+  db/exclude-constraint.test.ts   EXCLUDE制約の動作検証（5テスト全PASS）
+docker/
+  Dockerfile.postgres  pg_bigm ソースビルド（pgdgにパッケージ無し）
+  initdb/00-extensions.sql
+```
+
+## M2 で実装すること
+
+**e-Gov Parser + 条項分割 + canonical_path生成**
+
+### 参照すべき S0 spike の知見（spikes/ は使い捨てだが知見は再利用）
+
+S0 spike（`spikes/src/`）で F-2 パーサーが抽出率 99.97〜100.00% を達成済み。以下の知見を M2 実装へ引き継ぐ。
+
+1. **e-Gov API v2**（認証不要、`https://laws.e-gov.go.jp/api/2/`）:
+   - `/laws?law_title={title}` — 法令検索
+   - `/law_revisions/{law_id}` — 版一覧
+   - `/law_data/{law_revision_id}` — 本文取得
+   - 建築基準法の `law_id`: `325AC0000000201`
+
+2. **法令標準XMLの構造** → 条/項/号 の対応:
+   - `Article` → 条（`Num` 属性から `art{N}`、`_` は `-` へ）
+   - `Paragraph` → 項（`para{N}`、省略時 `1`）
+   - `Item` → 号（`item{N}`）
+   - `SupplProvision` → 附則（`AmendLawNum` で名前空間分離。建基法に120個）
+   - `AppdxTable`/`AppdxStyle` → 別表・様式
+
+3. **F-2 で発見した重要事項**:
+   - 本文は `ParagraphSentence` の外にもある（`TableColumn`, `Column`）。`ParagraphSentence` だけ拾うと約2%を失う
+   - ルビ（`Rt`/`Rp`）を除外しないと本文が壊れる（施行規則で28箇所）
+   - 附則の `canonical_path` 衝突: `suppl:{amendment_law_id}/art1/para1` で名前空間を切る（S1で `law_revisions` 突合を検証）
+   - 別表の `canonical_path`: 連番（`appdx{seq}`）ではなくタイトルから生成（`appdx-table-1`）。F-5 で連番が版間追跡を壊すことを実証済み
+
+4. **抽出率の計測規則**: 分母・分子ともに空白除去後の文字数。残差は制定文（`EnactStatement`）で、条項ではないため取りこぼしではない。
+
+### M2 で実装しないもの（M3 以降）
+
+- e-Gov API への実際のアクセス（M3 の Fetcher）
+- DB への書き込み（M3 のパイプライン統合）
+- Validation の全項目（M3）
+- Publish（M4）
+
+M2 は **Parser の純関数**（XML文字列 → ProvisionSegment[]）を実装し、Fixture Test で検証する。
 
 ## 決まっていること（蒸し返さない）
 
-- 体制は Solo Track（実装1名＋AI）。**継続的な Domain Reviewer の外部確保は S1 の前提から外した（ADR-025）。** 実装者が二級建築士・老人ホーム規模の設計実務経験者であり、日常のドメイン検証を自力で担保できるため。独立チェックはゲート時のサンプリング検査（8〜16時間・任意）へ縮小。**正確性の基準（99%・重大誤表示0件）は下げない**
-- 実装言語は TypeScript / Node 22（ADR-022）
-- 検索基盤は pg_bigm。OpenSearch は入れない（F-7 で実測）
-- `spikes/` は使い捨て。本実装へそのまま持ち込まない
-
-## ✅ 解決済み: 設計書修正5件
-
-**2026-07-29 付で設計書へ反映済み。** F-2 / F-5 / F-6 の実測値に基づき、§6.1（附則の canonical_path 衝突対策・別表タイトル生成）、§6.3（CitationRef の alternatePaths・略称の法令種別依存）、§9.3（ルビ除外）、§13.1（provision テーブル制約）を修正した。
-
-## やってはいけないこと
-
-- 正確性の基準（時点表示 99%・重大誤表示 0 件）を体制の軽量化（ADR-025）に合わせて下げない。体制を軽くするのであって、基準を下げるのではない
+- 設計書 v1.2 の ADR-027（DOMに座標を持たせない）、ADR-028（トークン単位のDOM生成禁止）、ADR-029（クライアント一括配信は測定待ち）、ADR-030（言語変更しない）は確定済み
+- 正確性の基準（時点表示 99%・重大誤表示 0 件）を体制の軽量化（ADR-025）に合わせて下げない
 - 誤った条文を自信を持って表示する実装をしない。時点解決が曖昧なら推測せずエラーにする（設計書 §4.2、§18）
 - Rule DSL / Compiler / Graph DB / Vector DB / Event Broker に手を出さない（ADR-006、ADR-015）
 - 設計書の「削らない4つ」（法令時間モデル / Consolidation State / Citation Anchor / Snapshot 不変性）を工数都合で削らない（ADR-017）
 
-## 環境
+## hourei-rag との関係
 
-- Node 22、PostgreSQL 16（Homebrew、起動済み）、Docker、Python 3.13
-- 検証用 DB `blra_f7` が作成済み（`psql -d blra_f7`）
-- spike の実行: `cd spikes && npm install` のあと `npm run f2` / `f5` / `f6` / `f7:export`
-- e-Gov API v2 は認証不要。`https://laws.e-gov.go.jp/api/2/`（v1 は 301 を返すので使わない）
+`reference/hourei-rag/` に稼働中MVP（hourei-rag）のコードスナップショットがある。**コードのみ。設計文書は含まない。** 実装技法の参考にするが、設計判断は blra 設計書 v1.2 を正とする。
 
-## 次にやること
+hourei-rag は原文座標を DOM 属性（`data-source-start`）として保持するが、blra 設計書 §6.2 はこれを否定し、座標対応表をデータとして持つ方針（ADR-027）。hourei-rag のコードを読むときはこの違いに注意。
 
-S0 は完了した。以降の作業は次のとおり。
+## 設計書の未記載事項（M1 で判明・実装時に補完済みまたは要補完）
 
-1. **S1（Corpus Foundation）の着手。** `src/` を新設して本実装を始める。ブロッカーはない
-2. 設計書 §16 の O-2（pg_bigm）を ADR 化する
-3. **U-1（実務者ヒアリング）**を並行実施。「告示の現行全文が読めないツールに価値があるか」は n=1 では埋まらない唯一の論点
-4. ゲート検査者の確保（任意・S1 完了時までに）
+- ✅ `source.coverage_from` 列: §4.6 で第一級概念だが §13.1 のDDLに漏れ。M1 マイグレーションで補完済み
+- ✅ 全 enum 型の CREATE TYPE 文: 設計書に値のリストが散在。M1 で集約して実装済み
+- ⚠️ `source_type_enum` のコード値: 設計書 §8.4 は形式名のみ。`EGOV_LAW` 等のコード値を M1 で確定した。設計書への反映は未実施
+- ⚠️ `audit_record`, `ingestion_job` のDDL: 設計書に構造記述のみ。M1 で実装したが設計書への反映は未実施
+- ⚠️ pg ドライバの date型タイムゾーン問題: JST環境で date 型が前日になる。将来 `pg.types.setTypeParser` のカスタマイズを検討
 
-U-1〜U-4（実務者ヒアリング、Baseline計測、検索課題30件、Design Partner確保）は Taguchi さん側の作業として並行。**特に「告示の現行全文が読めないツールに価値があるか」は U-1 で必ず確認する必要がある。**
+## 並行タスク（Taguchi さん側、S1を止めない）
+
+- [ ] U-1（実務者ヒアリング）。案B の価値提案が成立するかを検証。**n=1 では埋まらない唯一の論点** → `user-research/`
+- [ ] ゲート検査者の確保（8〜16時間・任意）→ `docs/domain-reviewer-role.md`
