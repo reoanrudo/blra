@@ -10,6 +10,8 @@
  * このスクリプトと同じ ingestSourceVersion() を呼ぶ薄いラッパーになる。
  */
 
+// config を最初に import して dotenv を読み込む（ESM の import 順序対応）
+import "../config.js";
 import { db, closeDatabase } from "../db/connection.js";
 import { ingestSourceVersion } from "../ingest/pipeline.js";
 
