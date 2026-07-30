@@ -1,0 +1,38 @@
+# PostgreSQL 16 + pg_bigm + btree_gist 拡張
+# pg_bigm は pgdg パッケージとして提供されていないため、ソースからビルドする。
+# btree_gist は contrib として PostgreSQL ソースに含まれる。
+
+FROM postgres:16-bookworm AS builder
+
+# ビルドに必要なパッケージと PostgreSQL 16 の開発ヘッダをインストール
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        make \
+        gcc \
+        libc-dev \
+        postgresql-server-dev-16 \
+    && rm -rf /var/lib/apt/lists/*
+
+# pg_bigm のソースを取得してビルド
+# リリースタグは PostgreSQL バージョンに対応したものを使用
+ARG PG_BIGM_VERSION=1.2-20250903
+RUN git clone --depth 1 --branch "v${PG_BIGM_VERSION}" https://github.com/pgbigm/pg_bigm.git /tmp/pg_bigm \
+    && cd /tmp/pg_bigm \
+    && make USE_PGXS=1 \
+    && make USE_PGXS=1 DESTDIR=/pg_bigm_install install
+
+# 本番イメージ
+FROM postgres:16-bookworm
+
+# ビルドした pg_bigm をコピー（DESTDIR=/pg_bigm_install の構造: /pg_bigm_install/usr/lib/...）
+COPY --from=builder /pg_bigm_install/usr/lib/postgresql/16/lib/pg_bigm.so /usr/lib/postgresql/16/lib/pg_bigm.so
+COPY --from=builder /pg_bigm_install/usr/lib/postgresql/16/lib/bitcode /usr/lib/postgresql/16/lib/bitcode
+COPY --from=builder /pg_bigm_install/usr/share/postgresql/16/extension/pg_bigm.control /usr/share/postgresql/16/extension/pg_bigm.control
+COPY --from=builder /pg_bigm_install/usr/share/postgresql/16/extension/pg_bigm--*.sql /usr/share/postgresql/16/extension/
+
+# pg_bigm のライブラリパスを共有ライブラリ検索パスへ追加
+ENV LD_LIBRARY_PATH=/usr/lib/postgresql/16/lib
