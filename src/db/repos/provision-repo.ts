@@ -14,9 +14,14 @@ import type {
   OnConflictDatabase,
   OnConflictTables,
   OnConflictUpdateBuilder,
+  Selectable,
 } from "kysely";
 import type { Database, ProvisionType } from "../types.js";
 import type { ProvisionSegment } from "../../parser/types.js";
+
+// SELECT 結果の型
+type Provision = Selectable<Database["provision"]>;
+type ProvisionVersion = Selectable<Database["provision_version"]>;
 
 const BATCH_SIZE = 500;
 
@@ -106,4 +111,46 @@ export async function insertProvisionVersions(
       )
       .execute();
   }
+}
+
+// === 参照系クエリ（M4 で追加。Corpus API のデータ元）===
+
+export interface ProvisionWithVersion {
+  provision: Provision;
+  currentVersion: ProvisionVersion;
+}
+
+/**
+ * provision 1件を現行版（valid_to IS NULL）とともに取得する。
+ * 存在しない場合は undefined。
+ *
+ * 設計書 §4.2: 現行版は valid_to が NULL の provision_version。
+ */
+export async function getProvisionCurrentVersion(
+  db: Kysely<Database>,
+  provisionId: string,
+): Promise<ProvisionWithVersion | undefined> {
+  const provision = await db
+    .selectFrom("provision")
+    .selectAll()
+    .where("provision_id", "=", provisionId)
+    .executeTakeFirst();
+
+  if (!provision) {
+    return undefined;
+  }
+
+  const currentVersion = await db
+    .selectFrom("provision_version")
+    .selectAll()
+    .where("provision_id", "=", provisionId)
+    .where("valid_to", "is", null)
+    .orderBy("valid_from", "desc")
+    .executeTakeFirst();
+
+  if (!currentVersion) {
+    return undefined;
+  }
+
+  return { provision, currentVersion };
 }
