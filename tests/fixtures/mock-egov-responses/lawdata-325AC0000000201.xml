@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Law>
+  <LawNum>昭和二十五年法律第二百一号</LawNum>
+  <LawBody>
+    <LawTitle>建築基準法</LawTitle>
+    <MainProvision>
+      <Chapter Num="1">
+        <ChapterTitle>第一章　総則</ChapterTitle>
+        <Article Num="1">
+          <ArticleCaption>（目的）</ArticleCaption>
+          <ArticleTitle>第一条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum>１</ParagraphNum>
+            <ParagraphSentence>この法律は、建築物の敷地、構造、設備及び用途に関する最低の基準を定めることを目的とする。</ParagraphSentence>
+          </Paragraph>
+        </Article>
+      </Chapter>
+    </MainProvision>
+  </LawBody>
+</Law>

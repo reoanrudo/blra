@@ -1,0 +1,20 @@
+{
+  "law_info": {
+    "law_type": "Constitution",
+    "law_id": "325AC0000000201",
+    "law_num": "昭和二十五年法律第二百一号",
+    "promulgation_date": "1950-05-24"
+  },
+  "revisions": [
+    {
+      "law_revision_id": "325AC0000000201_20250401",
+      "law_title": "建築基準法",
+      "amendment_enforcement_date": "2025-04-01",
+      "amendment_promulgate_date": "2024-12-11",
+      "amendment_law_id": "336CO0000000115",
+      "amendment_law_num": "令和六年政令第百十五号",
+      "amendment_type": "改正",
+      "current_revision_status": "現行"
+    }
+  ]
+}
