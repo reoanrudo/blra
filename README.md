@@ -9,9 +9,9 @@
 
 ---
 
-## 現在地: S1 M3 完了・M4 着手
+## 現在地: S1 M4 完了・M5 着手
 
-**S1（Corpus Foundation）の M1〜M3 が完了。** 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish まで End-to-End で実行可能（S1 Exit 条件の主要部分を達成）。次は M4（Publish API + Source Registry API + 監査）。
+**S1（Corpus Foundation）の M1〜M4 が完了。** 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish → HTTP API 経由で参照・操作できる（S1 Exit 条件をほぼ達成）。次は M5（認証基盤 OIDC + Admin画面最小限）。
 
 S0（Corpus Feasibility）は完了済み（[ADR-024](docs/adr/ADR-024-s0-exit.md)）。
 
@@ -20,11 +20,11 @@ S0（Corpus Feasibility）は完了済み（[ADR-024](docs/adr/ADR-024-s0-exit.m
 | M1 | プロジェクト基盤 + 初期DB + Kysely検証 | 1.0週 | **完了** |
 | M2 | e-Gov Parser + 条項分割 + canonical_path生成 | 1.5週 | **完了** |
 | M3 | 取込パイプライン（Fetcher→Raw保存→Parser→Validation→Publish） | 1.0週 | **完了** |
-| M4 | Publish API + Source Registry API + 監査 | 0.5週 | **次** |
-| M5 | 認証基盤（OIDC）+ Admin画面（最小限） | 1.0週 | 未着手 |
+| M4 | Publish API + Source Registry API + 監査 | 0.5週 | **完了** |
+| M5 | 認証基盤（OIDC）+ Admin画面（最小限） | 1.0週 | **次** |
 | M6 | E2Eテスト + SourceVersion不変性テスト + ドキュメント | 1.0週 | 未着手 |
 
-**M3 E2E 実績（2026-07-30）**: 建築基準法 2264 条項、抽出率 100%、自動 Publish 済み。冪等性確認済み。
+**M4 実績（2026-07-30）**: HTTP API 7エンドポイント完成。curl/ブラウザから法令データの参照・取込トリガー・Publish・監査ログ検索が可能。テスト104件全合格。
 
 対象テーマは確定済み（[ADR-026](docs/adr/ADR-026-target-domain.md)）: **就寝用途のある福祉施設（老人ホーム等）の、新築における防火・避難**。
 
