@@ -18,7 +18,8 @@
     "db:down": "docker compose down",
     "migrate": "tsx src/migrate.ts up",
     "migrate:down": "tsx src/migrate.ts down",
-    "migrate:create": "tsx src/migrate.ts create"
+    "migrate:create": "tsx src/migrate.ts create",
+    "ingest": "tsx src/cli/ingest.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
