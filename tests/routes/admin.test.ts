@@ -18,7 +18,7 @@ import type { Kysely } from "kysely";
 import type { Database } from "../../src/db/types.js";
 import type { FetchResult } from "../../src/ingest/types.js";
 import { createTestDb, truncateAll } from "../helpers/db.js";
-import { buildTestApp } from "../helpers/app.js";
+import { buildTestApp, setStubSession, createMockSessionUser } from "../helpers/app.js";
 import { insertAuditRecord } from "../../src/db/repos/audit-repo.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -113,6 +113,8 @@ function mockFetcher(): (lawId: string) => Promise<FetchResult> {
 describe("POST /admin/source-versions/:id/publish", () => {
   beforeEach(async () => {
     app = await buildTestApp({ db });
+    // M5: CORPUS_EDITOR ロールを注入
+    setStubSession(app, createMockSessionUser({ roles: ["CORPUS_EDITOR"] }));
   });
 
   it("未公開バージョンをPublishし published_at をセットする", async () => {
@@ -197,6 +199,8 @@ describe("GET /admin/audit", () => {
       resourceId: "sv-002",
     });
     app = await buildTestApp({ db });
+    // M5: SYSTEM_ADMIN ロールを注入（監査ログはシステム運用者のみ）
+    setStubSession(app, createMockSessionUser({ roles: ["SYSTEM_ADMIN"] }));
   });
 
   it("全件取得する", async () => {
@@ -249,6 +253,8 @@ describe("GET /admin/audit", () => {
 describe("POST /admin/ingest", () => {
   beforeEach(async () => {
     app = await buildTestApp({ db, ingestFetcher: mockFetcher() });
+    // M5: CORPUS_EDITOR ロールを注入
+    setStubSession(app, createMockSessionUser({ roles: ["CORPUS_EDITOR"] }));
   });
 
   it("lawId を受け取って取込を実行し結果を返す", async () => {

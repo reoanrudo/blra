@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLRA 管理画面</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; }
+    header { background: #334155; color: #fff; padding: 12px 20px; border-radius: 8px 8px 0 0;
+             display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 1.2rem; margin: 0; }
+    header .user-info { font-size: 0.85rem; }
+    nav { background: #f1f5f9; padding: 10px 20px; display: flex; gap: 16px; border-bottom: 1px solid #cbd5e1; }
+    nav a { color: #1e293b; text-decoration: none; font-size: 0.9rem; }
+    nav a:hover { text-decoration: underline; }
+    section { padding: 20px; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 8px 8px; margin-bottom: 20px; }
+    h2 { font-size: 1.1rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+    .form-row { margin-bottom: 12px; }
+    label { display: block; font-size: 0.85rem; margin-bottom: 4px; font-weight: 600; }
+    input, select { padding: 8px; border: 1px solid #94a3b8; border-radius: 4px; width: 100%; max-width: 320px; }
+    button { padding: 8px 20px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+    th { background: #f8fafc; font-weight: 600; }
+    .error { color: #dc2626; font-size: 0.85rem; margin-top: 8px; }
+    .success { color: #16a34a; font-size: 0.85rem; margin-top: 8px; }
+    .empty { color: #64748b; font-style: italic; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>BLRA 管理画面</h1>
+  <div class="user-info" id="user-info">読込中...</div>
+</header>
+
+<nav>
+  <a href="#ingest">取込（SCR-10）</a>
+  <a href="#publish">Publish（SCR-12）</a>
+  <a href="#members">メンバー（SCR-20）</a>
+  <a href="/auth/logout">ログアウト</a>
+</nav>
+
+<!-- SCR-10: 取込ダッシュボード -->
+<section id="ingest">
+  <h2>取込トリガー（SCR-10）</h2>
+  <div class="form-row">
+    <label for="lawId">法令ID（e-Gov lawId）</label>
+    <input type="text" id="lawId" placeholder="例: 343AC0000000042" />
+  </div>
+  <button onclick="triggerIngest()">取込実行</button>
+  <div id="ingest-result"></div>
+</section>
+
+<!-- SCR-12: SourceVersion 詳細/Publish -->
+<section id="publish">
+  <h2>SourceVersion 詳細・Publish（SCR-12）</h2>
+  <div class="form-row">
+    <label for="svId">SourceVersion ID</label>
+    <input type="text" id="svId" placeholder="UUID" />
+    <button onclick="loadSourceVersion()">詳細取得</button>
+  </div>
+  <div id="sv-detail"></div>
+  <div id="publish-area" style="display:none;">
+    <button id="publish-btn" onclick="publishSourceVersion()">Publish</button>
+    <div id="publish-result"></div>
+  </div>
+</section>
+
+<!-- SCR-20: 組織・メンバー管理 -->
+<section id="members">
+  <h2>組織・メンバー管理（SCR-20）</h2>
+  <div class="form-row">
+    <label for="member-email">追加するユーザの email</label>
+    <input type="email" id="member-email" placeholder="user@example.com" />
+    <label for="member-role">ロール</label>
+    <select id="member-role">
+      <option value="RESEARCHER">RESEARCHER</option>
+      <option value="REVIEWER">REVIEWER</option>
+      <option value="CORPUS_EDITOR">CORPUS_EDITOR</option>
+      <option value="ORGANIZATION_ADMIN">ORGANIZATION_ADMIN</option>
+    </select>
+    <button onclick="addMember()">メンバー追加</button>
+  </div>
+  <div id="member-add-result"></div>
+  <table id="member-table" style="display:none;">
+    <thead><tr><th>表示名</th><th>Email</th><th>ロール</th><th>付与日</th></tr></thead>
+    <tbody id="member-list"></tbody>
+  </table>
+  <div id="member-empty" class="empty">メンバーがいません</div>
+</section>
+
+<script>
+// === 初期化: /me でログイン状態確認 ===
+async function init() {
+  try {
+    const res = await fetch('/me');
+    if (res.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const body = await res.json();
+    const u = body.data;
+    document.getElementById('user-info').textContent =
+      `${u.display_name} [${u.roles.join(', ')}]`;
+    loadMembers();
+  } catch (e) {
+    document.getElementById('user-info').textContent = 'エラー';
+  }
+}
+
+// === SCR-10: 取込トリガー ===
+async function triggerIngest() {
+  const lawId = document.getElementById('lawId').value.trim();
+  if (!lawId) return;
+  const el = document.getElementById('ingest-result');
+  el.innerHTML = '<p>取込中...</p>';
+  try {
+    const res = await fetch('/admin/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lawId }),
+    });
+    const body = await res.json();
+    if (res.ok) {
+      el.innerHTML = `<div class="success">取込完了: ${body.data.status}（${body.data.segment_count}条項）</div>`;
+    } else {
+      el.innerHTML = `<div class="error">エラー: ${body.error?.message || res.status}</div>`;
+    }
+  } catch (e) {
+    el.innerHTML = `<div class="error">通信エラー</div>`;
+  }
+}
+
+// === SCR-12: SourceVersion 詳細取得 ===
+async function loadSourceVersion() {
+  const id = document.getElementById('svId').value.trim();
+  if (!id) return;
+  const detailEl = document.getElementById('sv-detail');
+  const pubArea = document.getElementById('publish-area');
+  detailEl.innerHTML = '<p>読込中...</p>';
+  try {
+    const res = await fetch(`/admin/source-versions/${id}`);
+    if (!res.ok) {
+      const body = await res.json();
+      detailEl.innerHTML = `<div class="error">${body.error?.message || '取得失敗'}</div>`;
+      pubArea.style.display = 'none';
+      return;
+    }
+    const body = await res.json();
+    const d = body.data;
+    detailEl.innerHTML = `
+      <table>
+        <tr><th>content_hash</th><td>${d.content_hash}</td></tr>
+        <tr><th>consolidation_state</th><td>${d.consolidation_state}</td></tr>
+        <tr><th>verification_status</th><td>${d.verification_status}</td></tr>
+        <tr><th>published_at</th><td>${d.published_at || '未公開'}</td></tr>
+        <tr><th>processing_status</th><td>${d.processing_status}</td></tr>
+      </table>`;
+    pubArea.style.display = 'block';
+    const btn = document.getElementById('publish-btn');
+    btn.disabled = !d.can_publish;
+    btn.dataset.svId = id;
+  } catch (e) {
+    detailEl.innerHTML = `<div class="error">通信エラー</div>`;
+  }
+}
+
+// === SCR-12: Publish ===
+async function publishSourceVersion() {
+  const btn = document.getElementById('publish-btn');
+  const id = btn.dataset.svId;
+  if (!id) return;
+  if (!confirm('このSourceVersionを公開しますか？')) return;
+  const el = document.getElementById('publish-result');
+  el.innerHTML = '<p>Publish中...</p>';
+  try {
+    const res = await fetch(`/admin/source-versions/${id}/publish`, { method: 'POST' });
+    const body = await res.json();
+    if (res.ok) {
+      el.innerHTML = `<div class="success">公開完了: ${body.data.published_at}</div>`;
+      btn.disabled = true;
+    } else {
+      el.innerHTML = `<div class="error">エラー: ${body.error?.message}</div>`;
+    }
+  } catch (e) {
+    el.innerHTML = `<div class="error">通信エラー</div>`;
+  }
+}
+
+// === SCR-20: メンバー一覧 ===
+async function loadMembers() {
+  try {
+    const meRes = await fetch('/me');
+    const me = (await meRes.json()).data;
+    const orgId = me.organization_id;
+    const res = await fetch(`/admin/organizations/${orgId}/members`);
+    if (!res.ok) return;
+    const body = await res.json();
+    const members = body.data;
+    const table = document.getElementById('member-table');
+    const empty = document.getElementById('member-empty');
+    const list = document.getElementById('member-list');
+    if (members.length === 0) {
+      table.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    table.style.display = 'table';
+    empty.style.display = 'none';
+    list.innerHTML = members.map(m =>
+      `<tr><td>${m.display_name}</td><td>${m.email}</td><td>${m.role}</td><td>${m.granted_at?.slice(0,10) || '-'}</td></tr>`
+    ).join('');
+  } catch (e) { /* 権限不足等は無視 */ }
+}
+
+// === SCR-20: メンバー追加 ===
+async function addMember() {
+  const email = document.getElementById('member-email').value.trim();
+  const role = document.getElementById('member-role').value;
+  if (!email) return;
+  const el = document.getElementById('member-add-result');
+  try {
+    const meRes = await fetch('/me');
+    const orgId = (await meRes.json()).data.organization_id;
+    const res = await fetch(`/admin/organizations/${orgId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role }),
+    });
+    const body = await res.json();
+    if (res.ok) {
+      el.innerHTML = `<div class="success">追加完了: ${body.data.display_name} (${role})</div>`;
+      loadMembers();
+    } else {
+      el.innerHTML = `<div class="error">エラー: ${body.error?.message}</div>`;
+    }
+  } catch (e) {
+    el.innerHTML = `<div class="error">通信エラー</div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

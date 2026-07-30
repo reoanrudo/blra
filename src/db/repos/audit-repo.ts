@@ -6,8 +6,8 @@
  *   Source Metadata 変更等。
  *   機密本文を Audit Payload へ無制限に複製しない（ハッシュで代替）。
  *
- * M4 時点では認証未実装のため actor_id / organization_id は NULL で記録する。
- * M5（OIDC 認証基盤）で拡張する。
+ * M5 拡張: actorId / organizationId をセッションから受け取り記録する。
+ * 認証未使用時（スタブモード）は null で記録し、M4 までのテスト互換を保つ。
  */
 
 import { randomUUID } from "node:crypto";
@@ -32,11 +32,15 @@ export interface InsertAuditRecordParams {
   correlationId?: string | null;
   /** クライアントコンテキスト（任意の JSON）。 */
   clientContext?: unknown | null;
+  /** 実行者のユーザID（M5: セッションから取得）。未認証時は null。 */
+  actorId?: string | null;
+  /** 実行者の組織ID（M5: セッションから取得）。未認証時は null。 */
+  organizationId?: string | null;
 }
 
 /**
  * 監査レコードを追記する。
- * actor_id / organization_id は M4 時点では常に NULL（M5 で認証導入時に拡張）。
+ * actorId / organizationId は M5 でセッションから渡される（未認証時は null）。
  */
 export async function insertAuditRecord(
   db: Kysely<Database>,
@@ -47,8 +51,8 @@ export async function insertAuditRecord(
     .values({
       audit_id: randomUUID(),
       occurred_at: new Date(),
-      actor_id: null,
-      organization_id: null,
+      actor_id: params.actorId ?? null,
+      organization_id: params.organizationId ?? null,
       action: params.action,
       resource_type: params.resourceType,
       resource_id: params.resourceId ?? null,
