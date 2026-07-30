@@ -1,0 +1,29 @@
+services:
+  postgres:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.postgres
+    container_name: blra-postgres
+    environment:
+      POSTGRES_USER: blra
+      POSTGRES_PASSWORD: blra_dev
+      POSTGRES_DB: blra
+      # pg_bigm は shared_preload_libraries への登録が必要
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_bigm
+      -c max_connections=50
+    ports:
+      - "5433:5432"
+    volumes:
+      - blra-pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blra -d blra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  blra-pgdata:
