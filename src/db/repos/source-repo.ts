@@ -11,9 +11,14 @@ import type {
   OnConflictDatabase,
   OnConflictTables,
   OnConflictUpdateBuilder,
+  Selectable,
 } from "kysely";
 import type { Database } from "../types.js";
 import type { LawInfo } from "../../ingest/types.js";
+
+// SELECT 結果の型。Generated<XXX> を解決した実体の型。
+type Source = Selectable<Database["source"]>;
+type SourceVersion = Selectable<Database["source_version"]>;
 
 /**
  * canonical_uri で source を UPSERT し、source_id を返す。
@@ -116,4 +121,95 @@ export async function createSourceVersion(
     .executeTakeFirstOrThrow();
 
   return result.source_version_id;
+}
+
+// === 参照系クエリ（M4 で追加。Source Registry API のデータ元）===
+
+/**
+ * 取込済み法令（source）一覧を取得する。
+ * §5.3 制約: 公開済み版を持つ source のみ返す。
+ */
+export async function listPublishedSources(
+  db: Kysely<Database>,
+): Promise<Source[]> {
+  return db
+    .selectFrom("source")
+    .selectAll()
+    .where("source_id", "in", (qb) =>
+      qb
+        .selectFrom("source_version")
+        .select("source_id")
+        .where("published_at", "is not", null),
+    )
+    .orderBy("title", "asc")
+    .execute();
+}
+
+/**
+ * source 1件を取得する。
+ * 存在しない場合は undefined。
+ */
+export async function getSourceById(
+  db: Kysely<Database>,
+  sourceId: string,
+): Promise<Source | undefined> {
+  return db
+    .selectFrom("source")
+    .selectAll()
+    .where("source_id", "=", sourceId)
+    .executeTakeFirst();
+}
+
+/**
+ * 指定 source の版履歴を取得する。
+ * §5.3 制約: 公開済み版（published_at IS NOT NULL）のみ返す。
+ */
+export async function listPublishedSourceVersions(
+  db: Kysely<Database>,
+  sourceId: string,
+): Promise<SourceVersion[]> {
+  return db
+    .selectFrom("source_version")
+    .selectAll()
+    .where("source_id", "=", sourceId)
+    .where("published_at", "is not", null)
+    .orderBy("recorded_at", "desc")
+    .execute();
+}
+
+/**
+ * source_version 1件を取得する。
+ * Publish API・監査で使う。
+ */
+export async function getSourceVersionById(
+  db: Kysely<Database>,
+  sourceVersionId: string,
+): Promise<SourceVersion | undefined> {
+  return db
+    .selectFrom("source_version")
+    .selectAll()
+    .where("source_version_id", "=", sourceVersionId)
+    .executeTakeFirst();
+}
+
+/**
+ * source_version を Publish する（published_at をセット）。
+ * 既に Publish 済みの場合は影響なし（冪等）。
+ * @returns 更新行数（0 = 対象なし、1 = 更新成功）
+ */
+export async function publishSourceVersion(
+  db: Kysely<Database>,
+  sourceVersionId: string,
+): Promise<number> {
+  const result = await db
+    .updateTable("source_version")
+    .set({
+      published_at: new Date(),
+      processing_status: "PUBLISHED",
+    })
+    .where("source_version_id", "=", sourceVersionId)
+    .where("published_at", "is", null)
+    .executeTakeFirst();
+
+  return Number(result.numUpdatedRows);
 }
