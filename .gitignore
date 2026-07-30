@@ -20,3 +20,6 @@ spikes/fixtures/raw/
 # hourei-rag のコードスナップショット（実装技法の参考用・git管理外）
 # 設計文書は含めない。blra 設計書 v1.2 を正とする。
 reference/hourei-rag/
+
+# 取込パイプラインの原本XML（再取得可能）
+data/raw/

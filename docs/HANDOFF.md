@@ -17,20 +17,22 @@ BLRA（建築法令リファレンス）プロジェクトを引き継いでほ�
 
 ## 現在地
 
-**S1（Corpus Foundation）の M1 完了。M2（e-Gov Parser）着手準備済み。**
+**S1（Corpus Foundation）の M3 完了。M4（Publish API + Source Registry API）着手準備済み。**
 
-S0 は完了済み（ADR-024）。S1 を6マイルストーンに分割し、最初の M1（プロジェクト基盤 + 初期DB + Kysely動作検証）を完了した。
+S0 は完了済み（ADR-024）。S1 を6マイルストーンに分割し、M1〜M3 を完了した。
+**建築基準法1本を e-Gov API → 取込 → 構造化 → Publish まで End-to-End で実行可能（S1 Exit条件の主要部分を達成）。**
 
 | マイルストーン | 内容 | 期間 | 状態 |
 |---|---|---|---|
 | M1 | プロジェクト基盤 + 初期DB + Kysely検証 | 1.0週 | **完了** |
-| M2 | e-Gov Parser + 条項分割 + canonical_path生成 | 1.5週 | **次** |
-| M3 | 取込パイプライン（Fetcher→Raw保存→Parser→Validation） | 1.0週 | 未着手 |
-| M4 | Publish API + Source Registry API + 監査 | 0.5週 | 未着手 |
+| M2 | e-Gov Parser + 条項分割 + canonical_path生成 | 1.5週 | **完了** |
+| M3 | 取込パイプライン（Fetcher→Raw保存→Parser→Validation→Publish） | 1.0週 | **完了** |
+| M4 | Publish API + Source Registry API + 監査 | 0.5週 | **次** |
 | M5 | 認証基盤（OIDC）+ Admin画面（最小限） | 1.0週 | 未着手 |
 | M6 | E2Eテスト + SourceVersion不変性テスト + ドキュメント | 1.0週 | 未着手 |
 
 **S1 Exit条件**: 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish まで End-to-End で実行できること。
+**M3 で E2E デモ成功（建築基準法 2264 条項、抽出率 100%、自動 Publish 済み）。**
 
 ## 技術スタック（ADR-022 + ADR-027、ともに確定済み）
 
@@ -110,43 +112,71 @@ docker/
   initdb/00-extensions.sql
 ```
 
-## M2 で実装すること
+## M2 + M3 で作成したもの
 
-**e-Gov Parser + 条項分割 + canonical_path生成**
+### M2: e-Gov Parser（純関数）
 
-### 参照すべき S0 spike の知見（spikes/ は使い捨てだが知見は再利用）
+M2 は **Parser の純関数**（XML文字列 → ProvisionSegment[]）を実装した。spike F-2 パーサーのロジックを本実装へ昇華。抽出率 99.97〜100% を維持。
 
-S0 spike（`spikes/src/`）で F-2 パーサーが抽出率 99.97〜100.00% を達成済み。以下の知見を M2 実装へ引き継ぐ。
+```
+src/parser/
+  index.ts           parse() エントリ（XML → ProvisionSegment[]）
+  types.ts           ProvisionSegment, ParseInput, ParseOutput, ValidationError 型
+  xml-to-tree.ts     fast-xml-parser で LawNode 木へ変換
+  segment.ts         LawBody → ProvisionSegment[] 分解 + validateSegments()
+  normalize.ts       NFKC正規化 + SHA-256 fingerprint
+```
 
-1. **e-Gov API v2**（認証不要、`https://laws.e-gov.go.jp/api/2/`）:
-   - `/laws?law_title={title}` — 法令検索
-   - `/law_revisions/{law_id}` — 版一覧
-   - `/law_data/{law_revision_id}` — 本文取得
-   - 建築基準法の `law_id`: `325AC0000000201`
+### M3: 取込パイプライン（Fetcher→Raw保存→Parser→Validation→Publish）
 
-2. **法令標準XMLの構造** → 条/項/号 の対応:
-   - `Article` → 条（`Num` 属性から `art{N}`、`_` は `-` へ）
-   - `Paragraph` → 項（`para{N}`、省略時 `1`）
-   - `Item` → 号（`item{N}`）
-   - `SupplProvision` → 附則（`AmendLawNum` で名前空間分離。建基法に120個）
-   - `AppdxTable`/`AppdxStyle` → 別表・様式
+M3 は設計書 §8.1 のパイプラインを完成させた。`npm run ingest` で建築基準法1本を E2E で取込・公開できる。
 
-3. **F-2 で発見した重要事項**:
-   - 本文は `ParagraphSentence` の外にもある（`TableColumn`, `Column`）。`ParagraphSentence` だけ拾うと約2%を失う
-   - ルビ（`Rt`/`Rp`）を除外しないと本文が壊れる（施行規則で28箇所）
-   - 附則の `canonical_path` 衝突: `suppl:{amendment_law_id}/art1/para1` で名前空間を切る（S1で `law_revisions` 突合を検証）
-   - 別表の `canonical_path`: 連番（`appdx{seq}`）ではなくタイトルから生成（`appdx-table-1`）。F-5 で連番が版間追跡を壊すことを実証済み
+```
+src/ingest/
+  types.ts           FetchResult, PipelineResult, IngestOptions, ValidFromResult 型
+  fetcher.ts         e-Gov API v2 クライアント（リトライ付き・XMLバリデーション）
+  raw-store.ts       原本XMLのローカルFS保存・読込（§8.2-2 原本は先に残す）
+  hash.ts            content_hash 計算（SHA-256 先頭16文字）
+  valid-from.ts      §4.2 valid_from / valid_from_status 導出
+  validation.ts      §8.3 抽出率・文字化けチェック + Publish判定
+  pipeline.ts        ingestSourceVersion() — 全ステージ統合のメイン関数
+src/db/repos/
+  source-repo.ts     source / source_version の UPSERT・Hash検索
+  provision-repo.ts  provision / provision_version の UPSERT・バッチINSERT
+src/cli/
+  ingest.ts          npm run ingest エントリ
+```
 
-4. **抽出率の計測規則**: 分母・分子ともに空白除去後の文字数。残差は制定文（`EnactStatement`）で、条項ではないため取りこぼしではない。
+### M3 の設計判断（確定済み・設計書へ反映済み）
 
-### M2 で実装しないもの（M3 以降）
+設計ドキュメント: `docs/superpowers/specs/2026-07-30-s1-m3-ingestion-pipeline-design.md`
+実装計画: `docs/superpowers/plans/2026-07-30-s1-m3-ingestion-pipeline.md`
 
-- e-Gov API への実際のアクセス（M3 の Fetcher）
-- DB への書き込み（M3 のパイプライン統合）
-- Validation の全項目（M3）
-- Publish（M4）
+- **Raw保存**: ローカルFS（`data/raw/{sourceId}/{hash}.xml`）。将来 S3 へ移行可能
+- **取込対象**: 現行版（latest revision）1つ。Fetcher は1版を取込む関数（全版ループは Phase 2）
+- **終端**: 自動Publishまで。validation合格版は `published_at` セット、要Review版は NULL
+- **トリガー**: CLI（`npm run ingest`）。M4 で HTTP API の薄いラッパーを追加
+- **valid_from 導出**: `amendment_enforcement_date` → FIXED、なければ UNDETERMINED
+- **content_hash**: 原本XML全文の SHA-256 先頭16文字
 
-M2 は **Parser の純関数**（XML文字列 → ProvisionSegment[]）を実装し、Fixture Test で検証する。
+### M3 の E2E デモ実績（2026-07-30）
+
+```
+npm run ingest
+  状態: INGESTED（公開済み）
+  segment数: 2264
+  抽出率: 100.00%
+  contentHash: 89311dd9768f73eb
+```
+
+DB: source 1件、source_version 1件（PUBLISHED）、provision 2264件、provision_version 2264件。冪等性確認済み（2回目は SKIP）。
+
+### M3 で実装しないもの（M4 以降）
+
+- Publish API / Source Registry API（HTTP エンドポイント）— M4
+- Reference Extractor（Citation Resolver 経由のエッジ抽出）— Phase 2
+- 複数版の順次取込（全 law_revisions ループ）— Phase 2
+- Review Queue UI — Phase 2 以降
 
 ## 決まっていること（蒸し返さない）
 
