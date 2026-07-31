@@ -19,7 +19,9 @@
     "migrate": "tsx src/migrate.ts up",
     "migrate:down": "tsx src/migrate.ts down",
     "migrate:create": "tsx src/migrate.ts create",
-    "ingest": "tsx src/cli/ingest.ts"
+    "migrate:test": "TEST_DATABASE_URL=postgres://blra:blra_dev@localhost:5433/blra_test tsx src/migrate.ts up",
+    "ingest": "tsx src/cli/ingest.ts",
+    "seed:dev": "tsx scripts/seed-dev-references.ts"
   },
   "dependencies": {
     "@fastify/secure-session": "^8.3.0",
