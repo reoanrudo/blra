@@ -38,8 +38,12 @@ async function main() {
 
   const direction = command === "down" ? "down" : "up";
 
+  // TEST_DATABASE_URL が設定されていればテスト用DB（blra_test）へ適用。
+  // `npm run migrate:test` がこの変数を設定する。
+  const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL!;
+
   await runner({
-    databaseUrl: process.env.DATABASE_URL!,
+    databaseUrl,
     dir: migrationsDir,
     migrationsTable: "pgmigrations",
     direction,

@@ -54,7 +54,12 @@ export async function ingestSourceVersion(
   const fetched: FetchResult = await fetcher(lawId);
 
   // === ステージ2: source の UPSERT（トランザクション外で source_id を先に確保） ===
-  const sourceId = await upsertSource(db, fetched.lawInfo);
+  // title には通称名（例: 「建築基準法」）を使う。revisionInfo.law_title に格納。
+  const sourceId = await upsertSource(
+    db,
+    fetched.lawInfo,
+    fetched.revisionInfo.law_title,
+  );
 
   // === ステージ3: content_hash 計算 + Raw保存 ===
   const contentHash = computeContentHash(fetched.xml);

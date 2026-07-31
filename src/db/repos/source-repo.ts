@@ -23,10 +23,18 @@ type SourceVersion = Selectable<Database["source_version"]>;
 /**
  * canonical_uri で source を UPSERT し、source_id を返す。
  * 既存の場合は title 等を更新（改正でタイトルが変わる可能性）。
+ *
+ * title には通称名（例: 「建築基準法」）を使う。
+ * 通称名は e-Gov API の law_revisions レスポンスの revision.law_title に格納されている。
+ * lawInfo.law_num（例: 「昭和二十五年法律第二百一号」）は法令番号であり、
+ * 人間が法令を識別する名称としては不適切なため title には使わない。
+ * law_num は title_kana（よみがな欄）が空の場合のフォールバック識別子として
+ * 別途保持できるが、本カラム構成では title に通称名を入れる。
  */
 export async function upsertSource(
   db: Kysely<Database>,
   lawInfo: LawInfo,
+  lawTitle: string,
 ): Promise<string> {
   // canonical_uri は設計書 §13.1: "{jurisdiction}/{sourceIdentity}" 形式
   const canonicalUri = `jp/law/${lawInfo.law_id}`;
@@ -36,7 +44,7 @@ export async function upsertSource(
     .values({
       source_id: randomUUID(),
       canonical_uri: canonicalUri,
-      title: lawInfo.law_num, // 法令番号をタイトルの代わり（最も安定した識別子）
+      title: lawTitle, // 通称名（例: 「建築基準法」）
       publisher: "日本国",
       authority_class: "PRIMARY_LAW",
       jurisdiction: "jp",
@@ -51,11 +59,11 @@ export async function upsertSource(
         OnConflictTables<"source">
       > =>
         oc.column("canonical_uri").doUpdateSet({
-          title: lawInfo.law_num,
+          title: lawTitle,
         }) as OnConflictUpdateBuilder<
-          OnConflictDatabase<Database, "source">,
-          OnConflictTables<"source">
-        >,
+        OnConflictDatabase<Database, "source">,
+        OnConflictTables<"source">
+      >,
     )
     .returning("source_id")
     .executeTakeFirstOrThrow();
