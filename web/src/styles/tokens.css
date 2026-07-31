@@ -23,10 +23,16 @@
   /* === 注意帯（NoticeBand）6種の優先順序 §19.10.3 === */
   --caution-bg: #fdf3dc;
   --caution-fg: #7a5200;
+  --caution-border: #e7d3a2;
   --critical-bg: #fcebea;
   --critical-fg: #a3261e;
+  --critical-border: #f0c9c5;
   --info-bg: #edf2fe;
   --info-fg: #24479f;
+  --info-border: #c3d2f5;
+
+  /* === 目次（TOC）=== */
+  --toc-active-bg: #fceff5;
 
   /* === 線引き（ハイライト）=== */
   --marker: #f5d76e; /* 薄い山吹 */
@@ -56,5 +62,5 @@
   --asof-bar-height: 40px;
 
   /* === 背景（机の上）=== */
-  --desk-bg: #e8e4dc;
+  --desk-bg: #E8E4DB;
 }

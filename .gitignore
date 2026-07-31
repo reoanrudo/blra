@@ -16,6 +16,8 @@ web/tsconfig.tsbuildinfo
 # spike の取得物と出力（再取得可能なため追跡しない）
 spikes/out/
 spikes/fixtures/raw/
+spikes/node_modules/
+spikes/.omc/
 
 # 大きな調査記録は追跡するが、エディタの一時ファイルは除く
 *.swp
@@ -30,3 +32,9 @@ reference/hourei-rag/
 
 # 取込パイプラインの原本XML（再取得可能）
 data/raw/
+
+# brainstorm visual companion
+.superpowers/
+
+# hourei-rag から移植した未使用コード群（今後段階統合で再利用）
+web/src/_HoureiArchive/
