@@ -7,30 +7,22 @@
  * 前提: docker compose up -d + npm run migrate が完了済み。
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { Kysely, PostgresDialect, sql } from "kysely";
-import pg from "pg";
+import { sql } from "kysely";
 import { readFileSync, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Database } from "../../src/db/types.js";
+import { createTestDb } from "../helpers/db.js";
 import type { FetchResult } from "../../src/ingest/types.js";
 import { ingestSourceVersion } from "../../src/ingest/pipeline.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_XML = readFileSync(join(__dirname, "../fixtures/minimal-law.xml"), "utf-8");
 
-let db: Kysely<Database>;
-
-beforeAll(async () => {
-  const pool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL ?? "postgres://blra:blra_dev@localhost:5433/blra",
-  });
-  db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
-});
+let db = createTestDb();
 
 afterAll(async () => {
-  await db?.destroy();
+  await db.destroy();
 });
 
 beforeEach(async () => {

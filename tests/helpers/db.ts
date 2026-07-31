@@ -38,6 +38,15 @@ function resolveTestDatabaseUrl(): string {
 const TEST_DATABASE_URL = resolveTestDatabaseUrl();
 
 /**
+ * テスト用 DATABASE_URL（テスト用DBへの接続文字列）。
+ *
+ * createTestDb() を使わずに独自の pg.Pool を作るテスト
+ * （pipeline.test.ts, exclude-constraint.test.ts 等）は、
+ * この定数を使って本番DB（blra）ではなく blra_test へ接続すること。
+ */
+export { TEST_DATABASE_URL };
+
+/**
  * テスト用 DB 接続を作成する。
  * 呼び出し元で afterAll にて db.destroy() すること。
  */

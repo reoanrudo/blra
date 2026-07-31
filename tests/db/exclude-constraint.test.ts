@@ -13,21 +13,13 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { Kysely, PostgresDialect, sql } from "kysely";
-import pg from "pg";
-import type { Database } from "../../src/db/types.js";
+import { sql } from "kysely";
+import { createTestDb } from "../helpers/db.js";
 
-let db: Kysely<Database>;
-
-beforeAll(async () => {
-  const pool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL ?? "postgres://blra:blra_dev@localhost:5432/blra",
-  });
-  db = new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
-});
+let db = createTestDb();
 
 afterAll(async () => {
-  await db?.destroy();
+  await db.destroy();
 });
 
 // 各テストの前にデータをクリーンアップ
