@@ -1,0 +1,236 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .law-page {
+    --law-accent: #d92f7e;
+    --law-ink: #171717;
+    --law-muted: #6f6a62;
+    --law-rule: #1f1f1f;
+    --law-paper: #fffdf8;
+
+    max-width: 1040px;
+    margin: 0 auto;
+    background: var(--law-paper);
+    color: var(--law-ink);
+    border: 1px solid #d8d2c8;
+    box-shadow: 0 18px 44px rgb(33 29 24 / 12%);
+    container-type: inline-size;
+    padding: 22px 24px 30px;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  }
+
+  .law-running-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: end;
+    border-bottom: 2px solid var(--law-rule);
+    padding-bottom: 8px;
+    margin-bottom: 18px;
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  }
+
+  .law-running-header__law {
+    color: var(--law-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .law-running-header__section {
+    color: var(--law-ink);
+    font-size: 12px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .law-article-title {
+    color: var(--law-ink);
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .law-article-caption {
+    color: var(--law-accent);
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.5;
+    margin: 6px 0 18px;
+  }
+
+  .law-body {
+    font-size: 14px;
+    line-height: 1.92;
+  }
+
+  .law-body a {
+    color: var(--law-accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  .law-heading {
+    break-inside: avoid;
+    color: var(--law-accent);
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    font-weight: 800;
+    line-height: 1.5;
+  }
+
+  .law-heading--chapter {
+    border-top: 1px solid #bdb6aa;
+    margin: 22px 0 8px;
+    padding-top: 10px;
+    font-size: 17px;
+  }
+
+  .law-heading--section {
+    margin: 18px 0 6px;
+    font-size: 15px;
+  }
+
+  .law-heading--subsection {
+    margin: 14px 0 4px;
+    color: #6d2450;
+    font-size: 13px;
+  }
+
+  .law-node {
+    break-inside: avoid;
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+
+  .law-node__caption {
+    color: var(--law-accent);
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.5;
+    margin-bottom: 2px;
+  }
+
+  .law-node__text {
+    display: flex;
+    gap: 0.75em;
+    align-items: baseline;
+    margin: 0;
+  }
+
+  .law-node__text > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .law-node__label {
+    flex: 0 0 auto;
+    min-width: 2.75em;
+    color: #302b25;
+    font-weight: 800;
+  }
+
+  .law-table-wrapper {
+    break-inside: avoid;
+  }
+
+  .law-table {
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  }
+
+  .law-table__cell {
+    font-size: 12px;
+  }
+
+  .law-table__header-row .law-table__cell {
+    background: #f5f3ef;
+    color: #302b25;
+    font-weight: 800;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .law-note-panel {
+    --law-accent: #d92f7e;
+
+    color: #292521;
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  }
+
+  .law-note-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #292521;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0;
+    border-bottom: 2px solid #292521;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+  }
+
+  .law-note-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 2px;
+    background: #2b2b2b;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .law-note-section {
+    border-left: 2px solid #b9b0a3;
+    padding-left: 10px;
+  }
+
+  .law-note-link {
+    color: #292521;
+    text-decoration: none;
+  }
+
+  .law-note-link:hover {
+    color: var(--law-accent, #d92f7e);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* 2段組み（column-count: 2）は ADR-023 で廃止。
+     1条モード・章スクロールモードともに縦1列（1段組み）で統一。
+     画面サイズ・コンテナ幅に依存しない。 */
+
+  @media (max-width: 640px) {
+    .law-page {
+      border-left: 0;
+      border-right: 0;
+      padding: 18px 16px 24px;
+    }
+
+    .law-running-header {
+      grid-template-columns: 1fr;
+      gap: 3px;
+    }
+
+    .law-article-title {
+      font-size: 19px;
+    }
+
+    .law-body {
+      font-size: 13px;
+      line-height: 1.85;
+    }
+  }
+}

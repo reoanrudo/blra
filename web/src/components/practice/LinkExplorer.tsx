@@ -1,3 +1,6 @@
+"use client";
+
+import { useApplicability } from "@/contexts/ApplicabilityContext";
 
 export interface LinkItem {
   id: string;
@@ -13,6 +16,7 @@ interface LinkExplorerProps {
 }
 
 function LinkListItem({ item, badge }: { item: LinkItem; badge: string }) {
+  const applicability = useApplicability();
   const articleNumber = item.articleNumberNormalized
     ? `第${item.articleNumberNormalized}条`
     : "条文";
@@ -21,7 +25,7 @@ function LinkListItem({ item, badge }: { item: LinkItem; badge: string }) {
     <li className="flex items-start gap-2 py-1 text-xs leading-relaxed">
       <span className="law-note-badge mt-0.5">{badge}</span>
       <a
-        href={`/articles/${item.articleId}`}
+        href={applicability.articleHref(item.articleId)}
         target="_blank"
         rel="noopener noreferrer"
         className="law-note-link min-w-0 flex-1 text-left"

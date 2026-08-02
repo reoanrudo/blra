@@ -1,0 +1,737 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_bigm]
+}
+
+// ─── Enums ───
+
+enum CheckStatus {
+  unchecked
+  applicable
+  not_applicable
+  ok
+  ng
+  needs_consultation
+}
+
+// 法規種別（建築業界標準の傍注アイコン体系に準拠）
+enum RegulationCategory {
+  law // 法（法律）
+  cabinet_order // 令（政令）
+  ministry_ordinance // 省（省令）
+  agency_ordinance // 府（府令・局令）
+  notification // 告（告示）
+}
+
+// 法令テキスト種別（条文構造分類）
+enum RegulationType {
+  individual
+  collective
+  procedure
+  penalty
+  supplementary
+}
+
+enum ActivityType {
+  search
+  view
+  export
+  import
+}
+
+// 条文階層（16種。親子階層の型安全性を保証）
+enum ArticleLevel {
+  chapter
+  section
+  subsection
+  article
+  paragraph
+  item
+  subitem1
+  subitem2
+  subitem3
+  column
+  table_struct
+  table
+  appdx_table
+  table_row
+  table_column
+  suppl_provision
+}
+
+enum LinkType {
+  law_to_law
+  law_to_order
+  internal
+  term_definition
+  unresolved
+}
+
+enum PackType {
+  system
+  user
+}
+
+enum SourceType {
+  manual
+  rule
+  ai
+}
+
+enum GlossaryCategory {
+  legal_definition
+  technical_term
+  zone_name
+  building_type
+  procedure
+}
+
+enum GlossarySource {
+  auto_extracted
+  manual
+  preset
+}
+
+enum AnnotationTag {
+  applicable // 該当
+  review // 要検討
+  reference // 参考
+}
+
+enum ApplicabilityAnchorType {
+  TODAY
+  CONFIRMATION_APPLICATION
+  CONSTRUCTION_START
+  EXISTING_BUILDING_ORIGIN
+  CUSTOM
+}
+
+// ─── 法令パッケージ・リビジョン管理（実DB統合） ───
+
+// 法令データパッケージの運用状態（署名付き配布単位）
+enum LawPackageStatus {
+  draft
+  verified
+  scheduled
+  published
+  rejected
+}
+
+// 法令リビジョンの運用状態
+enum LawRevisionStatus {
+  staged
+  scheduled
+  active
+  superseded
+  rejected
+}
+
+// 法書版（書籍）の編集状態
+enum LawBookEditionStatus {
+  draft
+  validating
+  approved
+  published
+  withdrawn
+}
+
+// 法書への収録モード
+enum LawBookInclusionMode {
+  full
+  excerpt
+}
+
+// 法書項目の検証状態
+enum LawBookVerificationStatus {
+  planned
+  source_verified
+  ingested
+  structure_validated
+  link_validated
+  approved
+  blocked
+}
+
+// 法書項目の範囲種別
+enum LawBookRangeType {
+  article
+  paragraph
+  item
+  supplementary
+  appendix
+  table
+  entire_document
+}
+
+// ─── 法令パッケージ（署名付き配布単位） ───
+
+model LawPackage {
+  id               String           @id @default(cuid())
+  packageVersion   String           @unique
+  manifestChecksum String
+  signature        String
+  signerKeyId      String
+  sourceSummary    Json
+  effectiveAt      DateTime
+  publishedAt      DateTime?
+  status           LawPackageStatus @default(draft)
+  createdAt        DateTime         @default(now())
+  revisions        LawRevision[]
+
+  @@index([status, effectiveAt])
+}
+
+// ─── 法令リビジョン（改正単位ごとの法令スナップショット） ───
+
+model LawRevision {
+  id                 String            @id @default(cuid())
+  lawId              String
+  packageId          String
+  officialVersionKey String
+  promulgationDate   DateTime?
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  fetchedAt          DateTime
+  sourceUrl          String
+  xmlStorageKey      String
+  xmlChecksum        String
+  status             LawRevisionStatus @default(staged)
+  createdAt          DateTime          @default(now())
+  articles           Article[]
+  currentForLaw      Law?              @relation("CurrentLawRevision")
+  lawBookEntries     LawBookEntry[]
+  law                Law               @relation("LawRevisions", fields: [lawId], references: [id])
+  package            LawPackage        @relation(fields: [packageId], references: [id])
+
+  @@unique([lawId, officialVersionKey])
+  @@index([lawId, status, effectiveFrom])
+  @@index([packageId])
+}
+
+// ─── 法令 ───
+
+model Law {
+  id                String             @id @default(cuid())
+  egovLawId         String             @unique // e-Gov法令ID（例: "325AC0000000201"）。export/importのstable key
+  name              String // 正式名称: 建築基準法, 建築基準法施行令
+  shortName         String? // 略称: 建基法, 建基令（建築業界標準）
+  category          RegulationCategory // 法規種別（傍注アイコン準拠）
+  currentRevisionId String?            @unique // 現在有効なリビジョンID（実DB統合）
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  articles          Article[]
+  currentRevision   LawRevision?       @relation("CurrentLawRevision", fields: [currentRevisionId], references: [id])
+  lawBookEntries    LawBookEntry[]
+  revisions         LawRevision[]      @relation("LawRevisions")
+  sectionRules      SectionRule[]
+
+  @@index([category])
+  @@index([shortName])
+}
+
+// ─── 条文（条・項・号を統一的に管理。最小単位は号） ───
+
+model Article {
+  id       String    @id @default(cuid())
+  lawId    String
+  law      Law       @relation(fields: [lawId], references: [id])
+  parentId String? // 親要素
+  parent   Article?  @relation("ArticleHierarchy", fields: [parentId], references: [id])
+  children Article[] @relation("ArticleHierarchy")
+
+  // 階層タイプ
+  level ArticleLevel // chapter, section, subsection, article, paragraph, item, subitem1, subitem2, subitem3, column, table_struct, table, appdx_table, table_row, table_column, suppl_provision
+
+  // 識別番号
+  articleNumber           String? // "87", "128の3"
+  articleNumberNormalized String? // 漢数字→算用数字変換済み（"八十七"→"87"）。検索・リンク解決用
+  paragraphNumber         String? // "1", "2"
+  itemNumber              String? // "い", "1"
+  subitemNumber           String? // 細目番号（イ, ロ, (1), (i) 等）
+  columnNumber            String? // Columnの列番号
+  tableCoords             String? // テーブル座標（行/列）
+
+  // タイトル または 条文テキスト
+  title                    String? // 編・章・節・款の名称
+  caption                  String? // 条の見出し（太字斜体・条文番号上。e-GovのArticleCaptionをUIタグとして活用）
+  text                     String? // 条文本体
+  articleCaptionNormalized String? // captionの正規化（検索用。例：「（便所）」→"便所")
+
+  // 並び順
+  sortOrder Int
+
+  // システムタグ（拡張用。現状は null）
+  systemTags Json? // [{tag_id: string, tag_name: string}]
+
+  // 法令種別（検索フィルタ用）
+  regulationType RegulationType? // 法令種別（検索フィルタ用）
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // 法令改正による条文削除時の soft delete
+
+  // リビジョン管理（実DB統合）
+  lawRevisionId   String // 所属リビジョンID
+  stableNodeKey   String // リビジョン内安定キー（XMLノード対応）
+  contentChecksum String // 本文チェックサム（差分検出用）
+  inlineMarkup    Json?       @db.Json // インラインマークアップ（注記・ルビ等）
+  tableMetadata   Json?       @db.Json // テーブル構造メタデータ
+  lawRevision     LawRevision @relation(fields: [lawRevisionId], references: [id])
+
+  // 参照関係
+  outgoingLinks Link[] @relation("LinkSource")
+  incomingLinks Link[] @relation("LinkTarget")
+
+  // ハイライト
+  systemHighlights SystemHighlight[]
+  userHighlights   UserHighlight[]
+  userTags         UserTag[]
+  annotations      ArticleAnnotation[]
+
+  // 実務パック
+  packItems PackItem[]
+
+  // 実務レイヤー
+  checkItems           CheckItem[]
+  drawingNoteTemplates DrawingNoteTemplate[]
+  practiceTopics       ArticlePracticeTopic[]
+
+  // 関連用語
+  glossaryTerms GlossaryTerm[] @relation("GlossaryDefinition")
+
+  // 条件対応ハイライト
+  articleRules ArticleRule[]
+  // pg_bigm全文検索indexはraw SQL migrationで作成（WHERE "deletedAt" IS NULL 部分index）
+  // CREATE INDEX idx_article_text ON "Article" USING gin (text gin_bigm_ops) WHERE "deletedAt" IS NULL;
+  // CREATE INDEX idx_article_caption ON "Article" USING gin (caption gin_bigm_ops) WHERE "deletedAt" IS NULL;
+
+  @@unique([lawRevisionId, stableNodeKey])
+  @@index([lawId])
+  @@index([parentId])
+  @@index([parentId, sortOrder])
+  @@index([level])
+  @@index([articleNumber, lawId])
+  @@index([lawId, level, articleNumberNormalized])
+  @@index([caption]) // 傍注アイコン検索用
+  // リビジョン管理に伴う複合インデックス（実DB統合）
+  @@index([lawRevisionId, parentId, sortOrder])
+  @@index([lawId, lawRevisionId, level, articleNumberNormalized])
+}
+
+// ─── 条文間リンク（転置インデックス方式） ───
+
+model Link {
+  id                            String   @id @default(cuid())
+  sourceId                      String
+  source                        Article  @relation("LinkSource", fields: [sourceId], references: [id])
+  targetId                      String? // nullable: 未解決リンクはnull
+  target                        Article? @relation("LinkTarget", fields: [targetId], references: [id])
+  linkType                      LinkType // law_to_law | law_to_order | internal | term_definition | unresolved
+  sourceRange                   String? // 参照元文中の出現位置（例: "120-145"）
+  isResolved                    Boolean  @default(false)
+  targetLawName                 String? // 未解決時: "都市計画法"
+  targetText                    String? // 未解決時: "令第128条の3"
+  targetArticleNumberNormalized String? // 未解決時: "128の3"
+
+  @@index([sourceId])
+  @@index([targetId])
+}
+
+// ─── ユーザー（MVPはローカル固定ユーザー。外部認証テーブルは持たない） ───
+
+model User {
+  id    String  @id @default(cuid())
+  name  String?
+  email String? @unique
+
+  userHighlights UserHighlight[]
+  userTags       UserTag[]
+  annotations    ArticleAnnotation[]
+  packs          Pack[]
+  activities     UserActivity[]
+  projects       ProjectProfile[]
+}
+
+// ─── ユーザーアクティビティ（検索履歴・閲覧履歴） ───
+
+model UserActivity {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      ActivityType // search | view | export | import
+  lawId     String?
+  articleId String?
+  query     String?
+  payload   Json? // { resultCount, scrollY, articleNumberNormalized, caption }
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, type, createdAt])
+  @@index([articleId])
+}
+
+// ─── 共参照関係（データインテリジェンス） ───
+
+model ArticleCooccurrence {
+  id           String   @id @default(cuid())
+  articleId    String
+  relatedId    String
+  cooccurCount Int      @default(1)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([articleId, relatedId])
+  @@index([articleId])
+  @@index([relatedId])
+}
+
+// ─── システム線引き（拡張用） ───
+
+model SystemHighlight {
+  id         String  @id @default(cuid())
+  articleId  String
+  article    Article @relation(fields: [articleId], references: [id])
+  rangeStart Int // タグ/項/号 ID に対する相対位置
+  rangeEnd   Int
+  color      String // red, blue, green, yellow, purple
+  type       String // highlight, underline, bracket, symbol
+  ruleId     String? // ルールID
+
+  @@index([articleId])
+}
+
+// ─── ユーザー線引き（MVP: 手動） ───
+
+model UserHighlight {
+  id                    String                   @id @default(cuid())
+  userId                String
+  user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId             String
+  article               Article                  @relation(fields: [articleId], references: [id])
+  rangeStart            Int
+  rangeEnd              Int
+  color                 String // red, blue, green, yellow, purple, orange
+  type                  String // highlight, underline, bracket, symbol
+  ruleId                String? // 編集伝播用（拡張用）
+  exactQuote            String? // ハイライト範囲の引用テキスト（実DB統合）
+  anchorChecksum        String? // アンカー整合性チェックサム（実DB統合）
+  applicabilityAnchor   ApplicabilityAnchorType?
+  applicabilityDate     DateTime?                @db.Date
+  snapshotLawRevisionId String?
+
+  @@index([userId, articleId])
+  @@index([snapshotLawRevisionId])
+}
+
+// ─── ユーザータグ（MVP: 手動） ───
+
+model UserTag {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id])
+  tagName   String
+
+  @@unique([userId, articleId, tagName])
+  @@index([userId])
+  @@index([tagName])
+}
+
+// ─── 条文注釈（Sprint 2: ハイライト+注釈） ───
+
+model ArticleAnnotation {
+  id                    String                   @id @default(cuid())
+  userId                String
+  user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId             String
+  article               Article                  @relation(fields: [articleId], references: [id])
+  projectId             String?
+  project               ProjectProfile?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag                   AnnotationTag            @default(review)
+  note                  String?
+  applicabilityAnchor   ApplicabilityAnchorType?
+  applicabilityDate     DateTime?                @db.Date
+  snapshotLawRevisionId String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@unique([userId, articleId])
+  @@index([articleId])
+  @@index([projectId])
+  @@index([tag])
+  @@index([snapshotLawRevisionId])
+}
+
+// ─── 実務パック（MVP: 手動作成） ───
+
+model Pack {
+  id        String     @id @default(cuid())
+  name      String
+  type      PackType // system, user
+  ownerId   String
+  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items     PackItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([ownerId])
+}
+
+model PackItem {
+  id        String  @id @default(cuid())
+  packId    String
+  pack      Pack    @relation(fields: [packId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article @relation(fields: [articleId], references: [id])
+  sortOrder Int
+  checked   Boolean @default(false)
+  note      String?
+
+  @@unique([packId, articleId])
+}
+
+// ─── 建築実務レイヤー ───
+
+// 物件プロファイル（用途・規模・地域条件等）
+model ProjectProfile {
+  id             String              @id @default(cuid())
+  userId         String
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String // "渋谷区 飲食店用途変更"
+  usage          String? // 飲食店、事務所、住宅 等
+  siteArea       Float? // 敷地面積（㎡）
+  buildingArea   Float? // 建築面積（㎡）
+  totalFloorArea Float? // 延べ面積（㎡）
+  floors         Int? // 階数
+  structure      String? // 鉄筋コンクリート造、木造 等
+  useDistrict    String? // 用途地域（近隣商業地域 等）
+  fireDistrict   String? // 防火地域区分（防火地域、準防火地域 等）
+  roadAccess     String? // 接道状況
+  municipality   String? // 自治体
+  isActive       Boolean             @default(false) // アクティブプロジェクトフラグ（シングルトン制約はアプリ層で保証）
+  conditions     Json? // 物件条件オブジェクト（用途地域・防火・用途・構造・規模）
+  tags           String[] // 検索ランキング用タグ（用途・構造・地域の正規化値）
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  checkItems     CheckItem[]
+  annotations    ArticleAnnotation[]
+}
+
+// 確認項目（物件ごとの法令確認ノード）
+model CheckItem {
+  id                    String                   @id @default(cuid())
+  projectId             String
+  project               ProjectProfile           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  articleId             String
+  article               Article                  @relation(fields: [articleId], references: [id])
+  title                 String? // 確認項目名（例: "内装制限の適用有無"）
+  status                CheckStatus              @default(unchecked)
+  evidenceText          String? // 根拠条文の引用テキスト
+  drawingNote           String? // 図面注記用テキスト
+  calculationMemo       String? // 計算メモ（拡張時: CalculationMemo テーブル化）
+  consultationMemo      String? // 審査機関確認メモ（拡張時: LocalRuleNote テーブル化）
+  applicabilityAnchor   ApplicabilityAnchorType?
+  applicabilityDate     DateTime?                @db.Date
+  snapshotLawRevisionId String?
+  source                SourceType               @default(manual) // manual | rule | ai
+  sortOrder             Int                      @default(0)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([projectId])
+  @@index([snapshotLawRevisionId])
+}
+
+// 図面注記テンプレート
+model DrawingNoteTemplate {
+  id           String   @id @default(cuid())
+  articleId    String
+  article      Article  @relation(fields: [articleId], references: [id])
+  title        String // "排煙計算 根拠条文"
+  templateText String // "法第○条第○項により、排煙上有効な開口部を..."
+  tags         String[] // ["排煙", "確認申請"]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([articleId])
+}
+
+// 実務論点トピック
+model PracticeTopic {
+  id          String                 @id @default(cuid())
+  name        String                 @unique // "排煙", "採光", "防火区画" 等
+  description String? // 論点の説明
+  source      SourceType             @default(manual) // manual | rule | ai
+  confidence  Float? // AI判定時の信頼度（0〜1）
+  articles    ArticlePracticeTopic[]
+  createdAt   DateTime               @default(now())
+}
+
+// 条文と実務論点の紐付け
+model ArticlePracticeTopic {
+  id         String        @id @default(cuid())
+  articleId  String
+  article    Article       @relation(fields: [articleId], references: [id])
+  topicId    String
+  topic      PracticeTopic @relation(fields: [topicId], references: [id])
+  source     SourceType    @default(manual) // manual | rule | ai
+  confidence Float? // 0〜1
+  createdAt  DateTime      @default(now())
+
+  @@unique([articleId, topicId])
+}
+
+// ─── 関連用語（GlossaryTerm） ───
+
+model GlossaryTerm {
+  id                  String           @id @default(cuid())
+  term                String // 用語名（「耐火建築物」「建蔽率」等）
+  reading             String // 読み（あいうえお順ソート用）
+  category            GlossaryCategory // legal_definition / technical_term / zone_name / building_type / procedure
+  definitionArticleId String? // 定義条文の Article ID（法定定義語の場合）
+  definitionArticle   Article?         @relation("GlossaryDefinition", fields: [definitionArticleId], references: [id])
+  description         String? // 用語解説（技術用語の手動メンテ時）
+  source              GlossarySource // auto_extracted / manual / preset
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([category])
+  @@index([reading])
+}
+
+// ─── 条件対応ハイライトルール ───
+
+// 節レベル広域マッピング（「この範囲の条文は○○条件に関連する」を宣言）
+model SectionRule {
+  id            Int      @id @default(autoincrement())
+  lawId         String
+  sectionStart  String // "第48条"
+  sectionEnd    String // "第68条"
+  conditionType String // "useDistrict" | "fireDistrict" | "heightLimit" | "buildingCoverage" | "floorAreaRatio" | "buildingUse" | "structureType"
+  label         String // "用途地域等の制限"
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  articleRules ArticleRule[]
+  law          Law           @relation(fields: [lawId], references: [id])
+
+  @@index([conditionType])
+  @@index([lawId])
+}
+
+// 条・項・号・別表セルレベル詳細マッピング
+model ArticleRule {
+  id            Int     @id @default(autoincrement())
+  sectionRuleId Int
+  articleId     String? // nullable: 範囲指定の場合
+  articleRange  String? // "第48条第1項第1号"
+
+  highlightLevel String // "article" | "paragraph" | "item" | "cell"
+  cellRow        String? // 別表: 行キー
+  cellColumn     String? // 別表: 列キー
+
+  conditionKey    String // "useDistrict" | "fireDistrict" | ...
+  conditionValues Json // ["第一種住居地域"]
+  description     String?
+  sortOrder       Int     @default(0)
+
+  sectionRule SectionRule @relation(fields: [sectionRuleId], references: [id])
+  article     Article?    @relation(fields: [articleId], references: [id])
+  // GIN index on conditionValues は raw SQL migration で作成
+
+  @@index([sectionRuleId])
+  @@index([conditionKey])
+  @@index([articleId])
+}
+
+// ─── 法書（書籍版法令集）管理（実DB統合） ───
+
+// 法書版（書籍単位）
+model LawBookEdition {
+  id                        String               @id @default(cuid())
+  editionKey                String               @unique
+  title                     String
+  editionYear               Int
+  isbn                      String
+  publisher                 String
+  bookPublishedAt           DateTime
+  effectiveAsOf             DateTime
+  manifestVersion           String
+  manifestChecksum          String
+  catalogEvidenceStorageKey String?
+  catalogEvidenceChecksum   String?
+  status                    LawBookEditionStatus @default(draft)
+  approvedAt                DateTime?
+  approvedBy                String?
+  activatedAt               DateTime?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @default(now()) @updatedAt
+  entries                   LawBookEntry[]
+
+  @@unique([publisher, editionYear, isbn])
+  @@index([status, editionYear])
+}
+
+// 法書収録項目（法令ごとの書籍掲載情報）
+model LawBookEntry {
+  id                   String                    @id @default(cuid())
+  editionId            String
+  lawId                String
+  lawRevisionId        String?
+  displayOrder         Int
+  sectionName          String?
+  inclusionMode        LawBookInclusionMode
+  printedTitle         String
+  printedPage          Int
+  catalogSourceLocator String
+  verificationStatus   LawBookVerificationStatus @default(planned)
+  verificationNote     String?
+  sourceUrl            String?
+  sourceStorageKey     String?
+  sourceChecksum       String?
+  sourceFetchedAt      DateTime?
+  articleCount         Int?
+  verifiedAt           DateTime?
+  verifiedBy           String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @default(now()) @updatedAt
+  edition              LawBookEdition            @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  law                  Law                       @relation(fields: [lawId], references: [id])
+  lawRevision          LawRevision?              @relation(fields: [lawRevisionId], references: [id])
+  ranges               LawBookEntryRange[]
+
+  @@unique([editionId, lawId])
+  @@unique([editionId, displayOrder])
+  @@index([editionId, verificationStatus])
+  @@index([lawRevisionId])
+}
+
+// 法書項目の範囲（条文範囲・ページ範囲）
+model LawBookEntryRange {
+  id                    String                    @id @default(cuid())
+  lawBookEntryId        String
+  rangeType             LawBookRangeType
+  startStableNodeKey    String?
+  endStableNodeKey      String?
+  officialCitationStart String?
+  officialCitationEnd   String?
+  inclusionReason       String?
+  sortOrder             Int
+  verificationStatus    LawBookVerificationStatus @default(planned)
+  verifiedAt            DateTime?
+  verifiedBy            String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @default(now()) @updatedAt
+  lawBookEntry          LawBookEntry              @relation(fields: [lawBookEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([lawBookEntryId, sortOrder])
+  @@index([lawBookEntryId, verificationStatus])
+}

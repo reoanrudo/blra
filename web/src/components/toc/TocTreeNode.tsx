@@ -1,3 +1,4 @@
+"use client";
 
 import { isExpandableTocLevel, nodeLabel } from "@/lib/article/toc-tree";
 import type { TocNode } from "@/lib/article/toc-tree";
