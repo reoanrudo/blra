@@ -53,6 +53,10 @@ export function fullLawTargetSelector(articleId: string): string {
   return `#${fullLawAnchorId(articleId)}`;
 }
 
+export function readerArticleHref(articleId: string): string {
+  return `/articles/${encodeURIComponent(articleId)}`;
+}
+
 export function buildFullLawBlocks(
   nodes: FullLawNode[],
   lawName: string,
