@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { NextRequest } from "next/server";
+import { gunzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GET as getDocument } from "@/app/api/law-revisions/[id]/document/route";
 import { getFullLawDocument } from "@/lib/article/full-law-repository";
@@ -106,6 +107,23 @@ describe("全文法令Repository (integration)", () => {
     expect(response.headers.get("etag")).toMatch(/^"[a-f0-9]{64}"$/);
     expect(response.headers.get("cache-control")).toBe(
       "public, max-age=300, stale-while-revalidate=86400",
+    );
+  });
+
+  it("gzip対応クライアントには全文JSONを圧縮して返す", async () => {
+    if (!revisionId) return;
+
+    const url = `http://localhost/api/law-revisions/${revisionId}/document`;
+    const response = await getDocument(
+      new NextRequest(url, { headers: { "Accept-Encoding": "gzip" } }),
+      { params: { id: revisionId } },
+    );
+
+    expect(response.headers.get("content-encoding")).toBe("gzip");
+    expect(response.headers.get("vary")).toContain("Accept-Encoding");
+    const decoded = gunzipSync(Buffer.from(await response.arrayBuffer()));
+    expect(JSON.parse(decoded.toString()).law.egovLawId).toBe(
+      "325AC0000000201",
     );
   });
 
