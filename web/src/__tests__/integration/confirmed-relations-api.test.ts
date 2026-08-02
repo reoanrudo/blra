@@ -52,8 +52,8 @@ describe("confirmed relations API (integration)", () => {
     const active = await createManualConfirmedRelation({
       sourceArticleId: fixture.sourceArticleId,
       targetArticleId: fixture.targetArticleId,
-      relationType: "DEFINES",
-      rationale: "用語定義をあわせて確認するため",
+      relationType: "DELEGATES_TO",
+      rationale: "委任先をあわせて確認するため",
       reviewerId: fixture.reviewerId,
     });
     const revoked = await createManualConfirmedRelation({
@@ -121,6 +121,11 @@ describe("confirmed relations API (integration)", () => {
     );
     const etag = response.headers.get("etag");
     expect(etag).toMatch(/^"[a-f0-9]{64}"$/);
+    const responseDocument = await response.clone().json();
+    vi.spyOn(
+      confirmedRelationsRepository,
+      "getConfirmedRelationsDocument",
+    ).mockResolvedValueOnce(responseDocument);
     const notModified = await getConfirmedRelations(
       new NextRequest(url, { headers: { "If-None-Match": etag! } }),
       { params: { id: fixture.revisionId } },
