@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { NextRequest, NextResponse } from "next/server";
 import { getFullLawDocument } from "@/lib/article/full-law-repository";
 
@@ -11,6 +12,7 @@ function cacheHeaders(etag: string): HeadersInit {
   return {
     ETag: etag,
     "Cache-Control": CACHE_CONTROL,
+    Vary: "Accept-Encoding",
   };
 }
 
@@ -30,7 +32,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const body = JSON.stringify(document);
-    const etag = `"${createHash("sha256").update(body).digest("hex")}"`;
+    const acceptsGzip = /(?:^|,)\s*gzip\s*(?:;|,|$)/i.test(
+      request.headers.get("accept-encoding") ?? "",
+    );
+    const digest = createHash("sha256").update(body).digest("hex");
+    const etag = acceptsGzip ? `"${digest}-gzip"` : `"${digest}"`;
     if (request.headers.get("if-none-match") === etag) {
       return new Response(null, {
         status: 304,
@@ -38,9 +44,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
       });
     }
 
-    return new Response(body, {
+    const responseBody = acceptsGzip ? gzipSync(body) : body;
+    return new Response(responseBody, {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
+        ...(acceptsGzip
+          ? {
+              "Content-Encoding": "gzip",
+              "Content-Length": String(Buffer.byteLength(responseBody)),
+            }
+          : {}),
         ...cacheHeaders(etag),
       },
     });
