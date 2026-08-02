@@ -9,28 +9,32 @@ test.describe("確認済みの関連", () => {
   test("本文外の閉じた一覧から新しいタブ用リンクを表示する", async ({ page }) => {
     await page.route(
       "**/api/law-revisions/*/confirmed-relations",
-      (route) => route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          revisionId: "test-revision",
-          relationsBySource: {
-            [TEST_ARTICLE_ID]: [{
-              id: "confirmed-e2e-1",
-              relationType: "DEFINES",
-              rationale: "用語定義をあわせて確認するため",
-              confirmedAt: "2026-08-02T00:00:00.000Z",
-              target: {
-                articleId: ARTICLE_107_ID,
-                lawName: "建築基準法",
-                lawShortName: "建基法",
-                articleNumber: "百七",
-                caption: "（特殊建築物の内装）",
-              },
-            }],
-          },
-        }),
-      }),
+      (route) => {
+        const pathParts = new URL(route.request().url()).pathname.split("/");
+        const revisionId = decodeURIComponent(pathParts.at(-2) ?? "");
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            revisionId,
+            relationsBySource: {
+              [TEST_ARTICLE_ID]: [{
+                id: "confirmed-e2e-1",
+                relationType: "DEFINES",
+                rationale: "用語定義をあわせて確認するため",
+                confirmedAt: "2026-08-02T00:00:00.000Z",
+                target: {
+                  articleId: ARTICLE_107_ID,
+                  lawName: "建築基準法",
+                  lawShortName: "建基法",
+                  articleNumber: "百七",
+                  caption: "（特殊建築物の内装）",
+                },
+              }],
+            },
+          }),
+        });
+      },
     );
     await page.goto(`/articles/${TEST_ARTICLE_ID}`);
     const details = page.locator(
@@ -59,5 +63,25 @@ test.describe("確認済みの関連", () => {
       page.getByText("確認済みの関連を取得できませんでした"),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "関連だけ再試行" })).toBeVisible();
+  });
+
+  test("関連APIの200応答が不正でも全文表示を維持する", async ({ page }) => {
+    await page.route(
+      "**/api/law-revisions/*/confirmed-relations",
+      (route) => {
+        const pathParts = new URL(route.request().url()).pathname.split("/");
+        const revisionId = decodeURIComponent(pathParts.at(-2) ?? "");
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ revisionId }),
+        });
+      },
+    );
+    await page.goto(`/articles/${TEST_ARTICLE_ID}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+    await expect(
+      page.getByText("確認済みの関連を取得できませんでした"),
+    ).toBeVisible();
   });
 });
