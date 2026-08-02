@@ -1,214 +1,150 @@
-# 引き継ぎプロンプト（2026-07-30 SCR-03 Phase 0/1完了時点・次タスク=Phase 2 API接続）
+# BLRA 引き継ぎ（2026-08-02・全文法令リーダー Phase 1）
 
-以下をそのまま新しいセッションに貼る。
+BLRA（建築法令リファレンス）の作業ディレクトリは
+`/Users/taguchireo/Downloads/blra`。
 
----
+## 最初に読むもの
 
-BLRA（建築法令リファレンス）プロジェクトを引き継いでほしい。作業ディレクトリは `/Users/taguchireo/Downloads/blra` です。
+1. `docs/HANDOFF.md` — 本ファイル。現在地と直近の優先順位
+2. `docs/design-spec.md` — 設計の正本（v1.3・Normative）
+3. `git log --oneline` — 発見・判断・実装単位の履歴
 
-## 最初に読むもの（この順で）
-
-1. `README.md` — 現在地と進捗表
-2. `docs/design-spec.md` — 設計の正本（**v1.2**、Normative）。これと矛盾する実装をしない
-3. `DESIGN.md` — **法令リーダーのデザインブリーフ（次タスクの核心）。必ず最初に通読すること**
-4. `docs/HANDOFF.md` — 本ファイル。前回セッションの成果と次のタスク
-5. `git log --oneline` — 各コミットメッセージに発見・実装が要約してある
-
-`docs/research-log.md`（1.1MB）は調査記録であり Informative。設計根拠を辿るとき以外は読まなくてよい。
+実装計画は
+`docs/superpowers/plans/2026-08-02-reader-full-law.md`、適用時点機能の
+過去の実装記録は
+`docs/superpowers/plans/2026-07-31-applicability-context.md` を参照する。
 
 ## 現在地
 
-**S2 法令リーダー（SCR-03）実装中。Phase 0（バックエンド拡張）+ Phase 1（フロント基盤+静的デザイン）完了。次は Phase 2（API接続+6状態インフラ）。**
+**`web/` の hourei-rag（Next.js 14 + Prisma）をフロントの正本とし、
+e-Gov 型の「選択した法令を一度に読み込む全文リーダー」を Phase 1 とする。**
 
-Phase 0/1 で以下を達成:
-- **バックエンド**: `reference_edge` テーブル（migration 0008）、`GET /sources/:id/provisions`（条一括取得）、`GET /provisions/:id/references`（参照エッジ・§19.5 ソート順）を追加。テスト136件全合格。
-- **フロントエンド**: `web/` に React 18 + Vite 6 + TanStack（Query/Router/Virtual）を導入。DESIGN.md 通りの紙の法令集デザイン（明朝体・紙色・2色刷り・柱・3カラム）をサンプルデータで再現。
-- **Fastify 統合**: `web/dist` を配信 + SPA fallback。既存の素のHTMLフォーム（`public/`）は残置。
+従来の `web/`（Vite + React）へ機能を移植する方針には戻さない。
+`src/` の Fastify + Kysely は独立資産として残す。
 
-前回までの S1 M1〜M5 は完了済み（建築基準法1本を e-Gov API → 取込 → 構造化 → Publish → 認証・認可付き HTTP API 経由で参照・操作できる）。
+### Phase 1 で確定した読者体験
 
-| マイルストーン | 内容 | 期間 | 状態 |
-|---|---|---|---|
-| M1 | プロジェクト基盤 + 初期DB + Kysely検証 | 1.0週 | **完了** |
-| M2 | e-Gov Parser + 条項分割 + canonical_path生成 | 1.5週 | **完了** |
-| M3 | 取込パイプライン（Fetcher→Raw保存→Parser→Validation→Publish） | 1.0週 | **完了** |
-| M4 | Publish API + Source Registry API + 監査 | 0.5週 | **完了** |
-| M5 | 認証基盤（OIDC + RBAC）+ 素のHTMLフォーム | 1.0週 | **完了** |
-| M6 | E2Eテスト + SourceVersion不変性テスト + ドキュメント | 1.0週 | 未着手 |
+- 選択した法令の収録全文を、DB の表示・リンク解決規則を適用して1つのJSONで取得する
+- 全文を最初から同一DOMに置く。目次移動や深い条文の直URLで章単位の追加通信をしない
+- 画面は「左: 目次・検索」「中央: 本文」の2列。実務パネルは表示しない
+- 目次は同じタブ内で移動し、検索結果と本文参照は比較用の新しいタブで開く
+- URL の条文IDはスクロール位置に追従する。全DBノードに重複しない固定アンカーを持たせる
+- 表示は算用数字等に整形してよいが、コピー時はe-Gov由来の公式原文を復元する
+- 改正・施行の確認は、画面上部からe-Govを新しいタブで開く
+- 読者画面からプロジェクト、保存、注釈、チェック、AI推薦、ログインを外す
 
-**S1 Exit条件**: 建築基準法1本を e-Gov API → 取込 → 構造化 → Publish まで End-to-End で実行できること。**M5 で達成済み。**
+### Phase 1 で表示しないもの
 
-## 技術スタック（確定済み）
+- 適用時点バー、旧版保存、本文差分
+- NoticeBand（経過措置・未施行改正）
+- 実務パネル、未確認の自動推薦リンク
+- 編集画面と顧客による編集機能
 
-- **言語**: TypeScript / Node 22（ADR-022、ADR-030 で変更しないと明記）
-- **HTTP**: Fastify
-- **DB**: PostgreSQL 16（Docker Compose、ポート 5433。Homebrew PG が 5432 を占有しているため）
-- **DBアクセス**: pg + Kysely（ORM不使用。型安全なSQLビルダ）
-- **マイグレーション**: node-pg-migrate（生SQL）
-- **検索**: pg_bigm（ADR-027）
-- **テスト**: Vitest（123件）
-- **認証**: Self-hosted Keycloak (Docker) + openid-client + @fastify/secure-session（M5）
-- **フロント**: **素のHTMLフォーム（M5時点）。法令リーダー実装で React + Vite + TanStack を導入する**
+適用時点関連のコードとDB列は既存資産として残っているが、現在の読者画面には
+接続しない。複数版の網羅性と検証状態を担保してから再導入する。
+
+## 2026-08-02 の実装成果
+
+### 全文データ経路
+
+- `GET /api/law-revisions/:id/document` を追加
+- 法令メタデータ、収録範囲内の全ノード、DBで解決済みの参照を並列取得
+- soft delete済み・現在の法令集範囲外・未解決リンクを本文ペイロードから除外
+- ETag、5分キャッシュ、24時間の stale-while-revalidate を設定
+- gzip対応クライアントには圧縮して返し、`Vary: Accept-Encoding` を設定
+
+### 全文表示
+
+- `FullLawReader` / `FullLawViewer` を中心に全文を連続表示
+- DB上の `column`、`table_struct` を含む不可視ノードにも固定アンカーを設置
+- 建築基準法では2,904ノードすべてのアンカーが存在し、重複0件
+- 直URL、目次、スクロールURL同期のいずれでも同じ条文ID契約を使用
+- 既存の chapter-window / chapter-aux APIと部品は残っているが、Phase 1読者画面は呼ばない
+
+### 本番相当の実測（ローカル・2026-08-02）
+
+| 法令 | JSON原寸 | gzip転送 | 全文表示完了 | 最下部移動 | 移動後の追加通信 |
+|---|---:|---:|---:|---:|---:|
+| 建築基準法 | 2.83 MB | 231 KB | 3.41秒 | 262 ms | 0 |
+| 建築基準法施行令 | 4.13 MB | 306 KB | 1.86秒 | 240 ms | 0 |
+| 建築基準法施行規則 | 11.01 MB | 507 KB | 2.87秒 | 282 ms | 0 |
+| 労働安全衛生規則 | 12.42 MB | 731 KB | 3.57秒 | 442 ms | 0 |
+
+表示完了値にはDB取得、JSON復号、React描画を含む。ネットワーク遅延のないローカル値。
+計測は `cd web && npx tsx scripts/bench-full-law.ts` で再実行できる。
+
+## 検証状態
+
+- `web`: Vitest 325件合格
+- `web`: Playwright 11件合格（2列、不要APIなし、全文DOM、直URL、目次、固定アンカー、原文コピー、別タブ）
+- `web`: TypeScript合格
+- `web`: Next.js本番ビルド合格
+- `src`: Vitest 136件合格
+
+## 次のタスク（順番）
+
+### 1. 確認済み関連条文の見せ方
+
+本文に明記された参照は、DBで解決済みのものだけを新しいタブ用リンクとして表示する。
+本文に明記されない実務上の関連（例: 法の用語定義から施行令の用語定義）は、
+自動推測と人が確認した関連を分離するデータモデルを先に決める。読者に出すのは
+確認済みだけとし、未確認候補は編集・レビュー側に閉じる。
+
+### 2. 「論点索引」の最小実装
+
+e-Gov XMLの公式 `ArticleCaption`（括弧書き見出し）だけを初期候補にする。
+「設備」「構造」「手続」等はフォルダ階層ではなく複数タグとして扱う。
+公式見出し、運営が付けた分類、機械候補を同じ確からしさで混ぜない。
+
+### 3. 出典の確からしさ
+
+`AuthorityClass`、`consolidation_state`、`verification_status` を
+hourei-rag側のPrismaモデルと取込に対応させる。バッジを先に作らず、値の生成元と
+更新規則を確定してから読者画面へ出す。
+
+### 4. 読者画面の6状態
+
+標準、空、読込中、部分失敗、全体失敗、権限不足をPhase 1の2列構成に合わせて整理する。
+本文が取得できた場合は補助情報の失敗で本文を隠さない。
+
+### 5. NoticeBand と適用時点
+
+改正・施行・経過措置を判定できる版データと検証状態が揃ってから追加する。
+不完全な版データから推測表示しない。当面はe-Govへの公式導線を正とする。
+
+### 6. URLの永続性
+
+取込再実行後も条文URLが保たれるかを確認し、削除・範囲外になったIDの
+tombstone方針を決める。
 
 ## 開発環境
 
 ```bash
-docker compose up -d      # PostgreSQL（5433）+ Keycloak（8080）起動
-cp .env.example .env      # .env 準備（KEYCLOAK_ADMIN_PASSWORD 等を設定）
-npm run migrate           # マイグレーション（0001〜0007）
-npm test                  # テスト（123件・Vitest）
-npm run typecheck         # 型チェック
-npm run dev               # サーバー起動（ポート3000）
-npm run ingest            # 建築基準法の取込（M3 パイプライン）
+docker compose up -d
+
+cd web
+npm run dev               # http://localhost:3000
+npm test                  # フロントUnit/Integration
+npx playwright test       # ブラウザE2E
+npm run build             # 本番ビルド
+
+cd ..
+npm test                  # src/独立資産
 ```
 
-## 次のタスク: SCR-03 Phase 2（API接続 + 6状態インフラ）
+DBは2系統が並存する。
 
-### 概要
+- `web/` → Prisma → `hourei_rag`（現在のフロントの正）
+- `src/` → Kysely → `blra`（独立資産）
 
-Phase 1 で作った静的デザイン（サンプルデータ）を、実APIへ接続し、6状態インフラ（§19.14）を統合する。
+現在の `hourei_rag` DB は過去に `prisma db push` で構築され、既存migration履歴と
+整合していない。履歴をベースライン化するまでは、このDBに
+`prisma migrate deploy` を実行しない。
 
-### 必須資料
+## 実装上の禁止事項
 
-1. **`DESIGN.md`** — デザインブリーフ（配色・書体・レイアウト・固有UI）。**必ず最初に通読。**
-2. **設計書 §19.10（行1885-1953）** — SCR-03 法令リーダーの実装仕様（最も詳細）
-3. **設計書 §19.22（行2236-2303）** — レンダリング戦略と性能予算（DOM予算・CSS Custom Highlight API）
-4. **設計書 §6.2（行432-474）** — 原文座標の分離（DOM属性方式を否定・座標対応表方式）
-5. **設計書 §19.14（行2007-2016）** — 6状態設計の共通規約
-
-### 実装の主要要件
-
-#### フロントエンド基盤の導入（最初にやること）
-- **React + Vite + TanStack Query/Router** を新規導入
-- `web/` ディレクトリにプロジェクト作成
-- Vite dev proxy で Fastify（:3000）へ転送（Cookie付き fetch・同一オリジン）
-- M5 で導入した素のHTMLフォーム（`public/login.html`, `public/admin.html`）は残置
-
-#### 視覚デザイン（DESIGN.md から厳密に再現）
-- **本文は明朝体**（`Hiragino Mincho ProN` / `Yu Mincho` / `Noto Serif JP`）。ゴシック本文は禁止
-- **紙色の背景**（`#FFFDF8`）。純白ではない
-- **2色刷り**（黒＋マゼンタ寄りの赤 `#D92F7E`）。条見出し・章節見出しが赤
-- **柱（ランニングヘッダー）**。紙面上部に法令名と現在の章節
-- **カード化しない**。条文を角丸カードに入れると文書の連続性が消える
-- **影は紙面の外周のみ**
-
-#### 固有UI要素（一般的なビューアにはない・省略不可）
-1. **適用時点バー**（常時表示）— 「確認申請日」「着工日」「現在」等の切替。日付を隠さない（原則5）
-2. **出典バッジ** — `[法律] [2025-04-01 施行版] [官報確認済]`。色だけでなく文字ラベル必須
-3. **注意帯（NoticeBand）** — 経過措置・未施行改正の通知。6種の優先順序（§19.10.3）
-4. **本文中の参照（3状態）** — 確認済み（赤下線）/ 未確認候補（点線）/ 未解決（下線なし・右ペインへ列挙）
-5. **サポートペイン「関連」** — 型ラベル付き（委任先/定義/例外/参照）。無ラベル一覧禁止（§19.5）
-6. **線引き（ハイライト）** — CSS Custom Highlight API（§19.22.3）。DOM変更なし
-
-#### ハードな性能制約（§19.22.2 + §6.2.3）
-- **本文トークンごとにDOM要素を生成しない** — 原文座標はデータ側の対応表で保持（§6.2）
-- **章全体のDOMを一度にmaterializeしない** — 可視範囲外は仮想化でDOMから外す
-- **認証内側の法令本文をSSRしない** — SEO利益なくhydration費用のみ残る（ADR-028）
-- **本文以外のメタデータを本文と同一ペイロードで送らない** — 遅延取得
-- **ハイライトはCSS Custom Highlight APIのみ** — span包囲方式禁止。非対応環境は機能縮退
-- **CI計測が義務**（§19.22.5） — DOMノード数・ペイロード比率・応答内訳。予算超過はバグ
-
-#### 6状態設計（§19.14）
-標準/空/読込中/部分失敗/全体失敗/権限不足を実装。特に:
-- **部分失敗でも本文は隠さない** — 本文が出せて関連が出せない場合、本文表示＋関連欄にエラー
-- **読込中** — 300ms以内の操作にスケルトンを出さない
-- **権限不足** — 機能は見せて理由を示す。存在推測のできる表示はしない
-
-### 既存バックエンドAPI（法令リーダーが使うもの）
-
-```
-GET /provisions/:id                    条文取得
-GET /provisions/:id/at?date=&anchorId= 時点解決
-GET /provisions/:id/history            版履歴
-GET /provisions/:id/references         参照エッジ
-GET /provisions/:id/diff?from=&to=     差分
-GET /sources                           法令一覧
-GET /sources/:id                       法令詳細
-GET /sources/:id/versions              版一覧
-GET /me                                現在ユーザ（認証状態確認）
-```
-
-M5 時点で `/provisions/:id`, `/sources`, `/sources/:id`, `/sources/:id/versions` は実装済み。
-`/provisions/:id/at`, `/provisions/:id/history`, `/provisions/:id/references`, `/provisions/:id/diff` は未実装（必要に応じて追加）。
-
-### やってはいけないこと（DESIGN.md より）
-
-1. 本文をゴシック体にしない。明朝が正
-2. 条文を角丸カードに入れない
-3. 適用時点の日付を隠さない。折りたたみやホバー表示にしない
-4. 出典バッジを色だけで区別しない。必ず文字ラベルを併記
-5. 本文の中に別のスクロール領域を作らない。主スクロールは1つ
-6. 紫やグラデーション、絵文字アイコンを使わない
-7. ダークモードは作らない
-
-### アプローチの提案
-
-法令リーダーは規模が大きいため、以下の順で段階的に実装することを推奨:
-
-1. **Week 1**: フロントエンド基盤導入（React+Vite+TanStack）+ 静的デザインの再現（DESIGN.md 通りの紙面・明朝体・配色）+ サンプルデータでの表示
-2. **Week 2**: 既存APIへの接続 + 6状態インフラ + 適用時点バー・出典バッジ・参照3状態
-3. **Week 3**: CSS Custom Highlight API（ハイライト）+ サポートペイン + 仮想化・DOM予算対応
-
-新しいセッションの冒頭で EnterPlanMode を使い、スコープと優先順位を確定してから実装に入ること。
-
-## M1〜M5 で作成したもの（概要）
-
-### バックエンド（src/）
-- `config.ts` — 環境変数読込（M5: OIDC/Keycloak設定）
-- `app.ts` — Fastify アプリ構築（M5: セッション・認証・静的配信）
-- `auth/` — 認証基盤（M5: OIDC, session, RBAC, JIT）
-- `routes/` — corpus（参照系）, admin（書き込み系+監査）, me, members
-- `db/` — connection, types, repos/（source, provision, audit, user, member）
-- `parser/` — e-Gov Parser（M2: XML→ProvisionSegment[]）
-- `ingest/` — 取込パイプライン（M3: Fetcher→Raw保存→Parser→Validation→Publish）
-- `http/` — errors, meta（§12.2 API メタデータ）
-
-### データモデル（migrations/ 0001〜0007）
-- `source`, `source_version`, `provision`, `provision_version` — コーパス系
-- `audit_record`, `ingestion_job` — 運用系
-- `organization`, `app_user`, `organization_member` — identity系（M5）
-  - `app_user`: `(oidc_issuer, oidc_sub)` 複合一意（OIDC標準・プロバイダ非依存）
-
-### フロントエンド
-- `public/login.html`, `public/admin.html` — 素のHTMLフォーム（M5。React導入後も残置）
-- `web/` — **未作成。法令リーダー実装で新規作成。**
-
-### テスト（123件）
-- `tests/parser/` — M2 Parser（26件）
-- `tests/ingest/` — M3 パイプライン（34件）
-- `tests/db/` — DB・リポジトリ（11件）
-- `tests/routes/` — corpus, admin, me, members（42件）
-- `tests/auth/` — RBAC（10件）
-
-## 決まっていること（蒸し返さない）
-
-- 設計書 v1.2 の ADR-027〜030 は確定済み
-- 正確性の基準（時点表示 99%・重大誤表示 0 件）を体制の軽量化（ADR-025）に合わせて下げない
-- 誤った条文を自信を持って表示する実装をしない。時点解決が曖昧なら推測せずエラーにする（§4.2、§18）
-- Rule DSL / Compiler / Graph DB / Vector DB / Event Broker に手を出さない（ADR-006、ADR-015）
-- 設計書の「削らない4つ」（法令時間モデル / Consolidation State / Citation Anchor / Snapshot 不変性）を工数都合で削らない（ADR-017）
-- M5 で Keycloak 固有名を DB スキーマに使わない（`oidc_sub` + `oidc_issuer` で OIDC標準）
-- M5 Admin UI を素のHTMLフォームに縮小（[ADR-030](docs/adr/ADR-030-m5-admin-ui-scope-reduction.md)）。フロントエンド基盤は法令リーダーで導入
-
-## 宿題（M6 または S3 で対応）
-
-- **RLS テストの検証抜け**（[ADR-030 残課題](docs/adr/ADR-030-m5-admin-ui-scope-reduction.md#残課題-rls-テストの検証抜けm5-監査にて指摘)参照）: 現在の123件テストは `app.current_org` 未設定で走っており、RLS が効いている状態の挙動を一度も確かめていない。実害ゼロ（対象 `organization` 1テーブル・project/evidence 系は S3 以降）だが、「テストが通っている」を RLS 動作確認と誤解しないこと。T-03（テナント分離テスト）に相当する1本を M6 で追加推奨
-
-## 設計書の未記載事項（実装時に補完済みまたは要補完）
-
-- ✅ `source.coverage_from` 列: M1 マイグレーションで補完済み
-- ✅ 全 enum 型の CREATE TYPE 文: M1 で集約して実装済み
-- ⚠️ `source_type_enum` のコード値: `EGOV_LAW` 等を M1 で確定。設計書への反映は未実施
-- ⚠️ `identity`系テーブルのDDL: M5 で実装。設計書 §13.1 への反映は未実施
-- ⚠️ pg ドライバの date型タイムゾーン問題: JST環境で date 型が前日になる。将来 `pg.types.setTypeParser` のカスタマイズを検討
-
-## 並行タスク（Taguchi さん側、S1を止めない）
-
-- [ ] U-1（実務者ヒアリング）。案B の価値提案が成立するかを検証 → `user-research/`
-- [ ] ゲート検査者の確保（8〜16時間・任意）→ `docs/domain-reviewer-role.md`
-
-## hourei-rag との関係
-
-`reference/hourei-rag/` に稼働中MVPのコードスナップショットがある（Next.js + React 18）。**コードのみ。設計文書は含めない。** 実装技法の参考にするが、設計判断は blra 設計書 v1.2 を正とする。
-
-hourei-rag は原文座標を DOM 属性（`data-source-start`）として保持するが、blra 設計書 §6.2 はこれを否定し、座標対応表をデータとして持つ方針（ADR-027）。hourei-rag のコードを読むときはこの違いに注意。
+- `docs/design-spec.md` v1.3 と矛盾する実装をしない
+- 未確認候補を確認済みリンクとして本文へ出さない
+- 版が曖昧なときに近似本文を正しい本文として出さない
+- Phase 1読者画面へ実務パネルや編集機能を戻さない
+- `src/` と `web/` のDB統合を、別タスクのついでに行わない
