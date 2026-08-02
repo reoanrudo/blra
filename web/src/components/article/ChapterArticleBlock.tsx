@@ -75,12 +75,24 @@ export default function ChapterArticleBlock({
       {/* Article body */}
       <div className="law-body">
         {segments.map((seg) => {
+          if (seg.type === "anchor") {
+            return (
+              <span
+                id={fullLawAnchorId(seg.row.id)}
+                key={seg.row.id}
+                data-article-id={seg.row.id}
+                className="block h-0 scroll-mt-20"
+                aria-hidden="true"
+              />
+            );
+          }
           if (seg.type === "table") {
             return (
               <TableBlock
                 key={seg.table.id}
                 tableNode={seg.table}
                 rows={seg.rows}
+                anchorRows={seg.anchorRows}
               />
             );
           }
@@ -91,6 +103,7 @@ export default function ChapterArticleBlock({
                 row={seg.row}
                 keyword={seg.keyword}
                 body={seg.body}
+                anchorRows={seg.anchorRows}
                 outgoingLinks={outgoingBySource.get(seg.row.id) ?? []}
               />
             );

@@ -7,6 +7,7 @@ import {
   readerArticleHref,
   type FullLawNode,
 } from "@/lib/article/full-law-document";
+import { buildSegments } from "@/lib/article/article-segments";
 
 function node(overrides: Partial<FullLawNode>): FullLawNode {
   return {
@@ -109,5 +110,42 @@ describe("full law document", () => {
 
   it("reader article pathは適用時点queryを付けない", () => {
     expect(readerArticleHref("article-107")).toBe("/articles/article-107");
+  });
+
+  it("画面に本文を出さない定義列と表構造も固定アンカーとして保持する", () => {
+    const item = node({ id: "item-1", level: "item", depth: 1 });
+    const keyword = node({
+      id: "column-keyword",
+      parentId: item.id,
+      level: "column",
+      articleNumber: "1",
+      text: "用語",
+      depth: 2,
+    });
+    const body = node({
+      id: "column-body",
+      parentId: item.id,
+      level: "column",
+      articleNumber: "2",
+      text: "定義本文",
+      depth: 2,
+    });
+    const tableStruct = node({
+      id: "table-struct-1",
+      level: "table_struct",
+      depth: 1,
+    });
+    const renderRows = [item, keyword, body, tableStruct].map((row) => ({
+      ...row,
+      lawName: "建築基準法",
+    }));
+
+    expect(buildSegments(renderRows)).toMatchObject([
+      {
+        type: "definition",
+        anchorRows: [{ id: "column-keyword" }, { id: "column-body" }],
+      },
+      { type: "anchor", row: { id: "table-struct-1" } },
+    ]);
   });
 });
