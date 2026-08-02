@@ -49,6 +49,15 @@ export interface RevokeConfirmedRelationInput {
   reason: string;
 }
 
+export class ConfirmedRelationConflictError extends Error {
+  readonly code = "CONFIRMED_RELATION_CONFLICT";
+
+  constructor() {
+    super("確認済み関係の更新が競合しました。再度お試しください");
+    this.name = "ConfirmedRelationConflictError";
+  }
+}
+
 const relationScopeSql = lawBookArticleScopeSql("article", "entry");
 
 const SERIALIZABLE = {
@@ -56,6 +65,13 @@ const SERIALIZABLE = {
 } as const;
 
 const MAX_TRANSACTION_ATTEMPTS = 3;
+
+class SerializableRetryExhaustedError extends Error {
+  constructor(cause: unknown) {
+    super("Serializable transaction retry exhausted", { cause });
+    this.name = "SerializableRetryExhaustedError";
+  }
+}
 
 function isRetryableTransactionConflict(error: unknown): boolean {
   return (
@@ -76,7 +92,7 @@ async function withSerializableRetry<T>(
       lastConflict = error;
     }
   }
-  throw lastConflict;
+  throw new SerializableRetryExhaustedError(lastConflict);
 }
 
 async function assertCurrentArticle(
@@ -179,100 +195,143 @@ export async function saveRelatedArticleCandidate(input: SaveCandidateInput) {
     assertDistinctArticles(input.sourceArticleId, input.proposedTargetArticleId);
   }
   const fingerprint = candidateFingerprint(input);
-  return withSerializableRetry(async (tx) => {
-    await assertCurrentArticle(tx, input.sourceArticleId);
-    if (input.proposedTargetArticleId) {
-      await assertCurrentArticle(tx, input.proposedTargetArticleId);
-    }
-    const existing = await tx.relatedArticleCandidate.findUnique({
+  try {
+    return await withSerializableRetry(async (tx) => {
+      await assertCurrentArticle(tx, input.sourceArticleId);
+      if (input.proposedTargetArticleId) {
+        await assertCurrentArticle(tx, input.proposedTargetArticleId);
+      }
+      const existing = await tx.relatedArticleCandidate.findUnique({
+        where: { candidateFingerprint: fingerprint },
+      });
+      if (existing) return existing;
+      return tx.relatedArticleCandidate.create({
+        data: {
+          sourceArticleId: input.sourceArticleId,
+          proposedTargetArticleId: input.proposedTargetArticleId,
+          proposedTargetText,
+          relationType: input.relationType,
+          extractionMethod: input.extractionMethod,
+          generatorVersion,
+          confidence: input.confidence,
+          rationale: normalizeOptionalText(input.rationale),
+          candidateFingerprint: fingerprint,
+        },
+      });
+    });
+  } catch (error) {
+    if (!(error instanceof SerializableRetryExhaustedError)) throw error;
+    const existing = await prisma.relatedArticleCandidate.findUnique({
       where: { candidateFingerprint: fingerprint },
     });
     if (existing) return existing;
-    return tx.relatedArticleCandidate.create({
-      data: {
-        sourceArticleId: input.sourceArticleId,
-        proposedTargetArticleId: input.proposedTargetArticleId,
-        proposedTargetText,
-        relationType: input.relationType,
-        extractionMethod: input.extractionMethod,
-        generatorVersion,
-        confidence: input.confidence,
-        rationale: normalizeOptionalText(input.rationale),
-        candidateFingerprint: fingerprint,
-      },
-    });
-  });
+    throw new ConfirmedRelationConflictError();
+  }
 }
 
 export async function approveRelatedArticleCandidate(input: ApproveCandidateInput) {
   const rationale = normalizeRelationRationale(input.rationale);
-  return withSerializableRetry(async (tx) => {
-    const candidate = await tx.relatedArticleCandidate.findUnique({
+  try {
+    return await withSerializableRetry(async (tx) => {
+      const candidate = await tx.relatedArticleCandidate.findUnique({
+        where: { id: input.candidateId },
+      });
+      if (!candidate || candidate.status !== "PENDING") {
+        throw new Error("PENDINGの候補だけを承認できます");
+      }
+      assertDistinctArticles(candidate.sourceArticleId, input.targetArticleId);
+      await Promise.all([
+        assertReviewer(tx, input.reviewerId),
+        assertCurrentArticle(tx, candidate.sourceArticleId),
+        assertCurrentArticle(tx, input.targetArticleId),
+      ]);
+      await assertNoActiveDuplicate(
+        tx,
+        candidate.sourceArticleId,
+        input.targetArticleId,
+        input.relationType,
+      );
+      const reviewedAt = new Date();
+      const claimed = await tx.relatedArticleCandidate.updateMany({
+        where: { id: candidate.id, status: "PENDING" },
+        data: {
+          status: "PROMOTED",
+          reviewedById: input.reviewerId,
+          reviewedAt,
+          reviewNote: normalizeOptionalText(input.reviewNote),
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new Error("PENDINGの候補だけを承認できます");
+      }
+      return tx.confirmedArticleRelation.create({
+        data: {
+          sourceArticleId: candidate.sourceArticleId,
+          targetArticleId: input.targetArticleId,
+          relationType: input.relationType,
+          rationale,
+          origin: "CANDIDATE",
+          sourceCandidateId: candidate.id,
+          confirmedById: input.reviewerId,
+          confirmedAt: reviewedAt,
+        },
+      });
+    });
+  } catch (error) {
+    if (!(error instanceof SerializableRetryExhaustedError)) throw error;
+    const candidate = await prisma.relatedArticleCandidate.findUnique({
       where: { id: input.candidateId },
+      select: { sourceArticleId: true, status: true },
     });
     if (!candidate || candidate.status !== "PENDING") {
       throw new Error("PENDINGの候補だけを承認できます");
     }
-    assertDistinctArticles(candidate.sourceArticleId, input.targetArticleId);
-    await Promise.all([
-      assertReviewer(tx, input.reviewerId),
-      assertCurrentArticle(tx, candidate.sourceArticleId),
-      assertCurrentArticle(tx, input.targetArticleId),
-    ]);
-    await assertNoActiveDuplicate(
-      tx,
-      candidate.sourceArticleId,
-      input.targetArticleId,
-      input.relationType,
-    );
-    const reviewedAt = new Date();
-    const claimed = await tx.relatedArticleCandidate.updateMany({
-      where: { id: candidate.id, status: "PENDING" },
-      data: {
-        status: "PROMOTED",
-        reviewedById: input.reviewerId,
-        reviewedAt,
-        reviewNote: normalizeOptionalText(input.reviewNote),
-      },
-    });
-    if (claimed.count !== 1) {
-      throw new Error("PENDINGの候補だけを承認できます");
-    }
-    return tx.confirmedArticleRelation.create({
-      data: {
+    const duplicate = await prisma.confirmedArticleRelation.findFirst({
+      where: {
         sourceArticleId: candidate.sourceArticleId,
         targetArticleId: input.targetArticleId,
         relationType: input.relationType,
-        rationale,
-        origin: "CANDIDATE",
-        sourceCandidateId: candidate.id,
-        confirmedById: input.reviewerId,
-        confirmedAt: reviewedAt,
+        revokedAt: null,
       },
+      select: { id: true },
     });
-  });
+    if (duplicate) throw new Error("同じ有効関係が既に存在します");
+    throw new ConfirmedRelationConflictError();
+  }
 }
 
 export async function rejectRelatedArticleCandidate(input: RejectCandidateInput) {
   const reason = normalizeRelationRationale(input.reason);
-  return withSerializableRetry(async (tx) => {
-    await assertReviewer(tx, input.reviewerId);
-    const result = await tx.relatedArticleCandidate.updateMany({
-      where: { id: input.candidateId, status: "PENDING" },
-      data: {
-        status: "REJECTED",
-        reviewedById: input.reviewerId,
-        reviewedAt: new Date(),
-        reviewNote: reason,
-      },
+  try {
+    return await withSerializableRetry(async (tx) => {
+      await assertReviewer(tx, input.reviewerId);
+      const result = await tx.relatedArticleCandidate.updateMany({
+        where: { id: input.candidateId, status: "PENDING" },
+        data: {
+          status: "REJECTED",
+          reviewedById: input.reviewerId,
+          reviewedAt: new Date(),
+          reviewNote: reason,
+        },
+      });
+      if (result.count !== 1) {
+        throw new Error("PENDINGの候補だけを棄却できます");
+      }
+      return tx.relatedArticleCandidate.findUniqueOrThrow({
+        where: { id: input.candidateId },
+      });
     });
-    if (result.count !== 1) {
+  } catch (error) {
+    if (!(error instanceof SerializableRetryExhaustedError)) throw error;
+    const candidate = await prisma.relatedArticleCandidate.findUnique({
+      where: { id: input.candidateId },
+      select: { status: true },
+    });
+    if (!candidate || candidate.status !== "PENDING") {
       throw new Error("PENDINGの候補だけを棄却できます");
     }
-    return tx.relatedArticleCandidate.findUniqueOrThrow({
-      where: { id: input.candidateId },
-    });
-  });
+    throw new ConfirmedRelationConflictError();
+  }
 }
 
 export async function createManualConfirmedRelation(
@@ -280,49 +339,76 @@ export async function createManualConfirmedRelation(
 ) {
   const rationale = normalizeRelationRationale(input.rationale);
   assertDistinctArticles(input.sourceArticleId, input.targetArticleId);
-  return withSerializableRetry(async (tx) => {
-    await Promise.all([
-      assertReviewer(tx, input.reviewerId),
-      assertCurrentArticle(tx, input.sourceArticleId),
-      assertCurrentArticle(tx, input.targetArticleId),
-    ]);
-    await assertNoActiveDuplicate(
-      tx,
-      input.sourceArticleId,
-      input.targetArticleId,
-      input.relationType,
-    );
-    return tx.confirmedArticleRelation.create({
-      data: {
+  try {
+    return await withSerializableRetry(async (tx) => {
+      await Promise.all([
+        assertReviewer(tx, input.reviewerId),
+        assertCurrentArticle(tx, input.sourceArticleId),
+        assertCurrentArticle(tx, input.targetArticleId),
+      ]);
+      await assertNoActiveDuplicate(
+        tx,
+        input.sourceArticleId,
+        input.targetArticleId,
+        input.relationType,
+      );
+      return tx.confirmedArticleRelation.create({
+        data: {
+          sourceArticleId: input.sourceArticleId,
+          targetArticleId: input.targetArticleId,
+          relationType: input.relationType,
+          rationale,
+          origin: "MANUAL",
+          confirmedById: input.reviewerId,
+          confirmedAt: new Date(),
+        },
+      });
+    });
+  } catch (error) {
+    if (!(error instanceof SerializableRetryExhaustedError)) throw error;
+    const duplicate = await prisma.confirmedArticleRelation.findFirst({
+      where: {
         sourceArticleId: input.sourceArticleId,
         targetArticleId: input.targetArticleId,
         relationType: input.relationType,
-        rationale,
-        origin: "MANUAL",
-        confirmedById: input.reviewerId,
-        confirmedAt: new Date(),
+        revokedAt: null,
       },
+      select: { id: true },
     });
-  });
+    if (duplicate) throw new Error("同じ有効関係が既に存在します");
+    throw new ConfirmedRelationConflictError();
+  }
 }
 
 export async function revokeConfirmedRelation(input: RevokeConfirmedRelationInput) {
   const reason = normalizeRelationRationale(input.reason);
-  return withSerializableRetry(async (tx) => {
-    await assertReviewer(tx, input.reviewerId);
-    const result = await tx.confirmedArticleRelation.updateMany({
-      where: { id: input.relationId, revokedAt: null },
-      data: {
-        revokedAt: new Date(),
-        revokedById: input.reviewerId,
-        revocationReason: reason,
-      },
+  try {
+    return await withSerializableRetry(async (tx) => {
+      await assertReviewer(tx, input.reviewerId);
+      const result = await tx.confirmedArticleRelation.updateMany({
+        where: { id: input.relationId, revokedAt: null },
+        data: {
+          revokedAt: new Date(),
+          revokedById: input.reviewerId,
+          revocationReason: reason,
+        },
+      });
+      if (result.count !== 1) {
+        throw new Error("有効な確認済み関係がありません");
+      }
+      return tx.confirmedArticleRelation.findUniqueOrThrow({
+        where: { id: input.relationId },
+      });
     });
-    if (result.count !== 1) {
+  } catch (error) {
+    if (!(error instanceof SerializableRetryExhaustedError)) throw error;
+    const relation = await prisma.confirmedArticleRelation.findUnique({
+      where: { id: input.relationId },
+      select: { revokedAt: true },
+    });
+    if (!relation || relation.revokedAt !== null) {
       throw new Error("有効な確認済み関係がありません");
     }
-    return tx.confirmedArticleRelation.findUniqueOrThrow({
-      where: { id: input.relationId },
-    });
-  });
+    throw new ConfirmedRelationConflictError();
+  }
 }
