@@ -132,6 +132,11 @@ function FullLawReadyLayout({
             <FullLawViewer
               document={document}
               targetArticleId={initialArticleId}
+              confirmedRelationsBySource={
+                relationsState.status === "ready" && relationsState.document
+                  ? relationsState.document.relationsBySource
+                  : {}
+              }
             />
           </OfficialTextCopyBoundary>
         </article>

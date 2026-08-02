@@ -12,11 +12,14 @@ import type { ArticleRow } from "@/lib/article/article";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 import { articleLabel } from "@/lib/article/article";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
+import type { ConfirmedRelation } from "@/lib/relations/confirmed-relation";
+import ConfirmedRelationList from "@/components/article/ConfirmedRelationList";
 
 interface ChapterArticleBlockProps {
   articleRoot: ArticleRow;
   descendantNodes: ArticleRow[];
   outgoingBySource: Map<string, OutgoingLinkRow[]>;
+  confirmedRelations: ConfirmedRelation[];
   isFirst: boolean;
 }
 
@@ -24,6 +27,7 @@ export default function ChapterArticleBlock({
   articleRoot,
   descendantNodes,
   outgoingBySource,
+  confirmedRelations,
   isFirst,
 }: ChapterArticleBlockProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -117,6 +121,10 @@ export default function ChapterArticleBlock({
           );
         })}
       </div>
+      <ConfirmedRelationList
+        sourceArticleId={articleRoot.id}
+        relations={confirmedRelations}
+      />
     </div>
   );
 }

@@ -10,13 +10,16 @@ import {
   fullLawTargetSelector,
   type FullLawDocument,
 } from "@/lib/article/full-law-document";
+import type { ConfirmedRelation } from "@/lib/relations/confirmed-relation";
 
 export default function FullLawViewer({
   document,
   targetArticleId,
+  confirmedRelationsBySource,
 }: {
   document: FullLawDocument;
   targetArticleId: string;
+  confirmedRelationsBySource: Record<string, ConfirmedRelation[]>;
 }) {
   const blocks = useMemo(
     () => buildFullLawBlocks(document.nodes, document.law.name),
@@ -25,6 +28,10 @@ export default function FullLawViewer({
   const outgoingBySource = useMemo(
     () => new Map(Object.entries(document.linksBySource)),
     [document.linksBySource],
+  );
+  const confirmedBySource = useMemo(
+    () => new Map(Object.entries(confirmedRelationsBySource)),
+    [confirmedRelationsBySource],
   );
   const firstArticleId = blocks.find(
     (block) => block.kind === "article",
@@ -54,6 +61,9 @@ export default function FullLawViewer({
             articleRoot={block.article.root}
             descendantNodes={block.article.children}
             outgoingBySource={outgoingBySource}
+            confirmedRelations={
+              confirmedBySource.get(block.article.root.id) ?? []
+            }
             isFirst={block.article.root.id === firstArticleId}
           />
         ),
