@@ -3,6 +3,7 @@ import {
   buildFullLawBlocks,
   buildFullLawToc,
   fullLawAnchorId,
+  fullLawTargetSelector,
   type FullLawNode,
 } from "@/lib/article/full-law-document";
 
@@ -96,6 +97,12 @@ describe("full law document", () => {
   it("Article IDをURL安全な固定DOM IDへ変換する", () => {
     expect(fullLawAnchorId("art_325ac_000002")).toBe(
       "law-node-art_325ac_000002",
+    );
+  });
+
+  it("子ノードを直接指定したとき、そのDOMセレクタを返す", () => {
+    expect(fullLawTargetSelector("paragraph-1")).toBe(
+      "#law-node-paragraph-1",
     );
   });
 });

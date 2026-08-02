@@ -49,6 +49,10 @@ export function fullLawAnchorId(articleId: string): string {
   return `law-node-${articleId.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 }
 
+export function fullLawTargetSelector(articleId: string): string {
+  return `#${fullLawAnchorId(articleId)}`;
+}
+
 export function buildFullLawBlocks(
   nodes: FullLawNode[],
   lawName: string,
