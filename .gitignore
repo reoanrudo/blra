@@ -40,5 +40,8 @@ data/raw/
 # brainstorm visual companion
 .superpowers/
 
+# isolated implementation worktrees
+.worktrees/
+
 # hourei-rag から移植した未使用コード群（今後段階統合で再利用）
 web/src/_HoureiArchive/
