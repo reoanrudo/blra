@@ -1,5 +1,7 @@
 import { TEST_ARTICLE_ID, expect, test } from "./fixtures";
 
+const SECOND_ARTICLE_ID = "art_325ac0000000201_20260101_000004";
+
 const FORBIDDEN_READER_APIS = [
   "/api/projects/active",
   "/api/glossary",
@@ -12,6 +14,17 @@ const FORBIDDEN_READER_APIS = [
 ];
 
 test.describe("Phase 1 全文法令リーダー", () => {
+  test("非先頭の条でも条番号を見出しの1回だけ表示する", async ({ page }) => {
+    await page.goto(`/articles/${SECOND_ARTICLE_ID}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+    const articleBlock = page
+      .locator(`[data-scroll-article-id="${SECOND_ARTICLE_ID}"]`)
+      .locator("..");
+
+    await expect(articleBlock.getByText("第2条", { exact: true })).toHaveCount(1);
+  });
+
   test("読者画面を2列UIに限定し不要APIを呼ばない", async ({ page }) => {
     const forbiddenRequests: string[] = [];
     page.on("request", (request) => {

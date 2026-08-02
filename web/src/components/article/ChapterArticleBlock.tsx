@@ -60,9 +60,6 @@ export default function ChapterArticleBlock({
       {!isFirst && (
         <div className="chapter-scroll-separator">
           <hr className="border-neutral-200" />
-          <span className="chapter-scroll-separator__badge">
-            {label || articleRoot.caption || ""}
-          </span>
         </div>
       )}
 
