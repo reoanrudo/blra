@@ -118,10 +118,13 @@ interface FullLawDocument {
   };
   toc: FullLawTocNode[];
   nodes: FullLawNode[];
+  linksBySource: Record<string, FullLawLink[]>;
 }
 ```
 
 `FullLawNode` は既存描画に必要な情報だけを返す。最低限、`id`、`parentId`、`stableNodeKey`、`level`、`sortOrder`、条・項番号、`caption`、`title`、`text`、描画に必要な既存属性を含める。案件、注釈、閲覧履歴、レコメンド等の利用者データは含めない。
+
+`linksBySource` には同じ現行法令集に収録された、DB保存済みかつ `isResolved = true` のリンクだけを含める。閲覧時の正規表現検出や推定リンク生成は行わない。
 
 DB取得は選択した `lawRevisionId` と現行法令集の収録範囲で限定し、`deletedAt IS NULL` を強制する。再帰CTEで文書順のpathを作り、DB側で正しい順序へ並べて返す。
 
