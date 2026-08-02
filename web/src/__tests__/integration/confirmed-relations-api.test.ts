@@ -1,8 +1,16 @@
 import { PrismaClient } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { GET as getConfirmedRelations } from "@/app/api/law-revisions/[id]/confirmed-relations/route";
-import { getConfirmedRelationsDocument } from "@/lib/relations/confirmed-relations-repository";
+import * as confirmedRelationsRepository from "@/lib/relations/confirmed-relations-repository";
 import {
   createManualConfirmedRelation,
   revokeConfirmedRelation,
@@ -19,6 +27,7 @@ const fixtures: RelationFixture[] = [];
 
 beforeAll(async () => prisma.$connect());
 afterEach(async () => {
+  vi.restoreAllMocks();
   while (fixtures.length > 0) {
     await cleanupRelationFixture(prisma, fixtures.pop()!);
   }
@@ -89,7 +98,9 @@ describe("confirmed relations API (integration)", () => {
       ),
     );
 
-    const document = await getConfirmedRelationsDocument(fixture.revisionId);
+    const document = await confirmedRelationsRepository.getConfirmedRelationsDocument(
+      fixture.revisionId,
+    );
     const rows = document?.relationsBySource[fixture.sourceArticleId] ?? [];
     expect(rows.some((row) => row.id === active.id)).toBe(true);
     expect(rows.some((row) => row.id === revoked.id)).toBe(false);
@@ -126,5 +137,26 @@ describe("confirmed relations API (integration)", () => {
     );
     expect(response.status).toBe(404);
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("repository例外時は公開エラーをno-storeで返す", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(
+      confirmedRelationsRepository,
+      "getConfirmedRelationsDocument",
+    ).mockRejectedValueOnce(new Error("database connection failed"));
+
+    const response = await getConfirmedRelations(
+      new NextRequest(
+        "http://localhost/api/law-revisions/current/confirmed-relations",
+      ),
+      { params: { id: "current" } },
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      error: "failed to load confirmed relations",
+    });
   });
 });
