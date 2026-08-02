@@ -73,6 +73,30 @@ enum LinkType {
   unresolved
 }
 
+enum RelationEdgeType {
+  DELEGATES_TO
+  APPLIES_MUTATIS_MUTANDIS
+  DEFINES
+  EXCEPTS
+  CITES
+}
+
+enum RelationCandidateMethod {
+  RULE_BASED
+  LLM_ASSISTED
+}
+
+enum RelationCandidateStatus {
+  PENDING
+  REJECTED
+  PROMOTED
+}
+
+enum ConfirmedRelationOrigin {
+  MANUAL
+  CANDIDATE
+}
+
 enum PackType {
   system
   user
@@ -285,8 +309,12 @@ model Article {
   lawRevision     LawRevision @relation(fields: [lawRevisionId], references: [id])
 
   // 参照関係
-  outgoingLinks Link[] @relation("LinkSource")
-  incomingLinks Link[] @relation("LinkTarget")
+  outgoingLinks          Link[]                     @relation("LinkSource")
+  incomingLinks          Link[]                     @relation("LinkTarget")
+  relatedCandidatesFrom  RelatedArticleCandidate[]  @relation("RelatedCandidateSource")
+  relatedCandidatesTo    RelatedArticleCandidate[]  @relation("RelatedCandidateTarget")
+  confirmedRelationsFrom ConfirmedArticleRelation[] @relation("ConfirmedRelationSource")
+  confirmedRelationsTo   ConfirmedArticleRelation[] @relation("ConfirmedRelationTarget")
 
   // ハイライト
   systemHighlights SystemHighlight[]
@@ -343,6 +371,61 @@ model Link {
   @@index([targetId])
 }
 
+model RelatedArticleCandidate {
+  id                      String                  @id @default(cuid())
+  sourceArticleId         String
+  proposedTargetArticleId String?
+  proposedTargetText      String?
+  relationType            RelationEdgeType
+  extractionMethod        RelationCandidateMethod
+  generatorVersion        String
+  confidence              Float
+  rationale               String?
+  candidateFingerprint    String                  @unique
+  status                  RelationCandidateStatus @default(PENDING)
+  reviewedById            String?
+  reviewedAt              DateTime?
+  reviewNote              String?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  sourceArticle         Article                   @relation("RelatedCandidateSource", fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  proposedTargetArticle Article?                  @relation("RelatedCandidateTarget", fields: [proposedTargetArticleId], references: [id], onDelete: Restrict)
+  reviewedBy            User?                     @relation("RelatedCandidateReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  promotedRelation      ConfirmedArticleRelation?
+
+  @@index([sourceArticleId, status])
+  @@index([proposedTargetArticleId])
+  @@index([status, createdAt])
+}
+
+model ConfirmedArticleRelation {
+  id                String                  @id @default(cuid())
+  sourceArticleId   String
+  targetArticleId   String
+  relationType      RelationEdgeType
+  rationale         String
+  origin            ConfirmedRelationOrigin
+  sourceCandidateId String?                 @unique
+  confirmedById     String
+  confirmedAt       DateTime
+  revokedAt         DateTime?
+  revokedById       String?
+  revocationReason  String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  sourceArticle   Article                  @relation("ConfirmedRelationSource", fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  targetArticle   Article                  @relation("ConfirmedRelationTarget", fields: [targetArticleId], references: [id], onDelete: Restrict)
+  sourceCandidate RelatedArticleCandidate? @relation(fields: [sourceCandidateId], references: [id], onDelete: Restrict)
+  confirmedBy     User                     @relation("ConfirmedRelationApprover", fields: [confirmedById], references: [id], onDelete: Restrict)
+  revokedBy       User?                    @relation("ConfirmedRelationRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+
+  @@index([sourceArticleId, revokedAt])
+  @@index([targetArticleId, revokedAt])
+  @@index([sourceArticleId, relationType, revokedAt])
+}
+
 // ─── ユーザー（MVPはローカル固定ユーザー。外部認証テーブルは持たない） ───
 
 model User {
@@ -350,12 +433,15 @@ model User {
   name  String?
   email String? @unique
 
-  userHighlights UserHighlight[]
-  userTags       UserTag[]
-  annotations    ArticleAnnotation[]
-  packs          Pack[]
-  activities     UserActivity[]
-  projects       ProjectProfile[]
+  userHighlights             UserHighlight[]
+  userTags                   UserTag[]
+  annotations                ArticleAnnotation[]
+  packs                      Pack[]
+  activities                 UserActivity[]
+  projects                   ProjectProfile[]
+  relatedCandidatesReviewed  RelatedArticleCandidate[]  @relation("RelatedCandidateReviewer")
+  confirmedRelationsApproved ConfirmedArticleRelation[] @relation("ConfirmedRelationApprover")
+  confirmedRelationsRevoked  ConfirmedArticleRelation[] @relation("ConfirmedRelationRevoker")
 }
 
 // ─── ユーザーアクティビティ（検索履歴・閲覧履歴） ───
