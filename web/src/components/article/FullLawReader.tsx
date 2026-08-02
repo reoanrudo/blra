@@ -13,6 +13,10 @@ import {
 } from "@/contexts/ScrollActiveArticleContext";
 import { useFullLawDocument } from "@/hooks/useFullLawDocument";
 import type { FullLawDocument } from "@/lib/article/full-law-document";
+import {
+  useConfirmedRelations,
+  type ConfirmedRelationsState,
+} from "@/hooks/useConfirmedRelations";
 
 interface FullLawReaderProps {
   lawRevisionId: string;
@@ -31,6 +35,7 @@ export default function FullLawReader(props: FullLawReaderProps) {
 
 function FullLawReaderContent(props: FullLawReaderProps) {
   const state = useFullLawDocument(props.lawRevisionId);
+  const relationsState = useConfirmedRelations(props.lawRevisionId);
   const emptyLinks = useMemo(() => new Map(), []);
 
   if (state.status === "loading") {
@@ -67,16 +72,26 @@ function FullLawReaderContent(props: FullLawReaderProps) {
 
   return (
     <ScrollActiveArticleProvider linksByArticle={emptyLinks}>
-      <FullLawReadyLayout {...props} document={state.document} />
+      <FullLawReadyLayout
+        {...props}
+        document={state.document}
+        relationsState={relationsState}
+      />
     </ScrollActiveArticleProvider>
   );
 }
+
+type FullLawReadyLayoutProps = FullLawReaderProps & {
+  document: FullLawDocument;
+  relationsState: ConfirmedRelationsState;
+};
 
 function FullLawReadyLayout({
   document,
   initialArticleId,
   breadcrumb,
-}: FullLawReaderProps & { document: FullLawDocument }) {
+  relationsState,
+}: FullLawReadyLayoutProps) {
   const scrollState = useScrollActiveArticle();
   const currentArticleId =
     scrollState?.activeArticleId ?? initialArticleId;
@@ -109,6 +124,9 @@ function FullLawReadyLayout({
               e-Govで改正・施行情報を確認
             </a>
           </header>
+          {relationsState.status === "error" && (
+            <ConfirmedRelationsPartialError onRetry={relationsState.retry} />
+          )}
           <ScrollUrlSync initialArticleId={initialArticleId} />
           <OfficialTextCopyBoundary>
             <FullLawViewer
@@ -119,6 +137,21 @@ function FullLawReadyLayout({
         </article>
       }
     />
+  );
+}
+
+function ConfirmedRelationsPartialError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <section
+      role="status"
+      className="mb-4 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+    >
+      <p className="font-bold">確認済みの関連を取得できませんでした</p>
+      <p>法令本文は表示できます。</p>
+      <button type="button" onClick={onRetry} className="mt-2 underline">
+        関連だけ再試行
+      </button>
+    </section>
   );
 }
 
