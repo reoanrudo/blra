@@ -1,3 +1,5 @@
+"use client";
+
 import {
   articleLabel,
   isHeadingLevel,
@@ -9,6 +11,7 @@ import {
 import { renderLinkSegments, renderToElements } from "@/lib/link/link-renderer";
 import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
+import { fullLawAnchorId } from "@/lib/article/full-law-document";
 import type { ReactNode } from "react";
 
 /**
@@ -87,7 +90,11 @@ export function ArticleNode({
 }) {
   if (isHeadingLevel(row.level)) {
     return (
-      <h3 className={levelHeadingClass(row.level)}>
+      <h3
+        id={fullLawAnchorId(row.id)}
+        data-article-id={row.id}
+        className={levelHeadingClass(row.level)}
+      >
         {row.title && <span>{row.title}</span>}
         {row.articleNumber && <span>（第{formatStructuredNumber(row.articleNumber)}条）</span>}
       </h3>
@@ -103,13 +110,22 @@ export function ArticleNode({
 
   const renderedText =
     displayText && outgoingLinks.length > 0
-      ? renderToElements(renderLinkSegments(displayText, outgoingLinks))
+      ? renderToElements(
+          renderLinkSegments(displayText, outgoingLinks),
+          undefined,
+          (articleId) => `/articles/${encodeURIComponent(articleId)}`,
+        )
       : displayText
         ? renderDisplayTokens(displayText)
         : null;
 
   return (
-    <div className={`${indent} law-node`} data-article-id={row.id} data-original-text={displayText ?? ""}>
+    <div
+      id={fullLawAnchorId(row.id)}
+      className={`${indent} law-node scroll-mt-20`}
+      data-article-id={row.id}
+      data-original-text={displayText ?? ""}
+    >
       {row.level === "article" && row.caption && (
         <p className="law-node__caption">{row.caption}</p>
       )}
@@ -124,7 +140,11 @@ export function ArticleNode({
 export type RenderSegment =
   | { type: "node"; row: ArticleRow }
   | { type: "definition"; row: ArticleRow; keyword: string; body: string }
-  | { type: "table"; rows: { row: ArticleRow; cells: ArticleRow[] }[] };
+  | {
+      type: "table";
+      table: ArticleRow;
+      rows: { row: ArticleRow; cells: ArticleRow[] }[];
+    };
 
 export function buildSegments(children: ArticleRow[]): RenderSegment[] {
   const segments: RenderSegment[] = [];
@@ -171,7 +191,7 @@ export function buildSegments(children: ArticleRow[]): RenderSegment[] {
       }));
 
       if (structuredRows.length > 0) {
-        segments.push({ type: "table", rows: structuredRows });
+        segments.push({ type: "table", table: row, rows: structuredRows });
       }
       continue;
     }
@@ -207,21 +227,34 @@ export function buildSegments(children: ArticleRow[]): RenderSegment[] {
 }
 
 export function TableBlock({
+  tableNode,
   rows,
 }: {
+  tableNode: ArticleRow;
   rows: { row: ArticleRow; cells: ArticleRow[] }[];
 }) {
   if (rows.length === 0) return null;
 
   return (
-    <div className="law-table-wrapper my-4 overflow-x-auto">
+    <div
+      id={fullLawAnchorId(tableNode.id)}
+      data-article-id={tableNode.id}
+      className="law-table-wrapper my-4 scroll-mt-20 overflow-x-auto"
+    >
       <table className="law-table w-full border-collapse text-xs">
         <tbody>
           {rows.map((tr, ri) => (
-            <tr key={tr.row.id} className={ri === 0 ? "law-table__header-row" : ""}>
+            <tr
+              id={fullLawAnchorId(tr.row.id)}
+              key={tr.row.id}
+              data-article-id={tr.row.id}
+              className={ri === 0 ? "law-table__header-row" : ""}
+            >
               {tr.cells.map((td) => (
                 <td
                   key={td.id}
+                  id={fullLawAnchorId(td.id)}
+                  data-article-id={td.id}
                   className="law-table__cell border border-neutral-400 px-2 py-1.5 align-top leading-relaxed"
                 >
                   {td.text && renderDisplayTokens(td.text)}
@@ -251,11 +284,20 @@ export function DefinitionNode({
 
   const renderedBody =
     outgoingLinks.length > 0
-      ? renderToElements(renderLinkSegments(body, outgoingLinks))
+      ? renderToElements(
+          renderLinkSegments(body, outgoingLinks),
+          undefined,
+          (articleId) => `/articles/${encodeURIComponent(articleId)}`,
+        )
       : renderDisplayTokens(body);
 
   return (
-    <div className={`${indent} law-node`} data-article-id={row.id} data-original-text={body}>
+    <div
+      id={fullLawAnchorId(row.id)}
+      className={`${indent} law-node scroll-mt-20`}
+      data-article-id={row.id}
+      data-original-text={body}
+    >
       <p className="law-node__text">
         {label && <span className="law-node__label">{label}</span>}
         <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>

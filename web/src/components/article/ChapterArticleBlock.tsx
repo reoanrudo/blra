@@ -1,3 +1,4 @@
+"use client";
 
 import { useRef, useEffect } from "react";
 import { useScrollActiveArticle } from "@/contexts/ScrollActiveArticleContext";
@@ -10,7 +11,7 @@ import {
 import type { ArticleRow } from "@/lib/article/article";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 import { articleLabel } from "@/lib/article/article";
-import { consumePendingTocScroll } from "@/lib/article/toc-scroll";
+import { fullLawAnchorId } from "@/lib/article/full-law-document";
 
 interface ChapterArticleBlockProps {
   articleRoot: ArticleRow;
@@ -32,17 +33,7 @@ export default function ChapterArticleBlock({
     if (!sentinelRef.current || !registerSentinel) return;
     registerSentinel(articleRoot.id, sentinelRef.current);
 
-    // 目次クリックによる別章遷移後のスクロール: 自分がターゲットなら上端へ即時ジャンプ
-    let rafId = 0;
-    if (consumePendingTocScroll(articleRoot.id)) {
-      // block:"start" で自分の上端へ。後にマウントされる兄弟ブロックは自分より下なので位置ずれしない
-      rafId = window.requestAnimationFrame(() => {
-        sentinelRef.current?.scrollIntoView({ block: "start" });
-      });
-    }
-
     return () => {
-      if (rafId) window.cancelAnimationFrame(rafId);
       unregisterSentinel?.(articleRoot.id);
     };
   }, [articleRoot.id, registerSentinel, unregisterSentinel]);
@@ -54,8 +45,10 @@ export default function ChapterArticleBlock({
     <div className="chapter-article-block">
       {/* Sentinel for IntersectionObserver tracking */}
       <div
+        id={fullLawAnchorId(articleRoot.id)}
         ref={sentinelRef}
         data-scroll-article-id={articleRoot.id}
+        data-article-id={articleRoot.id}
         className="scroll-mt-20"
       />
 
@@ -83,7 +76,13 @@ export default function ChapterArticleBlock({
       <div className="law-body">
         {segments.map((seg) => {
           if (seg.type === "table") {
-            return <TableBlock key={seg.rows[0]?.row.id ?? "table"} rows={seg.rows} />;
+            return (
+              <TableBlock
+                key={seg.table.id}
+                tableNode={seg.table}
+                rows={seg.rows}
+              />
+            );
           }
           if (seg.type === "definition") {
             return (
