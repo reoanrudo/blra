@@ -97,6 +97,8 @@ e-Gov 型の「選択した法令を一度に読み込む全文リーダー」�
 - `web`: Next.js本番ビルド合格
 - `src`: Vitest 136件合格
 - Prisma schema validate合格、稼働DBとの差分0
+- Web Vitest後にfixture残件0をPrismaで確認。`relation-test-` / `@example.invalid` の
+  テストユーザー、`RelatedArticleCandidate`、`ConfirmedArticleRelation` はすべて0件
 - 公開route・repository・client・hook・componentに候補固有語は混入していない
 - 実ブラウザ相当のrequest listenerで、建築基準法第1条の初期表示は全文API・
   確認済み関連APIが各1回、目次移動とスクロール後も追加0回を確認。関係0件では
