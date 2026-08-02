@@ -438,6 +438,7 @@ export default function ChapterScrollViewer({
               articleRoot={ca.root}
               descendantNodes={ca.children}
               outgoingBySource={outgoingBySource}
+              confirmedRelations={[]}
               isFirst={
                 segmentIndex === 0 && articleIndex === 0 && !beforeCursor
               }
