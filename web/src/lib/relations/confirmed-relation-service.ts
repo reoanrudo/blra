@@ -55,6 +55,30 @@ const SERIALIZABLE = {
   isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
 } as const;
 
+const MAX_TRANSACTION_ATTEMPTS = 3;
+
+function isRetryableTransactionConflict(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2002" || error.code === "P2034")
+  );
+}
+
+async function withSerializableRetry<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  let lastConflict: unknown;
+  for (let attempt = 0; attempt < MAX_TRANSACTION_ATTEMPTS; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, SERIALIZABLE);
+    } catch (error) {
+      if (!isRetryableTransactionConflict(error)) throw error;
+      lastConflict = error;
+    }
+  }
+  throw lastConflict;
+}
+
 async function assertCurrentArticle(
   tx: Prisma.TransactionClient,
   articleId: string,
@@ -155,8 +179,11 @@ export async function saveRelatedArticleCandidate(input: SaveCandidateInput) {
     assertDistinctArticles(input.sourceArticleId, input.proposedTargetArticleId);
   }
   const fingerprint = candidateFingerprint(input);
-  return prisma.$transaction(async (tx) => {
+  return withSerializableRetry(async (tx) => {
     await assertCurrentArticle(tx, input.sourceArticleId);
+    if (input.proposedTargetArticleId) {
+      await assertCurrentArticle(tx, input.proposedTargetArticleId);
+    }
     const existing = await tx.relatedArticleCandidate.findUnique({
       where: { candidateFingerprint: fingerprint },
     });
@@ -174,12 +201,12 @@ export async function saveRelatedArticleCandidate(input: SaveCandidateInput) {
         candidateFingerprint: fingerprint,
       },
     });
-  }, SERIALIZABLE);
+  });
 }
 
 export async function approveRelatedArticleCandidate(input: ApproveCandidateInput) {
   const rationale = normalizeRelationRationale(input.rationale);
-  return prisma.$transaction(async (tx) => {
+  return withSerializableRetry(async (tx) => {
     const candidate = await tx.relatedArticleCandidate.findUnique({
       where: { id: input.candidateId },
     });
@@ -223,12 +250,12 @@ export async function approveRelatedArticleCandidate(input: ApproveCandidateInpu
         confirmedAt: reviewedAt,
       },
     });
-  }, SERIALIZABLE);
+  });
 }
 
 export async function rejectRelatedArticleCandidate(input: RejectCandidateInput) {
   const reason = normalizeRelationRationale(input.reason);
-  return prisma.$transaction(async (tx) => {
+  return withSerializableRetry(async (tx) => {
     await assertReviewer(tx, input.reviewerId);
     const result = await tx.relatedArticleCandidate.updateMany({
       where: { id: input.candidateId, status: "PENDING" },
@@ -245,7 +272,7 @@ export async function rejectRelatedArticleCandidate(input: RejectCandidateInput)
     return tx.relatedArticleCandidate.findUniqueOrThrow({
       where: { id: input.candidateId },
     });
-  }, SERIALIZABLE);
+  });
 }
 
 export async function createManualConfirmedRelation(
@@ -253,7 +280,7 @@ export async function createManualConfirmedRelation(
 ) {
   const rationale = normalizeRelationRationale(input.rationale);
   assertDistinctArticles(input.sourceArticleId, input.targetArticleId);
-  return prisma.$transaction(async (tx) => {
+  return withSerializableRetry(async (tx) => {
     await Promise.all([
       assertReviewer(tx, input.reviewerId),
       assertCurrentArticle(tx, input.sourceArticleId),
@@ -276,12 +303,12 @@ export async function createManualConfirmedRelation(
         confirmedAt: new Date(),
       },
     });
-  }, SERIALIZABLE);
+  });
 }
 
 export async function revokeConfirmedRelation(input: RevokeConfirmedRelationInput) {
   const reason = normalizeRelationRationale(input.reason);
-  return prisma.$transaction(async (tx) => {
+  return withSerializableRetry(async (tx) => {
     await assertReviewer(tx, input.reviewerId);
     const result = await tx.confirmedArticleRelation.updateMany({
       where: { id: input.relationId, revokedAt: null },
@@ -297,5 +324,5 @@ export async function revokeConfirmedRelation(input: RevokeConfirmedRelationInpu
     return tx.confirmedArticleRelation.findUniqueOrThrow({
       where: { id: input.relationId },
     });
-  }, SERIALIZABLE);
+  });
 }

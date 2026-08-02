@@ -25,6 +25,58 @@ afterEach(async () => {
 afterAll(async () => prisma.$disconnect());
 
 describe("confirmed relation service (integration)", () => {
+  it("候補の提案先には現行法令集内の条ノードだけを保存できる", async () => {
+    const fixture = await createRelationFixture(prisma);
+    if (!fixture) return;
+    fixtures.push(fixture);
+    const nonArticle = await prisma.article.findFirst({
+      where: {
+        lawRevisionId: fixture.revisionId,
+        level: { not: "article" },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    expect(nonArticle).not.toBeNull();
+    if (!nonArticle) return;
+
+    await expect(
+      saveRelatedArticleCandidate({
+        sourceArticleId: fixture.sourceArticleId,
+        proposedTargetArticleId: nonArticle.id,
+        proposedTargetText: null,
+        relationType: "CITES",
+        extractionMethod: "RULE_BASED",
+        generatorVersion: fixture.generatorVersion,
+        confidence: 0.5,
+        rationale: null,
+      }),
+    ).rejects.toThrow("現行法令集内の条ノード");
+  });
+
+  it("同一候補を並行保存しても既存候補を返す", async () => {
+    const fixture = await createRelationFixture(prisma);
+    if (!fixture) return;
+    fixtures.push(fixture);
+    const input = {
+      sourceArticleId: fixture.sourceArticleId,
+      proposedTargetArticleId: fixture.targetArticleId,
+      proposedTargetText: null,
+      relationType: "CITES",
+      extractionMethod: "RULE_BASED",
+      generatorVersion: fixture.generatorVersion,
+      confidence: 0.72,
+      rationale: "並行候補",
+    } as const;
+
+    const [left, right] = await Promise.all([
+      saveRelatedArticleCandidate(input),
+      saveRelatedArticleCandidate(input),
+    ]);
+
+    expect(left.id).toBe(right.id);
+  });
+
   it("候補を修正承認して元候補と確定内容を分離保存する", async () => {
     const fixture = await createRelationFixture(prisma);
     if (!fixture) return;
@@ -132,5 +184,60 @@ describe("confirmed relation service (integration)", () => {
       reviewerId: fixture.reviewerId,
     });
     expect(reconfirmed.id).not.toBe(relation.id);
+  });
+
+  it("競合する承認・棄却と重複手動確認をドメインエラーへ収束する", async () => {
+    const fixture = await createRelationFixture(prisma);
+    if (!fixture) return;
+    fixtures.push(fixture);
+    const candidate = await saveRelatedArticleCandidate({
+      sourceArticleId: fixture.sourceArticleId,
+      proposedTargetArticleId: fixture.targetArticleId,
+      proposedTargetText: null,
+      relationType: "CITES",
+      extractionMethod: "RULE_BASED",
+      generatorVersion: fixture.generatorVersion,
+      confidence: 0.6,
+      rationale: null,
+    });
+    const reviewResults = await Promise.allSettled([
+      approveRelatedArticleCandidate({
+        candidateId: candidate.id,
+        targetArticleId: fixture.targetArticleId,
+        relationType: "CITES",
+        rationale: "承認根拠",
+        reviewerId: fixture.reviewerId,
+        reviewNote: null,
+      }),
+      rejectRelatedArticleCandidate({
+        candidateId: candidate.id,
+        reviewerId: fixture.reviewerId,
+        reason: "棄却根拠",
+      }),
+    ]);
+    expect(reviewResults.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const reviewFailure = reviewResults.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    expect(reviewFailure?.reason).toHaveProperty("message");
+    expect((reviewFailure?.reason as Error).message).toContain("PENDING");
+
+    const relationInput = {
+      sourceArticleId: fixture.sourceArticleId,
+      targetArticleId: fixture.targetArticleId,
+      relationType: "EXCEPTS",
+      rationale: "並行確認の根拠",
+      reviewerId: fixture.reviewerId,
+    } as const;
+    const relationResults = await Promise.allSettled([
+      createManualConfirmedRelation(relationInput),
+      createManualConfirmedRelation(relationInput),
+    ]);
+    expect(relationResults.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const relationFailure = relationResults.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    expect(relationFailure?.reason).toHaveProperty("message");
+    expect((relationFailure?.reason as Error).message).toContain("同じ有効関係");
   });
 });
