@@ -84,6 +84,7 @@ proposedTargetArticleId    String? (FK Article)
 proposedTargetText         String?
 relationType               RelationEdgeType
 extractionMethod           RULE_BASED | LLM_ASSISTED
+generatorVersion           String
 confidence                 Float
 rationale                  String?
 candidateFingerprint       String (unique)
@@ -100,7 +101,8 @@ updatedAt                  DateTime
 - `sourceArticleId` は必須とする
 - `proposedTargetArticleId` と `proposedTargetText` の少なくとも一方を必須とする
 - `confidence` は `0.0` 以上 `1.0` 以下とする
-- `candidateFingerprint` は、生成手法、参照元、提案先、関係種別、生成規則版から決定論的に作り、再実行時の重複を防ぐ
+- `generatorVersion` は候補生成規則またはプロンプトの版を必須で記録する
+- `candidateFingerprint` は、生成手法、参照元、提案先、関係種別、`generatorVersion` から決定論的に作り、再実行時の重複を防ぐ
 - `PENDING` の候補はレビュー情報を持たない
 - `REJECTED` と `PROMOTED` は、確認者、確認日時、レビュー記録を持つ
 - 候補の削除を通常操作にしない。再生成しても既存の棄却判断を復活させない
