@@ -4,6 +4,7 @@ import {
   buildFullLawToc,
   fullLawAnchorId,
   fullLawTargetSelector,
+  readerArticleHref,
   type FullLawNode,
 } from "@/lib/article/full-law-document";
 
@@ -104,5 +105,9 @@ describe("full law document", () => {
     expect(fullLawTargetSelector("paragraph-1")).toBe(
       "#law-node-paragraph-1",
     );
+  });
+
+  it("reader article pathは適用時点queryを付けない", () => {
+    expect(readerArticleHref("article-107")).toBe("/articles/article-107");
   });
 });

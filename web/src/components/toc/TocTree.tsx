@@ -1,9 +1,13 @@
+"use client";
 
 import { useRef, useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter } from "../../lib/navigation-stub";
+import { useRouter } from "next/navigation";
 import type { TocNode } from "@/lib/article/toc-tree";
 import { isExpandableTocLevel, nodeCategory } from "@/lib/article/toc-tree";
-import { setPendingTocScroll } from "@/lib/article/toc-scroll";
+import {
+  fullLawTargetSelector,
+  readerArticleHref,
+} from "@/lib/article/full-law-document";
 import TocTreeNode from "./TocTreeNode";
 
 interface TocTreeProps {
@@ -12,8 +16,6 @@ interface TocTreeProps {
   onToggle: (id: string) => void;
   currentArticleId: string | null;
   ancestorIds: Set<string>;
-  /** 条クリック時のコールバック（blra 用: router ではなく直接本文スクロール） */
-  onArticleClick?: (node: TocNode) => void;
 }
 
 function computeVisibleNodes(nodes: TocNode[], expandedIds: Set<string>): TocNode[] {
@@ -45,7 +47,6 @@ export default function TocTree({
   onToggle,
   currentArticleId,
   ancestorIds,
-  onArticleClick,
 }: TocTreeProps) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -76,24 +77,21 @@ export default function TocTree({
 
   const handleArticleClick = useCallback(
     (articleId: string) => {
-      // blra 用: callback があれば router.push の代わりに使用
-      if (onArticleClick) {
-        const node = nodes.find((n) => n.id === articleId);
-        if (node) { onArticleClick(node); return; }
-      }
-      // フォールバック: 本文スクロール
-      const el = document.querySelector<HTMLElement>(
-        `[data-scroll-article-id="${CSS.escape(articleId)}"]`,
+      const target = document.querySelector<HTMLElement>(
+        fullLawTargetSelector(articleId),
       );
-      if (el) {
-        el.scrollIntoView({ block: "start", behavior: "smooth" });
+      if (target) {
+        target.scrollIntoView({ block: "start", behavior: "auto" });
+        window.history.replaceState(
+          window.history.state,
+          "",
+          readerArticleHref(articleId),
+        );
         return;
       }
-      // 別章: スクロール先を記録して遷移
-      setPendingTocScroll(articleId);
-      router.push(`/articles/${articleId}`);
+      router.push(readerArticleHref(articleId));
     },
-    [router, onArticleClick, nodes],
+    [router],
   );
 
   const handleKeyDown = useCallback(
