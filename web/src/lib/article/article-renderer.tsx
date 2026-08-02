@@ -12,6 +12,7 @@ import { renderLinkSegments, renderToElements } from "@/lib/link/link-renderer";
 import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
+export { buildSegments } from "@/lib/article/article-segments";
 import type { ReactNode } from "react";
 
 /**
@@ -137,110 +138,30 @@ export function ArticleNode({
   );
 }
 
-export type RenderSegment =
-  | { type: "node"; row: ArticleRow }
-  | { type: "definition"; row: ArticleRow; keyword: string; body: string }
-  | {
-      type: "table";
-      table: ArticleRow;
-      rows: { row: ArticleRow; cells: ArticleRow[] }[];
-    };
-
-export function buildSegments(children: ArticleRow[]): RenderSegment[] {
-  const segments: RenderSegment[] = [];
-  let i = 0;
-
-  while (i < children.length) {
-    const row = children[i];
-
-    if (row.level === "table_struct") {
-      i++;
-      continue;
-    }
-
-    if (row.level === "table") {
-      const tableDepth = row.depth;
-      const tableDescendants: ArticleRow[] = [];
-      i++;
-      while (i < children.length && children[i].depth > tableDepth) {
-        tableDescendants.push(children[i]);
-        i++;
-      }
-
-      // Build parent→children map for proper row/cell grouping
-      const byParent = new Map<string, ArticleRow[]>();
-      for (const d of tableDescendants) {
-        if (!d.parentId) continue;
-        const list = byParent.get(d.parentId);
-        if (list) list.push(d);
-        else byParent.set(d.parentId, [d]);
-      }
-      Array.from(byParent.values()).forEach((list) => {
-        list.sort((a, b) => a.sortOrder - b.sortOrder);
-      });
-
-      const tableRows = (byParent.get(row.id) ?? [])
-        .filter((r) => r.level === "table_row")
-        .sort((a, b) => a.sortOrder - b.sortOrder);
-
-      const structuredRows = tableRows.map((tr) => ({
-        row: tr,
-        cells: (byParent.get(tr.id) ?? []).filter(
-          (c) => c.level === "table_column",
-        ),
-      }));
-
-      if (structuredRows.length > 0) {
-        segments.push({ type: "table", table: row, rows: structuredRows });
-      }
-      continue;
-    }
-
-    if (row.level === "table_row" || row.level === "table_column" || row.level === "column") {
-      i++;
-      continue;
-    }
-
-    // Detect definition items: item with column(keyword) + column(body) children
-    if (row.level === "item") {
-      let colIdx = i + 1;
-      let keyword: string | null = null;
-      let body: string | null = null;
-      while (colIdx < children.length && children[colIdx].level === "column" && children[colIdx].parentId === row.id) {
-        const col = children[colIdx];
-        if (col.articleNumber === "1") keyword = col.text?.trim() ?? null;
-        if (col.articleNumber === "2") body = col.text?.trim() ?? null;
-        colIdx++;
-      }
-      if (keyword && body) {
-        segments.push({ type: "definition", row, keyword, body });
-        i = colIdx;
-        continue;
-      }
-    }
-
-    segments.push({ type: "node", row });
-    i++;
-  }
-
-  return segments;
-}
-
 export function TableBlock({
   tableNode,
   rows,
+  anchorRows,
 }: {
   tableNode: ArticleRow;
   rows: { row: ArticleRow; cells: ArticleRow[] }[];
+  anchorRows: ArticleRow[];
 }) {
-  if (rows.length === 0) return null;
-
   return (
     <div
       id={fullLawAnchorId(tableNode.id)}
       data-article-id={tableNode.id}
       className="law-table-wrapper my-4 scroll-mt-20 overflow-x-auto"
     >
+      {anchorRows.map((anchor) => (
+        <span
+          id={fullLawAnchorId(anchor.id)}
+          key={anchor.id}
+          data-article-id={anchor.id}
+          className="block h-0 scroll-mt-20"
+          aria-hidden="true"
+        />
+      ))}
       <table className="law-table w-full border-collapse text-xs">
         <tbody>
           {rows.map((tr, ri) => (
@@ -272,11 +193,13 @@ export function DefinitionNode({
   row,
   keyword,
   body,
+  anchorRows,
   outgoingLinks,
 }: {
   row: ArticleRow;
   keyword: string;
   body: string;
+  anchorRows: ArticleRow[];
   outgoingLinks: OutgoingLinkRow[];
 }) {
   const indent = levelIndent(row.level);
@@ -298,6 +221,15 @@ export function DefinitionNode({
       data-article-id={row.id}
       data-original-text={body}
     >
+      {anchorRows.map((anchor) => (
+        <span
+          id={fullLawAnchorId(anchor.id)}
+          key={anchor.id}
+          data-article-id={anchor.id}
+          className="block h-0 scroll-mt-20"
+          aria-hidden="true"
+        />
+      ))}
       <p className="law-node__text">
         {label && <span className="law-node__label">{label}</span>}
         <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>

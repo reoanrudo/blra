@@ -1,62 +1,95 @@
-/**
- * LeftPanel — blra 版。provisions を TocPanel に渡す。
- */
+"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import SearchPracticePanel from "@/components/search/SearchPracticePanel";
 import TocPanel from "@/components/toc/TocPanel";
-import GlossaryList from "@/components/practice/GlossaryList";
-import { useScrollActiveArticle } from "@/contexts/ScrollActiveArticleContext";
-import type { ProvisionWithVersion } from "../../api/types";
+import type { TocNode } from "@/lib/article/toc-tree";
 
 type MainView = "toc" | "search";
-const VIEW_STORAGE_KEY = "left-panel-view";
+type DocumentStatus = "loading" | "ready" | "error";
 
 interface LeftPanelProps {
-  provisions: ProvisionWithVersion[];
-  onSelectArticle: (provision: ProvisionWithVersion) => void;
+  toc: TocNode[];
+  documentStatus: DocumentStatus;
+  currentArticleId: string | null;
 }
 
-export default function LeftPanel({ provisions, onSelectArticle }: LeftPanelProps) {
-  const scrollCtx = useScrollActiveArticle();
-  const currentArticleId = scrollCtx?.activeArticleId ?? null;
+const VIEW_STORAGE_KEY = "reader-left-panel-view";
 
+export default function LeftPanel({
+  toc,
+  documentStatus,
+  currentArticleId,
+}: LeftPanelProps) {
   const [view, setViewState] = useState<MainView>(() => {
+    if (typeof window === "undefined") return "toc";
     try {
-      const s = sessionStorage.getItem(VIEW_STORAGE_KEY);
-      if (s === "toc" || s === "search") return s;
-    } catch { /* ignore */ }
+      const stored = sessionStorage.getItem(VIEW_STORAGE_KEY);
+      if (stored === "toc" || stored === "search") return stored;
+    } catch {
+      // 保存値が使えない場合は目次を開く。
+    }
     return "toc";
   });
 
-  function setView(v: MainView) {
-    setViewState(v);
-    try { sessionStorage.setItem(VIEW_STORAGE_KEY, v); } catch { /* ignore */ }
+  function setView(next: MainView) {
+    setViewState(next);
+    try {
+      sessionStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // private modeでもタブ切替自体は維持する。
+    }
   }
+
+  useEffect(() => {
+    function onSearchExecuted() {
+      setViewState("search");
+    }
+    window.addEventListener("search-executed", onSearchExecuted);
+    return () => window.removeEventListener("search-executed", onSearchExecuted);
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex border-b border-neutral-300 shrink-0">
-        <button type="button" onClick={() => setView("toc")}
-          className={`flex-1 py-1.5 text-xs font-medium ${view === "toc" ? "text-[#9d1f58] border-b-2 border-[#d92f7e]" : "text-neutral-500 hover:text-neutral-800"}`}>
-          📑 目次
+      <div className="flex shrink-0 border-b border-neutral-300">
+        <button
+          type="button"
+          onClick={() => setView("toc")}
+          className={`flex-1 py-2 text-xs font-medium ${
+            view === "toc"
+              ? "border-b-2 border-[#d92f7e] text-[#9d1f58]"
+              : "text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          目次
         </button>
-        <button type="button" onClick={() => setView("search")}
-          className={`flex-1 py-1.5 text-xs font-medium ${view === "search" ? "text-[#9d1f58] border-b-2 border-[#d92f7e]" : "text-neutral-500 hover:text-neutral-800"}`}>
-          🔍 検索・実務
+        <button
+          type="button"
+          onClick={() => setView("search")}
+          className={`flex-1 py-2 text-xs font-medium ${
+            view === "search"
+              ? "border-b-2 border-[#d92f7e] text-[#9d1f58]"
+              : "text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          検索
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {view === "toc" && (
-          <TocPanel provisions={provisions} currentArticleId={currentArticleId} onSelect={onSelectArticle} />
+      <div className="min-h-0 flex-1">
+        {view === "toc" && documentStatus === "error" && (
+          <p className="px-3 py-6 text-center text-xs text-neutral-500">
+            目次を読み込めません
+          </p>
         )}
-        {view === "search" && (
-          <div className="p-3 text-xs text-neutral-500">検索は準備中です</div>
+        {view === "toc" && documentStatus !== "error" && (
+          <TocPanel
+            nodes={toc}
+            currentArticleId={currentArticleId}
+            loading={documentStatus === "loading"}
+          />
         )}
-      </div>
-
-      <div className="shrink-0 border-t border-neutral-300">
-        <GlossaryList />
+        {view === "search" && <SearchPracticePanel />}
       </div>
     </div>
   );

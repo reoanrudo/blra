@@ -3,6 +3,7 @@
 import { useLayoutEffect, useMemo } from "react";
 import ChapterArticleBlock from "@/components/article/ChapterArticleBlock";
 import { articleDisplayTitle } from "@/lib/article/article";
+import { levelHeadingClass } from "@/lib/article/article-renderer";
 import {
   buildFullLawBlocks,
   fullLawAnchorId,
@@ -43,7 +44,7 @@ export default function FullLawViewer({
             id={fullLawAnchorId(block.node.id)}
             key={block.node.id}
             data-article-id={block.node.id}
-            className="law-heading scroll-mt-20"
+            className={`${levelHeadingClass(block.node.level)} scroll-mt-20`}
           >
             {articleDisplayTitle(block.node)}
           </header>
