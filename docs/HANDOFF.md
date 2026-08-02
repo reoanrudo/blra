@@ -69,9 +69,14 @@ e-Gov 型の「選択した法令を一度に読み込む全文リーダー」�
   fingerprint等を公開ペイロードへ混ぜない
 - `GET /api/law-revisions/:id/confirmed-relations` を追加。ETagと
   `Cache-Control: public, max-age=60, stale-while-revalidate=300` を返す
+- 確認済み関連の200応答は実行時にDTOを検証し、許可fieldだけを再構築して版一致も確認する。
+  不正な200応答は本文を保った部分障害へ移し、成功データは進行中requestを共有した上で
+  成功時から60秒だけclient cacheに保持する（`2bb8a17`）
 - 確認済み関連は各条ブロックの直後に、初期状態で閉じた一覧として表示する。
   0件なら一覧を表示しない。対象リンクは新しいタブで開く
 - 関連APIだけが失敗した場合は本文を隠さず、関連部分のエラー表示と再試行だけを出す
+- 候補の書込競合はretry枯渇後にも最終状態を再読込・再評価し、型付きdomain conflictへ
+  収束させる。生のPrisma code / causeは呼出元へ露出しない（`ac4ace2`）
 - Review Queue、自動候補生成、実在する確認済み関係のseedは未実装。読者表示のために
   実在関係を自動投入してはならない
 
@@ -89,20 +94,20 @@ e-Gov 型の「選択した法令を一度に読み込む全文リーダー」�
 
 ## 検証状態
 
-- `web`: Vitest 340件合格（2026-08-02、通常実行）。確認済み関連のfixture衝突を
+- `web`: Vitest 351件合格（36 files、2026-08-02、通常実行）。確認済み関連のfixture衝突を
   検出し、`310e846` でfixtureを分離して再確認した
-- `web`: Playwright 13件合格（2列、不要APIなし、全文DOM、直URL、目次、固定アンカー、
-  原文コピー、別タブ、確認済み関連、関連API部分失敗）
+- `web`: Playwright 14件合格（2列、不要APIなし、全文DOM、直URL、目次、固定アンカー、
+  原文コピー、別タブ、確認済み関連、関連API部分失敗、不正200応答）
 - `web`: TypeScript合格
-- `web`: Next.js本番ビルド合格
-- `src`: Vitest 136件合格
-- Prisma schema validate合格、稼働DBとの差分0
+- `web`: Next.js 14.2.35本番ビルド合格。静的29ページを生成し、confirmed-relations routeも成功
+- `src`: Vitest 136件合格（15 files、`npm test -- --run`）
+- Prisma schema validate合格、稼働DBとの差分なし（`No difference detected`、exit 0）
 - Web Vitest後にfixture残件0をPrismaで確認。`relation-test-` / `@example.invalid` の
   テストユーザー、`RelatedArticleCandidate`、`ConfirmedArticleRelation` はすべて0件
 - 公開route・repository・client・hook・componentに候補固有語は混入していない
-- 実ブラウザ相当のrequest listenerで、建築基準法第1条の初期表示は全文API・
-  確認済み関連APIが各1回、目次移動とスクロール後も追加0回を確認。関係0件では
-  一覧も非表示
+- 実ブラウザ相当のrequest listenerで、建築基準法第1条の初期表示は全文API /
+  確認済み関連APIが1 / 1回、目次移動後も1 / 1回、スクロール後も1 / 1回を確認。
+  関係0件では一覧も非表示。計測用dev serverは停止済み
 
 ## 次のタスク（順番）
 
