@@ -3,6 +3,7 @@
 import { useMemo, type ReactNode } from "react";
 import ArticleLayout from "@/components/article/ArticleLayout";
 import FullLawViewer from "@/components/article/FullLawViewer";
+import OfficialTextCopyBoundary from "@/components/article/OfficialTextCopyBoundary";
 import ScrollUrlSync from "@/components/article/ScrollUrlSync";
 import LeftPanel from "@/components/layout/LeftPanel";
 import { CurrentLawProvider } from "@/contexts/CurrentLawContext";
@@ -109,10 +110,12 @@ function FullLawReadyLayout({
             </a>
           </header>
           <ScrollUrlSync initialArticleId={initialArticleId} />
-          <FullLawViewer
-            document={document}
-            targetArticleId={initialArticleId}
-          />
+          <OfficialTextCopyBoundary>
+            <FullLawViewer
+              document={document}
+              targetArticleId={initialArticleId}
+            />
+          </OfficialTextCopyBoundary>
         </article>
       }
     />
