@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
+import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { GET as getDocument } from "@/app/api/law-revisions/[id]/document/route";
 import { getFullLawDocument } from "@/lib/article/full-law-repository";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
 
@@ -89,5 +91,38 @@ describe("全文法令Repository (integration)", () => {
         links.every((link) => link.isResolved && Boolean(link.targetId)),
       ).toBe(true);
     }
+  });
+
+  it("全文APIはETagと再検証可能なキャッシュヘッダーを返す", async () => {
+    if (!revisionId) return;
+
+    const response = await getDocument(
+      new NextRequest(
+        `http://localhost/api/law-revisions/${revisionId}/document`,
+      ),
+      { params: { id: revisionId } },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("etag")).toMatch(/^"[a-f0-9]{64}"$/);
+    expect(response.headers.get("cache-control")).toBe(
+      "public, max-age=300, stale-while-revalidate=86400",
+    );
+  });
+
+  it("If-None-Match一致時は304を返す", async () => {
+    if (!revisionId) return;
+
+    const url = `http://localhost/api/law-revisions/${revisionId}/document`;
+    const first = await getDocument(new NextRequest(url), {
+      params: { id: revisionId },
+    });
+    const etag = first.headers.get("etag");
+    expect(etag).toBeTruthy();
+
+    const second = await getDocument(
+      new NextRequest(url, { headers: { "If-None-Match": etag! } }),
+      { params: { id: revisionId } },
+    );
+    expect(second.status).toBe(304);
   });
 });
