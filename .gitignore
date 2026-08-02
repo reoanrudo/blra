@@ -10,6 +10,8 @@ dist/
 web/dist/
 web/.next/
 web/test-results/
+web/spikes/
+*.bak
 web/tsconfig.tsbuildinfo
 
 # ZCode セッション状態（プロジェクト成果物ではない）

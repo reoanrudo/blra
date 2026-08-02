@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 import { formatLegalText, type LegalDisplayToken } from "@/lib/article/legal-display-format";
@@ -112,6 +113,9 @@ function renderTokensWithSourceAttrs(
  */
 export function renderToElements(
   segments: RenderSegment[],
+  onCmdClick?: (articleId: string) => void,
+  articleHref: (articleId: string) => string = (articleId) =>
+    `/articles/${articleId}`,
 ): ReactNode[] {
   return segments.map((seg, i) => {
     if (seg.kind === "text") {
@@ -129,16 +133,16 @@ export function renderToElements(
       const tokens = formatLegalText(seg.text);
       const linkChildren = renderTokensWithSourceAttrs(tokens, seg.textOffset, `l${i}`);
       return (
-        <a
+        <Link
           key={seg.linkId || i}
-          href={`/sources/all?article=${encodeURIComponent(seg.targetId)}`}
+          href={articleHref(seg.targetId)}
           data-link-target={seg.targetId}
           className="text-blue-600 hover:underline"
           target="_blank"
           rel="noopener noreferrer"
         >
           {linkChildren}
-        </a>
+        </Link>
       );
     }
     // unresolved-link

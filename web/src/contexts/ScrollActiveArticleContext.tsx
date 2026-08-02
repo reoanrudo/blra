@@ -1,3 +1,4 @@
+"use client";
 
 import {
   createContext,
@@ -41,7 +42,7 @@ export function useScrollActiveArticle(): ScrollActiveArticleContextValue | null
 
 interface ProviderProps {
   children: ReactNode;
-  linksByArticle?: Map<string, LinksForArticle>;
+  linksByArticle: Map<string, LinksForArticle>;
 }
 
 export function ScrollActiveArticleProvider({
@@ -57,8 +58,6 @@ export function ScrollActiveArticleProvider({
   const [auxLinksByArticle, setAuxLinksByArticle] = useState<
     Map<string, LinksForArticle>
   >(new Map());
-
-  const baseLinksByArticle = linksByArticle ?? new Map<string, LinksForArticle>();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -154,10 +153,10 @@ export function ScrollActiveArticleProvider({
 
   // 初期 + 追加統合済みのリンクマップ
   const mergedLinksByArticle = useMemo(() => {
-    const merged = new Map(baseLinksByArticle);
+    const merged = new Map(linksByArticle);
     auxLinksByArticle.forEach((v, k) => merged.set(k, v));
     return merged;
-  }, [baseLinksByArticle, auxLinksByArticle]);
+  }, [linksByArticle, auxLinksByArticle]);
 
   return (
     <ScrollActiveArticleContext.Provider

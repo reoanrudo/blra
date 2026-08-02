@@ -10,11 +10,21 @@
 import { kanjiToArabic } from "@/lib/article/normalize-article";
 
 /**
+ * 漢数字の文字セット。
+ */
+const KANJI_DIGITS = "一二三四五六七八九十百千万億";
+
+/**
  * 漢数字を含むかどうかの判定。
  */
 function containsKanjiNumber(text: string): boolean {
   return /[一二三四五六七八九十百千万億]/.test(text);
 }
+
+/**
+ * 万・億の単位文字。これらは算用数字にせず単位文字を残す（設計書§4.2）。
+ */
+const SCALE_UNITS = new Set(["万", "億"]);
 
 /**
  * 万・億を含む数値を「1万」「1億」形式に変換する。

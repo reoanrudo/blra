@@ -1,6 +1,8 @@
+"use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter } from "../../lib/navigation-stub";
+import { useRouter } from "next/navigation";
+import { useApplicability } from "@/contexts/ApplicabilityContext";
 
 interface GlossaryTerm {
   id: string;
@@ -23,6 +25,7 @@ const CATEGORY_ORDER = ["legal_definition", "technical_term", "zone_name", "buil
 
 export default function GlossaryList() {
   const router = useRouter();
+  const applicability = useApplicability();
   const [collapsed, setCollapsed] = useState(true);
   const [activeCategory, setActiveCategory] = useState("legal_definition");
   const [terms, setTerms] = useState<GlossaryTerm[]>([]);
@@ -112,7 +115,9 @@ export default function GlossaryList() {
                   type="button"
                   onClick={() => {
                     if (term.definitionArticleId) {
-                      router.push(`/articles/${term.definitionArticleId}`);
+                      router.push(
+                        applicability.articleHref(term.definitionArticleId),
+                      );
                     }
                   }}
                   className={`w-full truncate px-1 py-0.5 text-left text-[10px] ${

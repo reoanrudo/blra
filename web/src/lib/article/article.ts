@@ -1,12 +1,6 @@
-/**
- * 条文表示用の純粋関数・型定義。
- *
- * 元は hourei-rag から移植した Prisma データ取得関数を含んでいたが、
- * blra は API（api/client.ts）経由でデータを取得するため、
- * このファイルには表示用の純粋関数と型のみ残す。
- * データ取得は ReaderPage が useProvisions フックで行う。
- */
-
+import { prisma } from "@/lib/db";
+import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
+import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 
 export interface ArticleRow {
@@ -33,6 +27,72 @@ export interface ArticleRow {
   stableNodeKey: string | null;
   /** Articleが属するLawRevisionのID */
   lawRevisionId: string;
+}
+
+/** Fetch article with full descendant tree via recursive CTE (single query, no N+1) */
+export async function getArticleWithTree(articleId: string): Promise<ArticleRow[]> {
+  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
+    `
+    WITH RECURSIVE article_tree AS (
+      SELECT a.*, l.name AS "lawName", 0 AS depth,
+             ARRAY[a."sortOrder"] AS path
+      FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
+      JOIN "LawBookEntry" e
+        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
+      WHERE a.id = $1
+        AND a."deletedAt" IS NULL
+        AND edition."editionKey" = $2
+        AND ${lawBookScope}
+
+      UNION ALL
+
+      SELECT a.*, at."lawName", at.depth + 1,
+             at.path || a."sortOrder"
+      FROM "Article" a
+      INNER JOIN article_tree at ON a."parentId" = at.id
+      WHERE a."deletedAt" IS NULL
+    )
+    SELECT * FROM article_tree ORDER BY path
+    `,
+    articleId,
+    CURRENT_LAW_BOOK_EDITION_KEY,
+  );
+  return rows;
+}
+
+/** Fetch ancestor chain for breadcrumbs (root-to-leaf order) */
+export async function getArticleBreadcrumb(articleId: string): Promise<ArticleRow[]> {
+  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
+    `
+    WITH RECURSIVE ancestor_chain AS (
+      SELECT a.*, l.name AS "lawName", 0 AS depth
+      FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
+      JOIN "LawBookEntry" e
+        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
+      WHERE a.id = $1
+        AND a."deletedAt" IS NULL
+        AND edition."editionKey" = $2
+        AND ${lawBookScope}
+
+      UNION ALL
+
+      SELECT a.*, ac."lawName", ac.depth + 1
+      FROM "Article" a
+      INNER JOIN ancestor_chain ac ON a.id = ac."parentId"
+      WHERE a."deletedAt" IS NULL
+    )
+    SELECT * FROM ancestor_chain ORDER BY depth DESC
+    `,
+    articleId,
+    CURRENT_LAW_BOOK_EDITION_KEY,
+  );
+  return rows;
 }
 
 /** Look up the display label for an article level row.
@@ -138,4 +198,163 @@ export function isHeadingLevel(level: string): boolean {
 export interface ChapterArticle {
   root: ArticleRow;
   children: ArticleRow[];
+}
+
+/**
+ * Fetch all articles within the same chapter/section as the given article,
+ * including their full descendant trees.
+ *
+ * Step 1: Walk UP to find scope ancestor (chapter/section/subsection).
+ * Step 2: Walk DOWN from scope ancestor to get ALL descendants.
+ * Grouped by top-level article in JS.
+ */
+export async function getChapterArticlesWithTrees(
+  articleId: string,
+): Promise<{
+  articles: ChapterArticle[];
+  scopeAncestor: ArticleRow | null;
+}> {
+  const articleScope = lawBookArticleScopeSql("a", "e");
+  // Step 1: Find scope ancestor by walking up.
+  // ADR-024: 章スクロールのスコープは chapter を最優先。
+  // 子→親へ遡る再帰CTEで全祖先を集め、CASE で優先順（chapter > section > subsection）を与えて最初の1件を採用する。
+  // 旧実装では LIMIT 1 により節が先にマッチし、建基令で「章をまたげない」状態になっていた。
+  const ancestors = await prisma.$queryRawUnsafe<Array<{ id: string; level: string }>>(
+    `
+    WITH RECURSIVE up AS (
+      SELECT a.id, a."parentId", a.level
+      FROM "Article" a
+      JOIN "LawBookEntry" e
+        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
+      WHERE a.id = $1
+        AND a."deletedAt" IS NULL
+        AND edition."editionKey" = $2
+        AND ${articleScope}
+      UNION ALL
+      SELECT a.id, a."parentId", a.level
+      FROM "Article" a
+      INNER JOIN up ON a.id = up."parentId"
+      WHERE a."deletedAt" IS NULL
+    )
+    SELECT id, level FROM up
+    WHERE level IN ('chapter', 'section', 'subsection')
+    ORDER BY CASE level
+      WHEN 'chapter' THEN 0
+      WHEN 'section' THEN 1
+      WHEN 'subsection' THEN 2
+      ELSE 3
+    END
+    LIMIT 1
+    `,
+    articleId,
+    CURRENT_LAW_BOOK_EDITION_KEY,
+  );
+
+  // If no chapter/section ancestor, use the law root
+  let scopeId: string;
+  let scopeAncestor: ArticleRow | null = null;
+
+  if (ancestors.length > 0) {
+    scopeId = ancestors[0]!.id;
+  } else {
+    // Fallback: walk up to parentId IS NULL (law-level root)
+    const rootRow = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `
+      WITH RECURSIVE up AS (
+        SELECT a.id, a."parentId"
+        FROM "Article" a
+        JOIN "LawBookEntry" e
+          ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+        JOIN "LawBookEdition" edition ON edition.id = e."editionId"
+        WHERE a.id = $1
+          AND a."deletedAt" IS NULL
+          AND edition."editionKey" = $2
+          AND ${articleScope}
+        UNION ALL
+        SELECT a.id, a."parentId"
+        FROM "Article" a
+        INNER JOIN up ON a.id = up."parentId"
+        WHERE a."deletedAt" IS NULL
+      )
+      SELECT id FROM up WHERE "parentId" IS NULL LIMIT 1
+      `,
+      articleId,
+      CURRENT_LAW_BOOK_EDITION_KEY,
+    );
+    scopeId = rootRow[0]?.id ?? articleId;
+  }
+
+  // Step 2: Fetch scope ancestor row for display
+  const scopeRows = await prisma.$queryRawUnsafe<ArticleRow[]>(
+    `
+    SELECT a.*, l.name AS "lawName", 0 AS depth
+    FROM "Article" a
+    JOIN "Law" l ON a."lawId" = l.id
+    WHERE a.id = $1 AND a."deletedAt" IS NULL
+    `,
+    scopeId,
+  );
+  scopeAncestor = scopeRows[0] ?? null;
+
+  // Step 3: Fetch all descendants of scope ancestor
+  const treeScope = lawBookArticleScopeSql("tree", "e");
+  const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
+    `
+    WITH RECURSIVE tree AS (
+      SELECT a.*, l.name AS "lawName", 0 AS depth,
+             ARRAY[a."sortOrder"] AS path
+      FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
+      WHERE a."parentId" = $1 AND a."deletedAt" IS NULL
+
+      UNION ALL
+
+      SELECT a.*, tree."lawName", tree.depth + 1,
+             tree.path || a."sortOrder"
+      FROM "Article" a
+      INNER JOIN tree ON a."parentId" = tree.id
+      WHERE a."deletedAt" IS NULL
+    )
+    SELECT tree.*
+    FROM tree
+    JOIN "LawBookEntry" e
+      ON e."lawId" = tree."lawId" AND e."lawRevisionId" = tree."lawRevisionId"
+    JOIN "LawBookEdition" edition ON edition.id = e."editionId"
+    WHERE edition."editionKey" = $2
+      AND ${treeScope}
+    ORDER BY path
+    `,
+    scopeId,
+    CURRENT_LAW_BOOK_EDITION_KEY,
+  );
+
+  // Group into ChapterArticle entries.
+  // ADR-024: 条（article）を root とし、その配下（paragraph/item/subitem/column 等）を children とする。
+  // 旧実装（scope直下の子=root）では、建基令のように「章 → 節 → 条」の階層を持つ法令で
+  // 「節」が root になり、条が正しくグルーピングされなかった。
+  // 行レコードは再帰CTEで path 順（文書順）に並んでいるため、article を見るたびに新規 root、
+  // それ以外は現在の root の children に追加する。
+  const articles: ChapterArticle[] = [];
+  let currentRoot: ArticleRow | null = null;
+  let currentChildren: ArticleRow[] = [];
+
+  for (const row of rows) {
+    if (row.level === "article") {
+      // article = new root
+      if (currentRoot) {
+        articles.push({ root: currentRoot, children: currentChildren });
+      }
+      currentRoot = row;
+      currentChildren = [];
+    } else if (currentRoot) {
+      currentChildren.push(row);
+    }
+  }
+
+  if (currentRoot) {
+    articles.push({ root: currentRoot, children: currentChildren });
+  }
+
+  return { articles, scopeAncestor };
 }
