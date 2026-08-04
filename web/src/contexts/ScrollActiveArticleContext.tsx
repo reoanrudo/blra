@@ -85,23 +85,29 @@ export function ScrollActiveArticleProvider({
     const observer = new IntersectionObserver(
       (entries) => {
         const now = Date.now();
+        let needsFlush = false;
         for (const entry of entries) {
           const articleId = entry.target.getAttribute("data-scroll-article-id");
           if (!articleId) continue;
           if (entry.isIntersecting) {
             lastEntryRef.current.set(articleId, now);
+            needsFlush = true;
           } else {
-            lastEntryRef.current.delete(articleId);
+            // 退出した条文が直前のアクティブだった場合、即座に再計算が必要
+            if (lastEntryRef.current.delete(articleId)) {
+              needsFlush = true;
+            }
           }
         }
-        // rAF で1フレームにつき1回にバッチ化
-        if (rafId === null) {
+        if (needsFlush && rafId === null) {
           rafId = requestAnimationFrame(flushActive);
         }
       },
       {
-        threshold: 0.05,
-        rootMargin: "-60px 0px -60% 0px",
+        // ビューポート上部の狭い帯（上部オフセット〜画面中央）を判定域にする。
+        // threshold を極小にして微小な交差でも即検出する。
+        threshold: 0,
+        rootMargin: "0px 0px -50% 0px",
       },
     );
 

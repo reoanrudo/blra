@@ -8,6 +8,7 @@ import {
   fullLawTargetSelector,
   readerArticleHref,
 } from "@/lib/article/full-law-document";
+import { useScrollActiveArticle } from "@/contexts/ScrollActiveArticleContext";
 import TocTreeNode from "./TocTreeNode";
 
 interface TocTreeProps {
@@ -49,6 +50,7 @@ export default function TocTree({
   ancestorIds,
 }: TocTreeProps) {
   const router = useRouter();
+  const scrollState = useScrollActiveArticle();
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusIndex, setFocusIndex] = useState(-1);
 
@@ -81,6 +83,8 @@ export default function TocTree({
 
   const handleArticleClick = useCallback(
     (articleId: string) => {
+      // 目次ハイライトを即座に切り替える（スクロール完了を待たない）
+      scrollState?.activateArticle(articleId);
       const target = document.querySelector<HTMLElement>(
         fullLawTargetSelector(articleId),
       );
@@ -95,7 +99,7 @@ export default function TocTree({
       }
       router.push(readerArticleHref(articleId));
     },
-    [router],
+    [router, scrollState],
   );
 
   const handleKeyDown = useCallback(
