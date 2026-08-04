@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo } from "react";
+import { memo, useLayoutEffect, useMemo } from "react";
 import ChapterArticleBlock from "@/components/article/ChapterArticleBlock";
 import { articleDisplayTitle } from "@/lib/article/article";
 import { levelHeadingClass } from "@/lib/article/article-renderer";
@@ -12,7 +12,7 @@ import {
 } from "@/lib/article/full-law-document";
 import type { ConfirmedRelation } from "@/lib/relations/confirmed-relation";
 
-export default function FullLawViewer({
+function FullLawViewerImpl({
   document,
   targetArticleId,
   confirmedRelationsBySource,
@@ -71,3 +71,8 @@ export default function FullLawViewer({
     </div>
   );
 }
+
+// memo でラップし、activeArticleId 変化による親の再描画が
+// FullLawViewer（全条文レンダリング）に波及するのを防ぐ。
+const FullLawViewer = memo(FullLawViewerImpl);
+export default FullLawViewer;
