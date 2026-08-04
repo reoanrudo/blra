@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { materializeArticleRows, parseLawXml } from "@/lib/law-refresh/parse-law-xml";
-import type {
-  ActivateCandidateRevisionInput,
-  StageCandidateRevisionInput,
+import {
+  RefreshRepository,
+  type ActivateCandidateRevisionInput,
+  type StageCandidateRevisionInput,
 } from "@/lib/law-refresh/refresh-repository";
+import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
 
 /**
  * 現行法令リフレッシュの統合テスト用fixture。
@@ -44,6 +46,35 @@ export interface CurrentLawRefreshFixture {
   };
   /** cleanup 関数。テスト終了時に必ず呼ぶこと。 */
   cleanup: () => Promise<void>;
+  /**
+   * activateCandidate オプション付与時に設定される、
+   * 候補 Revision を activate したあとの情報。
+   * 未指定時は undefined。
+   */
+  activated?: {
+    /** activate 済み候補 Revision ID（Law.currentRevisionId と一致）。 */
+    candidateRevisionId: string;
+    /** 候補 Revision に属する最初の Article ID。 */
+    candidateArticleId: string;
+    /**
+     * LawBookEntry が指している Revision ID（activate 前に作成したため旧版のまま）。
+     * read scope テストは Entry が旧版を指していても公開本文が current になることを検証する。
+     */
+    entryRevisionId: string;
+    /** 作成した LawBookEntry の id。 */
+    lawBookEntryId: string;
+  };
+}
+
+/** createCurrentLawRefreshFixture へ渡すオプション。 */
+export interface CreateCurrentLawRefreshFixtureOptions {
+  /**
+   * true の場合、テスト用 LawBookEntry（ksk-2026 所属・旧 Revision 指向）を作成し、
+   * stageCandidateRevision → activateCandidateRevision で候補 Revision を current へ切り替える。
+   * activated フィールドへ候補 Revision 情報が格納される。
+   * LawBookEntry.lawRevisionId は旧 Revision のまま更新しない（read scope テストの前提）。
+   */
+  activateCandidate?: boolean;
 }
 
 /**
@@ -123,6 +154,7 @@ function buildParsedDocuments(lawId: string, oldRevisionId: string, candidateRev
  */
 export async function createCurrentLawRefreshFixture(
   prisma: PrismaClient,
+  options: CreateCurrentLawRefreshFixtureOptions = {},
 ): Promise<CurrentLawRefreshFixture> {
   const runSuffix = randomUUID();
   const lawId = `${TEST_PREFIX}${runSuffix}`;
@@ -208,8 +240,8 @@ export async function createCurrentLawRefreshFixture(
     data: { currentRevisionId: oldRevisionId },
   });
 
-  // oldRevision の Article を作成
-  const oldRows = materializeArticleRows(oldDoc, `${TEST_PREFIX}art-old-`);
+  // oldRevision の Article を作成（並列テストでID衝突しないよう runSuffix を含める）
+  const oldRows = materializeArticleRows(oldDoc, `${TEST_PREFIX}art-old-${runSuffix}-`);
   await prisma.article.createMany({
     data: oldRows.map((row) => ({
       id: row.id,
@@ -262,6 +294,12 @@ export async function createCurrentLawRefreshFixture(
     },
   });
 
+  // candidateInput の egovLawId / xmlChecksum は runSuffix ごとに一意にする。
+  // stageCandidateRevision が Article ID を `art_${egovLower}_${checksumPrefix}_` で生成するため、
+  // 固定値だと並列テストでID衝突する。
+  const candidateEgovLawId = `${TEST_EGOV_LAW_ID}-${runSuffix.slice(0, 8)}`;
+  const candidateChecksum = `${runSuffix.replace(/-/g, "").padEnd(64, "d").slice(0, 64)}`;
+
   const candidateInput: StageCandidateRevisionInput = {
     lawId,
     runId,
@@ -277,7 +315,7 @@ export async function createCurrentLawRefreshFixture(
             lawId,
             from: oldRevisionId,
             to: candidateRevisionIdPlaceholder,
-            xmlChecksum: "d".repeat(64),
+            xmlChecksum: candidateChecksum,
           },
         ],
       },
@@ -285,12 +323,12 @@ export async function createCurrentLawRefreshFixture(
       signature: "test-candidate-signature",
       signerKeyId: `${TEST_PREFIX}signer-${runSuffix}`,
     },
-    egovLawId: TEST_EGOV_LAW_ID,
+    egovLawId: candidateEgovLawId,
     sourceUpdatedAt: effectiveFrom,
     fetchedAt: now,
     sourceUrl: `https://example.invalid/candidate-${runSuffix}`,
     xmlStorageKey: `${TEST_PREFIX}candidate-${runSuffix}.xml`,
-    xmlChecksum: "d".repeat(64),
+    xmlChecksum: candidateChecksum,
     effectiveFrom,
     mappings: [],
     rangeResolutions: [],
@@ -310,10 +348,70 @@ export async function createCurrentLawRefreshFixture(
     sync: syncMetadata,
   };
 
+  // activateCandidate オプション: ksk-2026 Edition 所属の LawBookEntry（旧 Revision 指向）を作成し、
+  // stage → activate で候補 Revision を current へ切り替える。
+  // Entry.lawRevisionId は旧 Revision のまま更新しない（read scope テストの前提）。
+  let activated: CurrentLawRefreshFixture["activated"];
+  let lawBookEntryId: string | undefined;
+  if (options.activateCandidate) {
+    // ksk-2026 Edition を取得（存在しない場合はテスト環境ではないためスキップ）
+    const edition = await prisma.lawBookEdition.findUnique({
+      where: { editionKey: CURRENT_LAW_BOOK_EDITION_KEY },
+      select: { id: true },
+    });
+    if (!edition) {
+      throw new Error(
+        `LawBookEdition "${CURRENT_LAW_BOOK_EDITION_KEY}" が存在しません。seed を実行してください。`,
+      );
+    }
+
+    // LawBookEntry を旧 Revision へ紐付けて作成（displayOrder は一意制約回避のため乱数由来の大きい値）
+    lawBookEntryId = `${TEST_PREFIX}entry-${runSuffix}`;
+    await prisma.lawBookEntry.create({
+      data: {
+        id: lawBookEntryId,
+        editionId: edition.id,
+        lawId,
+        lawRevisionId: oldRevisionId,
+        displayOrder: 900000 + Math.floor(Math.random() * 100000),
+        inclusionMode: "full",
+        printedTitle: `${TEST_PREFIX}法令`,
+        printedPage: 1,
+        catalogSourceLocator: "test",
+        verificationStatus: "approved",
+        verifiedAt: now,
+      },
+    });
+
+    // stage → activate で候補 Revision を current へ
+    const repository = new RefreshRepository({ prisma });
+    const staged = await repository.stageCandidateRevision(candidateInput);
+    await repository.activateCandidateRevision({
+      ...activationInput,
+      candidateRevisionId: staged.revisionId,
+    });
+
+    // 候補 Revision の最初の Article を取得（read scope assert 用）
+    const candidateArticle = await prisma.article.findFirst({
+      where: { lawRevisionId: staged.revisionId, deletedAt: null },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
+    });
+
+    activated = {
+      candidateRevisionId: staged.revisionId,
+      candidateArticleId: candidateArticle?.id ?? "",
+      entryRevisionId: oldRevisionId,
+      lawBookEntryId,
+    };
+  }
+
   const cleanup = async (): Promise<void> => {
     // 外部キー制約の順序に従って削除:
     // LawSyncState → ArticleRevisionMapping → Article → LawBookEntryRangeResolution
-    // → LawRefreshLawResult → LawRefreshRun → LawRevision → LawPackage → Law
+    // → LawBookEntryRange → LawBookEntry → LawRefreshLawResult → LawRefreshRun
+    // → LawRevision → LawPackage → Law
+    // LawBookEntry / LawBookEntryRange は lawId で一括削除し、テスト中断時の残留を防ぐ。
     await prisma.lawSyncState.deleteMany({ where: { lawId } }).catch(() => {});
     await prisma.articleRevisionMapping.deleteMany({ where: { lawId } }).catch(() => {});
     // 候補 Revision の Article も含めて全削除
@@ -321,6 +419,10 @@ export async function createCurrentLawRefreshFixture(
     await prisma.lawBookEntryRangeResolution.deleteMany({
       where: { lawRevision: { lawId } },
     }).catch(() => {});
+    await prisma.lawBookEntryRange.deleteMany({
+      where: { lawBookEntry: { lawId } },
+    }).catch(() => {});
+    await prisma.lawBookEntry.deleteMany({ where: { lawId } }).catch(() => {});
     await prisma.lawRefreshLawResult.deleteMany({ where: { lawId } }).catch(() => {});
     await prisma.lawRefreshRun.deleteMany({ where: { id: runId } }).catch(() => {});
     await prisma.lawRevision.deleteMany({ where: { lawId } }).catch(() => {});
@@ -339,5 +441,6 @@ export async function createCurrentLawRefreshFixture(
     runId,
     syncMetadata,
     cleanup,
+    activated,
   };
 }
