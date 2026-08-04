@@ -1003,7 +1003,7 @@ git commit -m "feat(refresh): activate verified revisions atomically"
 - Produces: `refreshCurrentLaws(request, deps): Promise<RefreshRunReport>`
 - CLI: `lawbook:current:check`、`lawbook:current:refresh`
 
-- [ ] **Step 1: 無変更法令ではXMLを取得しない失敗テストを書く**
+- [x] **Step 1: 無変更法令ではXMLを取得しない失敗テストを書く**
 
 ```typescript
 it("公式版番号が一致する法令はmetadata確認だけで終了する", async () => {
@@ -1021,7 +1021,7 @@ it("公式版番号が一致する法令はmetadata確認だけで終了する",
 });
 ```
 
-- [ ] **Step 2: 1法令失敗でも他法令を更新する失敗テストを書く**
+- [x] **Step 2: 1法令失敗でも他法令を更新する失敗テストを書く**
 
 ```typescript
 it("検証保留を法令内に閉じ込める", async () => {
@@ -1057,13 +1057,13 @@ it("廃止状態でも既存Revisionを削除せず同期状態へ廃止日を�
 });
 ```
 
-- [ ] **Step 3: service未作成で失敗することを確認する**
+- [x] **Step 3: service未作成で失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/law-refresh-service.test.ts`
 
 Expected: import error。
 
-- [ ] **Step 4: serviceを依存注入可能な形で実装する**
+- [x] **Step 4: serviceを依存注入可能な形で実装する**
 
 ```typescript
 export interface RefreshCurrentLawsRequest {
@@ -1089,7 +1089,7 @@ export interface RefreshRunReport {
 
 対象はrequest指定がなければ `LAW_BOOK_2026` の120件。run全体を `withRefreshLock` で囲む。e-Gov照会は8並列、429/5xxだけ最大3回指数backoffする。`check` はmetadata比較と同期状態の記録だけ、`dry-run` は取得・parse・diff・verifyまででDB候補/Article/pointerを書かない、`refresh` だけ署名・stage・activateする。unchangedは `recordUnchangedCheck`、取得失敗は `recordFailedCheck` を呼ぶ。廃止状態は `LawSyncState.repealStatus/repealDate` へ保存し、Article、Revision、current pointerを物理削除しない。法令ごとの例外を公開error codeへ変換して次法令へ進む。
 
-- [ ] **Step 5: CLI引数と終了コードを実装する**
+- [x] **Step 5: CLI引数と終了コードを実装する**
 
 ```text
 npm run lawbook:current:check -- --asof 2026-08-04
@@ -1100,7 +1100,7 @@ npm run lawbook:current:refresh -- --asof 2026-08-04 --review-dir config/law-ref
 
 `--asof` 省略時はAsia/Tokyoの当日。`--review-dir` は存在するRevision pairのJSONだけをTask 5の厳格schemaで読む。`--json` はstdoutを `RefreshRunReport` 1個のJSONに限定し、進捗はstderrへ出す。未知law ID、未来日、同時実行lock取得失敗、全法令check失敗は非0終了。部分保留はreportを出してexit code 2、全成功/無変更は0とする。
 
-- [ ] **Step 6: serviceテストとCLI helpを通す**
+- [x] **Step 6: serviceテストとCLI helpを通す**
 
 Run:
 
@@ -1113,7 +1113,7 @@ npx tsc --noEmit
 
 Expected: 全PASS、helpに `--asof --law --dry-run --review-dir --json` が表示される。
 
-- [ ] **Step 7: service/CLIをコミットする**
+- [x] **Step 7: service/CLIをコミットする**
 
 ```bash
 git add web/src/lib/law-refresh/refresh-service.ts web/scripts/refresh-current-laws.ts web/src/__tests__/law-refresh-service.test.ts web/package.json
@@ -1228,7 +1228,7 @@ git commit -m "feat(refresh): backfill durable current-law identities"
 - Produces: `shouldInitializeCurrentRevision(currentRevisionId): boolean`
 - Invariant: catalog seed/verify/scopeは非収録lawを除き `Law.currentRevisionId` を変更しない
 
-- [ ] **Step 1: catalog再実行でcurrentを旧版へ戻さない失敗テストを書く**
+- [x] **Step 1: catalog再実行でcurrentを旧版へ戻さない失敗テストを書く**
 
 ```typescript
 it("currentが既にあれば書籍baselineで初期化し直さない", () => {
@@ -1241,21 +1241,21 @@ it("catalog ingestはcurrentではなくEntryの固定Revisionを対象にする
 });
 ```
 
-- [ ] **Step 2: 現行seed/ingestのcurrent依存を示すテストまたはsource assertionが失敗することを確認する**
+- [x] **Step 2: 現行seed/ingestのcurrent依存を示すテストまたはsource assertionが失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/law-book-current-compatibility.test.ts`
 
 Expected: module未作成でFAIL。
 
-- [ ] **Step 3: seed/ingest/scopeをcatalog責務へ限定する**
+- [x] **Step 3: seed/ingest/scopeをcatalog責務へ限定する**
 
 `seed-law-book.ts` は `LawBookEntry.lawRevisionId` のbaseline作成・検証だけを行い、`Law.currentRevisionId` がnullの初期導入時だけ設定する。`ingest.ts` は `ksk-2026` EntryのRevisionへArticleを投入し、law全体のcurrent Article存在数ではなく対象Revisionの存在数で冪等判定する。`enforceLawBookScope` は収録外lawだけを非公開化し、収録120法令のcurrent pointerとcurrent ArticleをEntry Revision不一致の理由で変更しない。
 
-- [ ] **Step 4: 固定版verifierを新しい責務へ更新する**
+- [x] **Step 4: 固定版verifierを新しい責務へ更新する**
 
 `verify-law-book.ts` はEntry baselineの120件、原本checksum、baseline Article、民法61範囲を検査し、`Entry.lawRevisionId === Law.currentRevisionId` を要求しない。公開currentの検査はTask 9のverifierへ委譲する。
 
-- [ ] **Step 5: catalog/current互換テストと固定版verifyを通す**
+- [x] **Step 5: catalog/current互換テストと固定版verifyを通す**
 
 Run:
 
@@ -1268,7 +1268,7 @@ npx tsc --noEmit
 
 Expected: 全PASS、catalog verifierとcurrent verifierの責務が重複しない。
 
-- [ ] **Step 6: catalog保護をコミットする**
+- [x] **Step 6: catalog保護をコミットする**
 
 ```bash
 git add web/src/lib/law-book/catalog-maintenance.ts web/src/__tests__/law-book-current-compatibility.test.ts web/scripts/seed-law-book.ts web/scripts/ingest.ts web/scripts/verify-law-book.ts web/scripts/lib/enforce-law-book-scope.ts
