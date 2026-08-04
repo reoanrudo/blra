@@ -10,7 +10,6 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import { flushSync } from "react-dom";
 import type { LinkItem } from "@/components/practice/LinkExplorer";
 import type { OutgoingLinkRow, IncomingLinkRow } from "@/lib/link/link";
 
@@ -135,12 +134,7 @@ export function ScrollActiveArticleProvider({
   );
 
   const activateArticle = useCallback(
-    (articleId: string) => {
-      // flushSync で同期的に React 再描画をフラッシュする。
-      // 通常の setState は次フレームまで遅延するが、flushSync なら
-      // クリック→ジャンプ→ハイライト変更が同一フレームで完了する。
-      flushSync(() => setActiveSafe(articleId));
-    },
+    (articleId: string) => setActiveSafe(articleId),
     [setActiveSafe],
   );
 
