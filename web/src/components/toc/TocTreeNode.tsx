@@ -47,7 +47,7 @@ function TocTreeNodeImpl({
         data-article-id={node.id}
         aria-current={isCurrent ? "location" : undefined}
         onClick={handleClick}
-        className={`w-full flex items-center gap-1 px-2 py-1 text-left text-xs transition-colors ${
+        className={`w-full flex items-center gap-1 px-2 py-1 text-left text-xs ${
           isCurrent
             ? "bg-[#fff4f9] border-l-2 border-[#d92f7e] font-semibold text-[#9d1f58]"
             : isAncestor
