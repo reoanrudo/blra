@@ -15,6 +15,43 @@ import TocTreeNode from "./TocTreeNode";
 /** クリックジャンプ時の上部オフセット（固定ヘッダ回避・scroll-mt-20 に相当） */
 const SCROLL_OFFSET_PX = 80;
 
+/** 通常状態の className（isCurrent/isAncestor でないノード） */
+const TOC_NODE_CLASS_NORMAL =
+  "w-full flex items-center gap-1 px-2 py-1 text-left text-xs text-neutral-700";
+/** アクティブ（current）状態の className */
+const TOC_NODE_CLASS_CURRENT =
+  "w-full flex items-center gap-1 px-2 py-1 text-left text-xs bg-[#fff4f9] border-l-2 border-[#d92f7e] font-semibold text-[#9d1f58]";
+
+/**
+ * DOM直接操作で目次ハイライトを瞬時に切り替える。
+ * React再描画を待たずに className と aria-current を書き換える。
+ */
+function applyHighlightDirect(
+  container: HTMLDivElement | null,
+  newArticleId: string,
+): void {
+  if (!container) return;
+
+  // 旧アクティブ要素のハイライトを解除
+  const prevActive = container.querySelector<HTMLElement>(
+    'button[aria-current="location"]',
+  );
+  if (prevActive) {
+    prevActive.className = TOC_NODE_CLASS_NORMAL;
+    prevActive.removeAttribute("aria-current");
+  }
+
+  // 新アクティブ要素にハイライトを付与
+  const escaped = CSS.escape(newArticleId);
+  const nextActive = container.querySelector<HTMLElement>(
+    `button[data-article-id="${escaped}"]`,
+  );
+  if (nextActive) {
+    nextActive.className = TOC_NODE_CLASS_CURRENT;
+    nextActive.setAttribute("aria-current", "location");
+  }
+}
+
 interface TocTreeProps {
   nodes: TocNode[];
   expandedIds: Set<string>;
@@ -96,9 +133,7 @@ export default function TocTree({
         );
 
       if (target) {
-        // ■ DOM操作を最優先: React State更新より先にジャンプする。
-        // activateArticle が React再描画カスケードを引き起こすため、
-        // 先にジャンプして体感遅延をゼロにする。
+        // ── 本文ジャンプ（純粋なDOM操作・瞬時） ──
         const scroller =
           scrollContainerRef?.current ??
           document.querySelector<HTMLElement>('[data-scroll-container]');
@@ -114,18 +149,24 @@ export default function TocTree({
           target.scrollIntoView({ block: "start" });
         }
 
-        // URL更新（瞬時・非同期処理なし）
+        // URL更新（瞬時）
         window.history.replaceState(
           window.history.state,
           "",
           readerArticleHref(articleId),
         );
 
-        // ■ ハイライト切替: ジャンプ完了直後に同期的に実行。
-        // scrollTop は上で既に完了しているので React再描画に先行されることはない。
-        // requestIdleCallback で遅延させると「ハイライトが後からやってくる」
-        // 感覚になるため、ここで即座に切り替える。
-        scrollState?.activateArticle(articleId);
+        // ── 目次ハイライト切替（純粋なDOM操作・瞬時） ──
+        // React State更新は100ms以上の再描画カスケードを引き起こすため、
+        // 先にDOM直接操作でハイライトを切り替える。
+        applyHighlightDirect(containerRef.current, articleId);
+
+        // ── React State更新は次フレームに遅延 ──
+        // DOMは既に更新済みなので、React再描画は追従確認するだけ。
+        // 右パネル・適用バー等の更新はここで行われる。
+        requestAnimationFrame(() => {
+          scrollState?.activateArticle(articleId);
+        });
         return;
       }
 
