@@ -14,7 +14,6 @@ export async function GET() {
        e."printedTitle",
        e."displayOrder",
        e."inclusionMode"::text AS "inclusionMode",
-       e."printedPage",
        first_article."id" AS "firstArticleId"
      FROM "LawBookEntry" e
      JOIN "LawBookEdition" edition ON edition."id" = e."editionId"

@@ -9,7 +9,6 @@ const laws: LawListItem[] = [
     printedTitle: "建築基準法",
     displayOrder: 1,
     inclusionMode: "full",
-    printedPage: 1,
     firstArticleId: "article-1",
   },
   {
@@ -19,7 +18,6 @@ const laws: LawListItem[] = [
     printedTitle: "建築基準法施行令（抄）",
     displayOrder: 2,
     inclusionMode: "excerpt",
-    printedPage: 165,
     firstArticleId: "article-2",
   },
 ];
@@ -38,7 +36,7 @@ describe("chooseActiveLawId", () => {
 });
 
 describe("lawSelectLabel", () => {
-  it("掲載順・印刷名称・頁を一覧で識別できる", () => {
-    expect(lawSelectLabel(laws[1])).toBe("2. 建築基準法施行令（抄） — p.165");
+  it("掲載順と印刷名称だけを一覧で識別できる", () => {
+    expect(lawSelectLabel(laws[1])).toBe("2. 建築基準法施行令（抄）");
   });
 });

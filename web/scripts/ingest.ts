@@ -14,16 +14,15 @@
  */
 
 import { PrismaClient, RegulationCategory } from "@prisma/client";
-import { XMLParser } from "fast-xml-parser";
 import * as fs from "fs";
 import * as path from "path";
-import { LAWS, type LawConfig } from "./laws-config";
-import { computeArticleContentChecksum } from "./lib/article-content-checksum";
+import { normalizeArticleNumber } from "../src/lib/article/normalize-article";
 import {
-  supplementaryProvisionMetadataFromNode,
-  supplementaryProvisionSystemTags,
-  supplementaryProvisionTitle,
-} from "./lib/supplementary-provision";
+  materializeArticleRows,
+  parseLawXml,
+} from "../src/lib/law-refresh/parse-law-xml";
+import type { ArticleRow } from "../src/lib/law-refresh/types";
+import { LAWS, type LawConfig } from "./laws-config";
 
 // ─── Constants ───
 
@@ -35,38 +34,6 @@ const DATA_DIR = path.join(
   "data",
   "law-book-2026",
 );
-
-const TAG_TO_LEVEL: Record<string, string> = {
-  Chapter: "chapter",
-  Section: "section",
-  Subsection: "subsection",
-  Article: "article",
-  Paragraph: "paragraph",
-  Item: "item",
-  Subitem1: "subitem1",
-  Subitem2: "subitem2",
-  Subitem3: "subitem3",
-  Column: "column",
-  TableStruct: "table_struct",
-  Table: "table",
-  AppdxTable: "appdx_table",
-  TableRow: "table_row",
-  TableColumn: "table_column",
-  SupplProvision: "suppl_provision",
-};
-
-const SKIP_LEVEL_TAGS = new Set([
-  "List", "ListSentence", "ArithFormula", "Sub", "Sup", "Ruby", "Rt",
-]);
-
-const ARRAY_TAGS = new Set([
-  "Chapter", "Section", "Subsection", "Article", "Paragraph", "Item",
-  "Subitem1", "Subitem2", "Subitem3", "Column", "TableStruct", "Table",
-  "AppdxTable", "TableRow", "TableColumn", "SupplProvision", "Sentence",
-  "ListSentence", "ParagraphSentence", "ItemSentence", "Subitem1Sentence",
-  "Subitem2Sentence", "Subitem3Sentence", "TOCChapter", "TOCSection",
-  "TOCSubsection", "List",
-]);
 
 // Regex patterns for link extraction
 const KANSUJI = "[一二三四五六七八九十百千]+";
@@ -97,131 +64,7 @@ function buildLinkPatterns(laws: readonly LawConfig[]): Record<string, RegExp> {
   };
 }
 
-// ─── Kanji Number Normalization ───
-
-function kanjiToArabic(kanji: string): string {
-  let s = kanji.replace(/[０-９]/g, (c) => String("０".codePointAt(0)! - c.codePointAt(0)!));
-
-  if (/[一二三四五六七八九十百千]/.test(s)) {
-    let result = 0;
-    let current = 0;
-    for (const ch of s) {
-      if (ch === "千") { result += (current || 1) * 1000; current = 0; }
-      else if (ch === "百") { result += (current || 1) * 100; current = 0; }
-      else if (ch === "十") { result += (current || 1) * 10; current = 0; }
-      else if (ch === "一") { current = 1; }
-      else if (ch === "二") { current = 2; }
-      else if (ch === "三") { current = 3; }
-      else if (ch === "四") { current = 4; }
-      else if (ch === "五") { current = 5; }
-      else if (ch === "六") { current = 6; }
-      else if (ch === "七") { current = 7; }
-      else if (ch === "八") { current = 8; }
-      else if (ch === "九") { current = 9; }
-      else { return s; }
-    }
-    result += current;
-    s = String(result);
-  }
-
-  return s;
-}
-
-function normalizeArticleNumber(num: string | undefined): string | undefined {
-  if (!num) return undefined;
-  return num.split("の").map(kanjiToArabic).join("の");
-}
-
-function normalizeCaption(caption: string | undefined): string | undefined {
-  if (!caption) return undefined;
-  return caption.replace(/^[（(]/, "").replace(/[）)]$/, "").trim();
-}
-
-// ─── Regulation Type Classification ───
-
-function classifyRegulationType(text: string, isSupplProvision: boolean): string | null {
-  if (isSupplProvision) return "supplementary";
-  if (/[罰刑]金|懲役|過料|拘留/.test(text)) return "penalty";
-  if (/手続|申請|認定|許可|認可|届出|登録|検査済証/.test(text)) return "procedure";
-  return "individual";
-}
-
-// ─── Text Extraction ───
-
-function extractTextRecursive(node: unknown): string {
-  if (typeof node === "string") return node.trim();
-  if (typeof node !== "object" || node === null) return "";
-
-  const obj = node as Record<string, unknown>;
-  if (typeof obj["#text"] === "string") return obj["#text"].trim();
-
-  const texts: string[] = [];
-  for (const [key, val] of Object.entries(obj)) {
-    if (key === "#text" || key.startsWith("@_")) continue;
-    if (Array.isArray(val)) {
-      for (const item of val) {
-        const t = extractTextRecursive(item);
-        if (t) texts.push(t);
-      }
-    } else if (val !== undefined && val !== null) {
-      const t = extractTextRecursive(val);
-      if (t) texts.push(t);
-    }
-  }
-  return texts.join("").trim();
-}
-
-function extractTextFromNode(node: unknown, _tagName: string): string {
-  if (typeof node === "string") return node;
-  if (typeof node !== "object" || node === null) return "";
-
-  const obj = node as Record<string, unknown>;
-  const texts: string[] = [];
-
-  for (const [key, val] of Object.entries(obj)) {
-    if (key === "#text") continue;
-    if (key.startsWith("@_")) continue;
-    if (SKIP_LEVEL_TAGS.has(key)) continue;
-    if (TAG_TO_LEVEL[key] !== undefined) continue;
-
-    if (Array.isArray(val)) {
-      for (const item of val) {
-        const t = extractTextRecursive(item);
-        if (t) texts.push(t);
-      }
-    } else if (val !== undefined && val !== null) {
-      const t = extractTextRecursive(val);
-      if (t) texts.push(t);
-    }
-  }
-  return texts.join("\n").trim();
-}
-
 // ─── Article Row Generation ───
-
-interface ArticleRow {
-  id: string;
-  lawId: string;
-  parentId: string | null;
-  level: string;
-  articleNumber: string | null;
-  articleNumberNormalized: string | null;
-  paragraphNumber: string | null;
-  itemNumber: string | null;
-  subitemNumber: string | null;
-  columnNumber: string | null;
-  tableCoords: string | null;
-  title: string | null;
-  caption: string | null;
-  text: string | null;
-  articleCaptionNormalized: string | null;
-  sortOrder: number;
-  regulationType: string | null;
-  systemTags: Record<string, unknown> | null;
-  lawRevisionId: string;
-  stableNodeKey: string;
-  contentChecksum: string;
-}
 
 interface LinkRow {
   id: string;
@@ -248,247 +91,6 @@ function makeIdGen(prefix: string) {
 }
 
 const BATCH_SIZE = 5000;
-
-function walkXML(
-  node: unknown,
-  lawId: string,
-  parentId: string | null,
-  sortOrders: Map<string | null, number>,
-  rows: ArticleRow[],
-  isSupplProvision: boolean,
-  supplIndex: { current: number },
-  idGen: ReturnType<typeof makeIdGen>,
-): void {
-  if (typeof node !== "object" || node === null) return;
-
-  const obj = node as Record<string, unknown>;
-
-  for (const [tag, val] of Object.entries(obj)) {
-    if (tag === "#text" || tag.startsWith("@_")) continue;
-
-    if (SKIP_LEVEL_TAGS.has(tag)) {
-      if (Array.isArray(val)) {
-        for (const item of val) walkXML(item, lawId, parentId, sortOrders, rows, isSupplProvision, supplIndex, idGen);
-      } else {
-        walkXML(val, lawId, parentId, sortOrders, rows, isSupplProvision, supplIndex, idGen);
-      }
-      continue;
-    }
-
-    const level = TAG_TO_LEVEL[tag];
-    if (level === undefined) {
-      if (Array.isArray(val)) {
-        for (const item of val) walkXML(item, lawId, parentId, sortOrders, rows, isSupplProvision, supplIndex, idGen);
-      } else {
-        walkXML(val, lawId, parentId, sortOrders, rows, isSupplProvision, supplIndex, idGen);
-      }
-      continue;
-    }
-
-    const isSuppl = isSupplProvision || tag === "SupplProvision";
-    const items = Array.isArray(val) ? val : [val];
-
-    for (const item of items) {
-      if (typeof item !== "object" || item === null) continue;
-
-      if (tag === "SupplProvision") {
-        supplIndex.current++;
-      }
-      const currentSupplIndex = supplIndex.current;
-
-      const itemObj = item as Record<string, unknown>;
-      const currentSort = (sortOrders.get(parentId) ?? 0) + 1;
-      sortOrders.set(parentId, currentSort);
-
-      const rowId = idGen.next();
-      const articleNumber = (itemObj["@_Num"] as string) || null;
-
-      let title: string | null = null;
-      let systemTags: Record<string, unknown> | null = null;
-      if (tag === "Chapter" || tag === "Section" || tag === "Subsection") {
-        const titleTag = `${tag}Title`;
-        if (itemObj[titleTag]) {
-          title = typeof itemObj[titleTag] === "string"
-            ? itemObj[titleTag]
-            : extractTextFromNode(itemObj[titleTag], titleTag) || null;
-        }
-      }
-      if (tag === "SupplProvision") {
-        const metadata = supplementaryProvisionMetadataFromNode(itemObj);
-        title = supplementaryProvisionTitle(metadata);
-        systemTags = supplementaryProvisionSystemTags(metadata);
-      }
-
-      let caption: string | null = null;
-      if (tag === "Article" && itemObj["ArticleCaption"] !== undefined) {
-        caption = typeof itemObj["ArticleCaption"] === "string"
-          ? itemObj["ArticleCaption"]
-          : extractTextFromNode(itemObj["ArticleCaption"], "ArticleCaption") || null;
-      }
-
-      let effectiveArticleNumber = articleNumber;
-      if (tag === "Article" && itemObj["ArticleTitle"] !== undefined) {
-        const titleText = typeof itemObj["ArticleTitle"] === "string"
-          ? itemObj["ArticleTitle"]
-          : extractTextFromNode(itemObj["ArticleTitle"], "ArticleTitle") || "";
-        const match = titleText.match(/第(.+)$/);
-        if (match) {
-          effectiveArticleNumber = match[1].replace(/条/g, "");
-        }
-      }
-
-      let paragraphNumber: string | null = null;
-      if (tag === "Paragraph" && itemObj["ParagraphNum"] !== undefined) {
-        paragraphNumber = typeof itemObj["ParagraphNum"] === "string"
-          ? itemObj["ParagraphNum"]
-          : extractTextFromNode(itemObj["ParagraphNum"], "ParagraphNum") || null;
-      }
-
-      let itemNumber: string | null = null;
-      if (tag === "Item" && itemObj["ItemTitle"] !== undefined) {
-        itemNumber = typeof itemObj["ItemTitle"] === "string"
-          ? itemObj["ItemTitle"]
-          : extractTextFromNode(itemObj["ItemTitle"], "ItemTitle") || null;
-      }
-
-      let subitemNumber: string | null = null;
-      if ((tag === "Subitem1" || tag === "Subitem2" || tag === "Subitem3") && itemObj[`${tag}Title`] !== undefined) {
-        const subTitleVal = itemObj[`${tag}Title`];
-        subitemNumber = typeof subTitleVal === "string"
-          ? subTitleVal
-          : extractTextFromNode(subTitleVal, `${tag}Title`) || null;
-      }
-
-      let columnNumber: string | null = null;
-      if (tag === "Column") {
-        columnNumber = articleNumber;
-      }
-
-      let tableCoords: string | null = null;
-      if (tag === "TableRow" || tag === "TableColumn") {
-        tableCoords = articleNumber;
-      }
-
-      const text = extractTextFromNode(item, tag) || null;
-
-      const rawArticleNum = isSupplProvision && level === "article" && effectiveArticleNumber
-        ? `附則${currentSupplIndex}_${effectiveArticleNumber}`
-        : effectiveArticleNumber;
-
-      const row: ArticleRow = {
-        id: rowId,
-        lawId,
-        parentId,
-        level,
-        articleNumber: effectiveArticleNumber,
-        articleNumberNormalized: normalizeArticleNumber(rawArticleNum ?? undefined) ?? null,
-        paragraphNumber,
-        itemNumber,
-        subitemNumber,
-        columnNumber,
-        tableCoords,
-        title: title || null,
-        caption: caption || null,
-        text,
-        articleCaptionNormalized: normalizeCaption(caption ?? undefined) ?? null,
-        sortOrder: currentSort,
-        regulationType: classifyRegulationType(text || "", isSuppl),
-        systemTags,
-        lawRevisionId: "",
-        stableNodeKey: "",
-        contentChecksum: "",
-      };
-
-      rows.push(row);
-      walkXML(item, lawId, rowId, sortOrders, rows, isSuppl, supplIndex, idGen);
-    }
-  }
-}
-
-function parseXML(filepath: string, lawId: string, idPrefix: string): ArticleRow[] {
-  const xmlContent = fs.readFileSync(filepath, "utf-8");
-
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "@_",
-    isArray: (name: string) => ARRAY_TAGS.has(name),
-    removeNSPrefix: true,
-    textNodeName: "#text",
-    preserveOrder: false,
-  });
-
-  const parsed = parser.parse(xmlContent);
-  const rows: ArticleRow[] = [];
-  const sortOrders = new Map<string | null, number>();
-  const supplIndex = { current: 0 };
-  const idGen = makeIdGen(idPrefix);
-
-  // 2026年版はe-Govの公式ダウンロードXML（Lawルート）をそのまま保存する。
-  // 既存のDataRootラップ形式も移行互換のため読み取れるようにする。
-  const dataRoot = parsed.DataRoot || parsed["DataRoot"];
-  const applData = dataRoot?.ApplData || dataRoot?.["ApplData"];
-  const lawFullText = applData?.LawFullText || applData?.["LawFullText"];
-  const law = parsed.Law || parsed["Law"] || lawFullText?.Law || lawFullText?.["Law"];
-  if (!law) throw new Error("Missing Law");
-
-  const lawBody = law.LawBody || law["LawBody"];
-  if (!lawBody) throw new Error("Missing LawBody");
-
-  const mainProvision = lawBody.MainProvision || lawBody["MainProvision"];
-  if (mainProvision) {
-    walkXML(mainProvision, lawId, null, sortOrders, rows, false, supplIndex, idGen);
-  }
-
-  const supplProvision = lawBody.SupplProvision || lawBody["SupplProvision"];
-  if (supplProvision) {
-    walkXML({ SupplProvision: supplProvision }, lawId, null, sortOrders, rows, true, supplIndex, idGen);
-  }
-
-  const appdxTable = lawBody.AppdxTable || lawBody["AppdxTable"];
-  if (appdxTable) {
-    walkXML({ AppdxTable: appdxTable }, lawId, null, sortOrders, rows, false, supplIndex, idGen);
-  }
-
-  const rowById = new Map(rows.map((row) => [row.id, row]));
-  const stableKeyById = new Map<string, string>();
-  const stableKeyFor = (row: ArticleRow): string => {
-    const cached = stableKeyById.get(row.id);
-    if (cached) return cached;
-    const parentKey = row.parentId ? stableKeyFor(rowById.get(row.parentId)!) : "root";
-    const semanticNumber =
-      row.articleNumberNormalized ||
-      row.paragraphNumber ||
-      row.itemNumber ||
-      row.subitemNumber ||
-      row.columnNumber ||
-      row.tableCoords ||
-      String(row.sortOrder);
-    const key = `${parentKey}/${row.level}:${semanticNumber}@${row.sortOrder}`;
-    stableKeyById.set(row.id, key);
-    return key;
-  };
-
-  for (const row of rows) {
-    row.stableNodeKey = stableKeyFor(row);
-    row.contentChecksum = computeArticleContentChecksum({
-      level: row.level,
-      articleNumber: row.articleNumberNormalized,
-      paragraphNumber: row.paragraphNumber,
-      itemNumber: row.itemNumber,
-      subitemNumber: row.subitemNumber,
-      title: row.title,
-      caption: row.caption,
-      text: row.text,
-      systemTags: row.systemTags,
-    });
-  }
-
-  if (new Set(rows.map((row) => row.stableNodeKey)).size !== rows.length) {
-    throw new Error(`${filepath}: stableNodeKeyが重複しています`);
-  }
-
-  return rows;
-}
 
 // ─── Link Extraction（汎用版：egovLawId ベースで全法令を解決） ───
 
@@ -655,6 +257,7 @@ async function insertArticleBatch(prisma: PrismaClient, batch: ArticleRow[]): Pr
       row.parentId,
       row.level,
       row.stableNodeKey,
+      row.durableNodeKey,
       row.articleNumber,
       row.articleNumberNormalized,
       row.paragraphNumber,
@@ -670,17 +273,18 @@ async function insertArticleBatch(prisma: PrismaClient, batch: ArticleRow[]): Pr
       row.regulationType,
       row.systemTags === null ? null : JSON.stringify(row.systemTags),
       row.contentChecksum,
+      row.bodyChecksum,
     );
     const p = (offset: number) => `$${base + offset}`;
-    return `(${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}::"ArticleLevel", ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)}, ${p(11)}, ${p(12)}, ${p(13)}, ${p(14)}, ${p(15)}, ${p(16)}, ${p(17)}, ${p(18)}::integer, ${p(19)}::"RegulationType", ${p(20)}::jsonb, ${p(21)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+    return `(${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}::"ArticleLevel", ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)}, ${p(11)}, ${p(12)}, ${p(13)}, ${p(14)}, ${p(15)}, ${p(16)}, ${p(17)}, ${p(18)}, ${p(19)}::integer, ${p(20)}::"RegulationType", ${p(21)}::jsonb, ${p(22)}, ${p(23)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
   });
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO "Article" (
-      "id", "lawId", "lawRevisionId", "parentId", "level", "stableNodeKey",
+      "id", "lawId", "lawRevisionId", "parentId", "level", "stableNodeKey", "durableNodeKey",
       "articleNumber", "articleNumberNormalized", "paragraphNumber", "itemNumber",
       "subitemNumber", "columnNumber", "tableCoords", "title", "caption", "text",
-      "articleCaptionNormalized", "sortOrder", "regulationType", "systemTags", "contentChecksum",
+      "articleCaptionNormalized", "sortOrder", "regulationType", "systemTags", "contentChecksum", "bodyChecksum",
       "createdAt", "updatedAt"
     ) VALUES ${tuples.join(",")}
     ON CONFLICT ("id") DO NOTHING`,
@@ -773,7 +377,15 @@ async function main() {
       const xmlPath = path.join(DATA_DIR, `${law.egovLawId}.xml`);
       const start = Date.now();
       const idPrefix = `art_${law.egovLawId.toLowerCase()}_20260101_`;
-      const rows = parseXML(xmlPath, "__TMP__", idPrefix);
+      const xmlContent = fs.readFileSync(xmlPath, "utf-8");
+      const lawId = "__TMP__";
+      const revisionId = "__TMP__";
+      const parsedDocument = parseLawXml(xmlContent, {
+        lawId,
+        egovLawId: law.egovLawId,
+        revisionId,
+      });
+      const rows = materializeArticleRows(parsedDocument, idPrefix);
       console.log(`  ${law.shortName.padEnd(14)} ${law.egovLawId}  ${String(rows.length).padStart(5)} 行  (${Date.now() - start}ms)`);
       parsedByLaw.set(law.egovLawId, { rows, config: law });
     }
@@ -897,7 +509,9 @@ async function main() {
       tableCoords: null,
       lawRevisionId: "",
       stableNodeKey: "",
+      durableNodeKey: "",
       contentChecksum: "",
+      bodyChecksum: "",
     }));
 
     const linkIdGen = makeIdGen("lnk_");

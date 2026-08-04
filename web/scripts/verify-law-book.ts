@@ -3,7 +3,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { LAW_BOOK_2026 } from "./law-book-2026";
-import { CIVIL_CODE_PRINTED_ARTICLES } from "./lib/seed-verified-excerpt-ranges";
+import { CIVIL_CODE_ARTICLE_EVIDENCE } from "./lib/seed-verified-excerpt-ranges";
 import { lawBookArticleScopeSql } from "../src/lib/law-book/sql-scope";
 
 const CIVIL_CODE_EGOV_ID = "129AC0000000089";
@@ -136,8 +136,8 @@ async function main(): Promise<void> {
     assert(excerptEntries.length === 106, `抄録Entry件数が106ではありません: ${excerptEntries.length}`);
     assert(civilCodeEntry !== undefined, "民法（抄）のEntryがありません");
     assert(
-      Number(civilCodeEntry.rangeCount) === CIVIL_CODE_PRINTED_ARTICLES.length,
-      `民法（抄）のRangeが${CIVIL_CODE_PRINTED_ARTICLES.length}件ではありません: ${civilCodeEntry.rangeCount}`,
+      Number(civilCodeEntry.rangeCount) === CIVIL_CODE_ARTICLE_EVIDENCE.length,
+      `民法（抄）のRangeが${CIVIL_CODE_ARTICLE_EVIDENCE.length}件ではありません: ${civilCodeEntry.rangeCount}`,
     );
     assert(
       pendingExcerptEntries.length === 105 && pendingExcerptEntries.every((entry) => Number(entry.rangeCount) === 0),
@@ -164,8 +164,8 @@ async function main(): Promise<void> {
     );
     assert(
       JSON.stringify(civilCodeRanges.map((range) => range.articleNumberNormalized)) ===
-        JSON.stringify(CIVIL_CODE_PRINTED_ARTICLES.map((range) => range.articleNumberNormalized)),
-      "民法（抄）のRangeが紙面掲載順と一致しません",
+        JSON.stringify(CIVIL_CODE_ARTICLE_EVIDENCE.map((range) => range.articleNumberNormalized)),
+      "民法（抄）のRangeが収録順と一致しません",
     );
 
     const totalArticles = entries.reduce((sum, entry) => sum + Number(entry.actualArticleCount), 0);
@@ -223,6 +223,36 @@ async function main(): Promise<void> {
          AND a."deletedAt" IS NULL
          AND ${publicScope}`,
     );
+
+    interface PageDataSummaryRow {
+      printedPageColumnCount: bigint;
+      catalogPageCount: bigint;
+      rangePageCount: bigint;
+      notePageCount: bigint;
+    }
+
+    const pageDataRows = await prisma.$queryRawUnsafe<PageDataSummaryRow[]>(
+      `SELECT
+         (SELECT COUNT(*)::bigint
+            FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'LawBookEntry'
+             AND column_name = 'printedPage') AS "printedPageColumnCount",
+         (SELECT COUNT(*)::bigint
+            FROM "LawBookEntry"
+           WHERE "catalogSourceLocator" ~ 'p[.][0-9]|頁') AS "catalogPageCount",
+         (SELECT COUNT(*)::bigint
+            FROM "LawBookEntryRange"
+           WHERE "inclusionReason" ~ 'p[.][0-9]|頁') AS "rangePageCount",
+         (SELECT COUNT(*)::bigint
+            FROM "LawBookEntry"
+           WHERE "verificationNote" ~ 'p[.][0-9]|頁') AS "notePageCount"`,
+    );
+    const pageData = pageDataRows[0];
+    assert(Number(pageData.printedPageColumnCount) === 0, "printedPage列が残っています");
+    assert(Number(pageData.catalogPageCount) === 0, "総目次参照にページ番号が残っています");
+    assert(Number(pageData.rangePageCount) === 0, "Range検証理由にページ番号が残っています");
+    assert(Number(pageData.notePageCount) === 0, "Entry検証メモにページ番号が残っています");
 
     console.log("=== 2026年版 DB完全性検証: OK ===");
     console.log(`Entry: ${entries.length}/120`);

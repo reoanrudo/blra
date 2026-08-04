@@ -163,10 +163,20 @@ export default function TocPanel({
     const ancestors = getAncestorIds(nodes, currentArticleId);
     if (ancestors.size === 0) return;
     setExpandedIds((current) => {
+      let changed = false;
       const next = new Set(current);
-      ancestors.forEach((id) => next.add(id));
-      saveExpanded(currentLawId, next);
-      return next;
+      ancestors.forEach((id) => {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      });
+      // 実際に展開すべき先祖が増えた場合だけ更新・保存する
+      if (changed) {
+        saveExpanded(currentLawId, next);
+        return next;
+      }
+      return current;
     });
   }, [currentArticleId, currentLawId, nodes]);
 

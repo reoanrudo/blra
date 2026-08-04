@@ -18,7 +18,6 @@ export interface LawConfig {
   category: LawCategory;
   displayOrder: number;
   inclusionMode: "full" | "excerpt";
-  printedPage: number;
 }
 
 const INDUSTRY_SHORT_NAMES: Readonly<Record<string, string>> = {
@@ -53,5 +52,4 @@ export const LAWS: readonly LawConfig[] = LAW_BOOK_2026.map((entry) => ({
   category: lawCategoryFromEgovId(entry.egovLawId),
   displayOrder: entry.displayOrder,
   inclusionMode: entry.inclusionMode,
-  printedPage: entry.printedPage,
 }));

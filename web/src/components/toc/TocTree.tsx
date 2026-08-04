@@ -65,15 +65,19 @@ export default function TocTree({
     [nodes, expandedIds],
   );
 
+  // 表示ノード一覧の長さだけ追従（内容の同一性はvisibleNodesのmemoに任せる）
+  const visibleCount = visibleNodes.length;
+
   useEffect(() => {
     if (!currentArticleId || !containerRef.current) return;
     const el = containerRef.current.querySelector(
       `[data-article-id="${CSS.escape(currentArticleId)}"]`,
     );
     if (el) {
-      (el as HTMLElement).scrollIntoView({ block: "nearest" });
+      (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "auto" });
     }
-  }, [currentArticleId, visibleNodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentArticleId, visibleCount]);
 
   const handleArticleClick = useCallback(
     (articleId: string) => {
@@ -164,8 +168,8 @@ export default function TocTree({
             depth={node.depth}
             expanded={expandedIds.has(node.id)}
             hasChildren={childrenSet.has(node.id)}
-            onToggle={() => onToggle(node.id)}
-            onClick={() => handleArticleClick(node.id)}
+            onToggle={onToggle}
+            onClick={handleArticleClick}
             isCurrent={node.id === currentArticleId}
             isAncestor={ancestorIds.has(node.id)}
             showCategoryBoundary={showBoundary}

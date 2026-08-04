@@ -23,19 +23,18 @@ describe("LAW_BOOK_2026", () => {
     expect(counts).toEqual({ law: 65, cabinet_order: 29, ministry_ordinance: 26 });
   });
 
-  it("全文14件と抄録106件を区別し、書籍掲載頁を失わない", () => {
+  it("全文14件と抄録106件を区別する", () => {
     expect(LAW_BOOK_2026.filter((entry) => entry.inclusionMode === "full")).toHaveLength(14);
     expect(LAW_BOOK_2026.filter((entry) => entry.inclusionMode === "excerpt")).toHaveLength(106);
     expect(LAW_BOOK_2026[0]).toMatchObject({
       egovLawId: "325AC0000000201",
-      printedPage: 1,
       inclusionMode: "full",
     });
     expect(LAW_BOOK_2026[119]).toMatchObject({
       egovLawId: "419AC0000000052",
-      printedPage: 1258,
       inclusionMode: "excerpt",
     });
+    expect(LAW_BOOK_2026.every((entry) => !("printedPage" in entry))).toBe(true);
   });
 
   it("2026年1月1日時点の公式本文URLを生成する", () => {
