@@ -1416,7 +1416,7 @@ git commit -m "refactor(reader): read verified current law revisions"
 - Public invariant: current sourceからcurrent targetへのLinkだけを解決済みとして返す
 - Snapshot invariant: `snapshotLawRevisionId` 指定時だけ過去Revisionを明示的に解決する
 
-- [ ] **Step 1: 旧RevisionのLinkと確認済み関係が現行版へ漏れない失敗テストを書く**
+- [x] **Step 1: 旧RevisionのLinkと確認済み関係が現行版へ漏れない失敗テストを書く**
 
 ```typescript
 it("旧Revisionだけにある関係をcurrent文書へ返さない", async () => {
@@ -1435,23 +1435,23 @@ it("current exportに旧Revision Articleを含めない", async () => {
 });
 ```
 
-- [ ] **Step 2: 現行実装が旧Entry境界を使って失敗することを確認する**
+- [x] **Step 2: 現行実装が旧Entry境界を使って失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/integration/current-law-dependent-scope.test.ts`
 
 Expected: 旧Articleまたは旧関係が結果へ含まれてFAIL。
 
-- [ ] **Step 3: 派生データのsource/target条件をcurrentへ変更する**
+- [x] **Step 3: 派生データのsource/target条件をcurrentへ変更する**
 
 Link SQLはsourceとtargetのそれぞれについて、カタログ所属する `LawBookEntry` と `Law.currentRevisionId` を結合する。targetがcurrentでないLinkは `isResolved=true` でも公開しない。変更法令の再構築時は、その法令をsourceに持つLinkとtarget候補に持つincoming Linkを削除・再抽出し、他法令同士のLinkには触れない。
 
-- [ ] **Step 4: snapshot明示とcurrent既定を分離する**
+- [x] **Step 4: snapshot明示とcurrent既定を分離する**
 
 `resolveApplicableArticle` は `snapshotLawRevisionId` がある場合だけそのRevisionを使い、ない場合は `Law.currentRevisionId` を使う。エクスポート、入力検証、確認済み関係はcurrentを既定とし、旧Revisionの関係を新Revisionへコピーしない。checksum変更を検知した確認済み関係は既存の失効理由 `REVISION_CONTENT_CHANGED` で無効化する。
 
 `verify-law-book.ts` は `lawBookCatalogArticleScopeSql` を明示して固定baselineだけを検査する。全consumerの移行後に `lawBookArticleScopeSql` のdeprecated aliasを削除する。
 
-- [ ] **Step 5: dependent scopeと既存関係テストを通す**
+- [x] **Step 5: dependent scopeと既存関係テストを通す**
 
 Run:
 
@@ -1463,7 +1463,7 @@ npx tsc --noEmit
 
 Expected: 全PASS。
 
-- [ ] **Step 6: 固定Entry Revisionを公開条件にしている残存箇所を監査する**
+- [x] **Step 6: 固定Entry Revisionを公開条件にしている残存箇所を監査する**
 
 Run:
 
@@ -1474,7 +1474,7 @@ rg -n '"lawRevisionId" = .*entry|entry\."lawRevisionId"|e\."lawRevisionId"' src
 
 Expected: 固定書籍版検証、履歴表示、migration用コード以外は0件。公開API/reader/search/link/exportから検出された場合は同じtask内でcurrent helperへ置換して再テストする。
 
-- [ ] **Step 7: dependent scopeをコミットする**
+- [x] **Step 7: dependent scopeをコミットする**
 
 ```bash
 git add web/src/lib/link/link.ts web/src/lib/link/link-detector.ts web/src/app/api/export/route.ts web/src/lib/practice/export-validator.ts web/src/lib/applicability/resolve-applicable-article.ts web/src/lib/relations/confirmed-relations-repository.ts web/src/lib/relations/confirmed-relation-service.ts web/src/lib/law-book/sql-scope.ts web/scripts/verify-law-book.ts web/src/__tests__/integration/current-law-dependent-scope.test.ts web/src/__tests__/integration/law-book-scope.test.ts web/src/__tests__/integration/export-import-smoke.test.ts web/src/__tests__/integration/confirmed-relation-service.test.ts
