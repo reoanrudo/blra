@@ -9,7 +9,11 @@ import {
   readerArticleHref,
 } from "@/lib/article/full-law-document";
 import { useScrollActiveArticle } from "@/contexts/ScrollActiveArticleContext";
+import { useScrollContainer } from "@/contexts/ScrollContainerContext";
 import TocTreeNode from "./TocTreeNode";
+
+/** クリックジャンプ時の上部オフセット（固定ヘッダ回避・scroll-mt-20 に相当） */
+const SCROLL_OFFSET_PX = 80;
 
 interface TocTreeProps {
   nodes: TocNode[];
@@ -51,6 +55,7 @@ export default function TocTree({
 }: TocTreeProps) {
   const router = useRouter();
   const scrollState = useScrollActiveArticle();
+  const scrollContainerRef = useScrollContainer();
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusIndex, setFocusIndex] = useState(-1);
 
@@ -89,7 +94,18 @@ export default function TocTree({
         fullLawTargetSelector(articleId),
       );
       if (target) {
-        target.scrollIntoView({ block: "start", behavior: "auto" });
+        // scrollIntoView ではなく scrollTop を直接設定して瞬時ジャンプする。
+        // ネストしたスクロールコンテナでのアニメーション介入を回避する。
+        const scroller = scrollContainerRef?.current;
+        if (scroller) {
+          const scrollerRect = scroller.getBoundingClientRect();
+          const targetRect = target.getBoundingClientRect();
+          const delta = targetRect.top - scrollerRect.top - SCROLL_OFFSET_PX;
+          scroller.scrollTop += delta;
+        } else {
+          // フォールバック: コンテナが取れない場合は scrollIntoView
+          target.scrollIntoView({ block: "start", behavior: "auto" });
+        }
         window.history.replaceState(
           window.history.state,
           "",
@@ -99,7 +115,7 @@ export default function TocTree({
       }
       router.push(readerArticleHref(articleId));
     },
-    [router, scrollState],
+    [router, scrollState, scrollContainerRef],
   );
 
   const handleKeyDown = useCallback(

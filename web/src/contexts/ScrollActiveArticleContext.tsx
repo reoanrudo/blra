@@ -25,6 +25,8 @@ interface ScrollActiveArticleContextValue {
   unregisterSentinel: (articleId: string) => void;
   /** スクロール末尾など、Observerだけでは判定できない位置のArticleを確定する */
   activateArticle: (articleId: string) => void;
+  /** スクロールコンテナ（<main>）を登録し、scroll追従を有効化する */
+  registerScrollContainer: (el: HTMLElement) => () => void;
   /** 追加取得Articleのリンク・注釈を実行時に統合する（Task C連携） */
   registerAuxData: (aux: {
     articleIds: string[];
@@ -35,6 +37,11 @@ interface ScrollActiveArticleContextValue {
 
 const ScrollActiveArticleContext =
   createContext<ScrollActiveArticleContextValue | null>(null);
+
+/** 判定帯のコンテナ上端からのオフセット（固定ヘッダ回避） */
+const ACTIVATION_OFFSET_PX = 80;
+/** 判定帯の許容誤差 */
+const ACTIVATION_TOLERANCE_PX = 5;
 
 export function useScrollActiveArticle(): ScrollActiveArticleContextValue | null {
   return useContext(ScrollActiveArticleContext);
@@ -147,6 +154,67 @@ export function ScrollActiveArticleProvider({
     }
   }, []);
 
+  // スクロールコンテナを登録し、scroll ベースでアクティブ条文を計算する。
+  // IntersectionObserver 単体では高速スクロールに遅延するため、
+  // scroll イベントで判定帯（コンテナ上部）に最も近い条文を直接特定する。
+  const registerScrollContainer = useCallback((el: HTMLElement) => {
+    let ticking = false;
+
+    const computeActive = () => {
+      ticking = false;
+      const containerTop = el.getBoundingClientRect().top + ACTIVATION_OFFSET_PX;
+      let bestId: string | null = null;
+      let bestDist = Infinity;
+      sentinelMapRef.current.forEach((sentinel, id) => {
+        const rect = sentinel.getBoundingClientRect();
+        // 判定帯より下にある条文のうち、最も近いものを選ぶ
+        const dist = rect.top - containerTop;
+        if (dist <= ACTIVATION_TOLERANCE_PX && dist > -bestDist) {
+          if (Math.abs(dist) < bestDist || (dist >= 0 && bestId === null)) {
+            // 判定帯を過ぎた直近の条文（dist に最も近い0以下）を優先
+          }
+        }
+        // シンプルに: 判定帯に最も近い条文（上から順）
+        if (dist <= 0 && Math.abs(dist) < bestDist) {
+          bestDist = Math.abs(dist);
+          bestId = id;
+        }
+      });
+      // 判定帯より前に条文が無い（ページ先頭付近）場合は最初の条文
+      if (!bestId && sentinelMapRef.current.size > 0) {
+        let topMost: string | null = null;
+        let topY = Infinity;
+        sentinelMapRef.current.forEach((sentinel, id) => {
+          const y = sentinel.getBoundingClientRect().top;
+          if (y < topY) {
+            topY = y;
+            topMost = id;
+          }
+        });
+        bestId = topMost;
+      }
+      if (bestId && bestId !== activeArticleIdRef.current) {
+        activeArticleIdRef.current = bestId;
+        setActiveArticleId(bestId);
+      }
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(computeActive);
+      }
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    // 初回計算
+    computeActive();
+
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
   const registerAuxData = useCallback(
     (aux: {
       articleIds: string[];
@@ -188,6 +256,7 @@ export function ScrollActiveArticleProvider({
         registerSentinel,
         unregisterSentinel,
         activateArticle,
+        registerScrollContainer,
         registerAuxData,
       }}
     >
