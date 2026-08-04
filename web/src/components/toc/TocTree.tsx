@@ -121,14 +121,11 @@ export default function TocTree({
           readerArticleHref(articleId),
         );
 
-        // ■ React State更新はジャンプ後に実行。
-        // rIC でアイドル時に回し、ジャンプをブロックしない。
-        const activate = () => scrollState?.activateArticle(articleId);
-        if ("requestIdleCallback" in window) {
-          requestIdleCallback(activate, { timeout: 16 });
-        } else {
-          requestAnimationFrame(activate);
-        }
+        // ■ ハイライト切替: ジャンプ完了直後に同期的に実行。
+        // scrollTop は上で既に完了しているので React再描画に先行されることはない。
+        // requestIdleCallback で遅延させると「ハイライトが後からやってくる」
+        // 感覚になるため、ここで即座に切り替える。
+        scrollState?.activateArticle(articleId);
         return;
       }
 
