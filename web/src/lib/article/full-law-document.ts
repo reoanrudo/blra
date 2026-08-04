@@ -7,6 +7,52 @@ export interface FullLawNode extends Omit<ArticleRow, "lawName"> {
   path: number[];
 }
 
+/**
+ * 現行法令の表示用更新状態。
+ *
+ * - verified       : 最新の確認が成功した現行施行版
+ * - check_failed   : 最新の確認が失敗し、最後に成功した版を表示している
+ * - never_checked  : e-Govとの最新確認が一度も完了していない
+ *
+ * 内部のエラー詳細（lastErrorCode/lastErrorDetail）はDTOへ含めない。
+ */
+export type LawRefreshDisplayStatus =
+  | "verified"
+  | "check_failed"
+  | "never_checked";
+
+/**
+ * 現行版の施行日・出典・同期状態を含むRevisionメタデータ。
+ *
+ * 計画書 Task 14 Step 3 に基づき、従来の `sourceDate`（固定収録基準日）を廃止し、
+ * e-Gov現行施行版の鮮度情報へ置き換える。
+ */
+export interface FullLawRevisionMetadata {
+  id: string;
+  editionKey: string;
+  /** 施行日（LawRevision.effectiveAsOf）。公開版が施行された日。 */
+  effectiveFrom: string;
+  /** e-Gov側のXML更新日時（LawRevision.sourceUpdatedAt）。未取得の場合は null。 */
+  sourceUpdatedAt: string | null;
+  /** 取得日時（LawRevision.fetchedAt）。 */
+  fetchedAt: string;
+  /** 最後に成功した確認日時（LawSyncState.lastSuccessfulCheckAt）。未確認なら null。 */
+  lastSuccessfulCheckAt: string | null;
+  /** 最後の確認試行日時（LawSyncState.lastAttemptAt）。未試行なら null。 */
+  lastAttemptAt: string | null;
+  /** 表示用更新状態。 */
+  refreshStatus: LawRefreshDisplayStatus;
+  /**
+   * 更新確認の内部エラーコード（LawSyncState.lastErrorCode）。
+   * 詳細メッセージは含まず、カテゴリ識別のみ。正常時は null。
+   */
+  refreshErrorCode: string | null;
+  /** 廃止状態（LawSyncState.repealStatus）。未設定時は "None" 扱い。 */
+  repealStatus: string | null;
+  /** 廃止日（LawSyncState.repealDate）。 */
+  repealDate: string | null;
+}
+
 export interface FullLawDocument {
   law: {
     id: string;
@@ -14,11 +60,7 @@ export interface FullLawDocument {
     name: string;
     shortName: string | null;
   };
-  revision: {
-    id: string;
-    editionKey: string;
-    sourceDate: string | null;
-  };
+  revision: FullLawRevisionMetadata;
   toc: TocNode[];
   nodes: FullLawNode[];
   linksBySource: Record<string, OutgoingLinkRow[]>;

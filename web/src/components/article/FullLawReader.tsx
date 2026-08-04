@@ -12,7 +12,11 @@ import {
   useScrollActiveArticle,
 } from "@/contexts/ScrollActiveArticleContext";
 import { useFullLawDocument } from "@/hooks/useFullLawDocument";
-import type { FullLawDocument } from "@/lib/article/full-law-document";
+import type {
+  FullLawDocument,
+  FullLawRevisionMetadata,
+  LawRefreshDisplayStatus,
+} from "@/lib/article/full-law-document";
 import {
   useConfirmedRelations,
   type ConfirmedRelationsState,
@@ -108,22 +112,7 @@ function FullLawReadyLayout({
       }
       center={
         <article className="law-page">
-          <header className="law-running-header">
-            <div className="min-w-0">
-              <p className="law-running-header__law">{document.law.name}</p>
-              <p className="law-running-header__section">
-                収録基準日: {document.revision.sourceDate ?? "未設定"}
-              </p>
-            </div>
-            <a
-              href={`https://laws.e-gov.go.jp/law/${encodeURIComponent(document.law.egovLawId)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] font-bold text-[#9d1f58] hover:underline"
-            >
-              e-Govで改正・施行情報を確認
-            </a>
-          </header>
+          <LawRunningHeader revision={document.revision} lawName={document.law.name} egovLawId={document.law.egovLawId} />
           {relationsState.status === "error" && (
             <ConfirmedRelationsPartialError onRetry={relationsState.retry} />
           )}
@@ -143,6 +132,155 @@ function FullLawReadyLayout({
       }
     />
   );
+}
+
+/**
+ * ISO 8601 文字列を Asia/Tokyo の "YYYY-MM-DD" へ整形する。
+ * タイムゾーン付きでない日付（施行日等）はそのまま日付部を返す。
+ * 表示の正確性が最優先のため、解析失敗時は元の文字列をそのまま返す。
+ */
+function formatTokyoDate(iso: string | null): string | null {
+  if (!iso) return null;
+  // 既に "YYYY-MM-DD" のみ（施行日）ならそのまま返す
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  try {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    // Asia/Tokyo (UTC+9) へ換算して YYYY-MM-DD を得る
+    const tokyo = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+    const yyyy = tokyo.getUTCFullYear();
+    const mm = String(tokyo.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(tokyo.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  } catch {
+    return iso;
+  }
+}
+
+/**
+ * ISO 8601 文字列を Asia/Tokyo の "YYYY-MM-DD HH:mm" へ整形する。
+ */
+function formatTokyoDateTime(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    const tokyo = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+    const yyyy = tokyo.getUTCFullYear();
+    const mm = String(tokyo.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(tokyo.getUTCDate()).padStart(2, "0");
+    const hh = String(tokyo.getUTCHours()).padStart(2, "0");
+    const min = String(tokyo.getUTCMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+  } catch {
+    return iso;
+  }
+}
+
+interface LawRunningHeaderProps {
+  revision: FullLawRevisionMetadata;
+  lawName: string;
+  egovLawId: string;
+}
+
+/**
+ * 現行版の施行日・確認状態を running header へ表示する（計画書 Task 14 Step 4）。
+ *
+ * verified       : 見出し「e-Gov現行施行版」
+ * check_failed   : 見出し「最終検証済みe-Gov版」+ 注意文
+ * never_checked  : 見出し「e-Gov版（最新確認未完了）」+ 注意文
+ *
+ * repealStatus !== "None" の場合は「廃止: YYYY-MM-DD」を表示する。
+ * 既存の e-Gov 公式ページへのリンクは維持する。
+ */
+function LawRunningHeader({
+  revision,
+  lawName,
+  egovLawId,
+}: LawRunningHeaderProps) {
+  const effectiveFrom = formatTokyoDate(revision.effectiveFrom);
+  const sourceUpdatedAt = formatTokyoDateTime(revision.sourceUpdatedAt);
+  const lastCheck = formatTokyoDateTime(revision.lastSuccessfulCheckAt);
+  const repealed = revision.repealStatus && revision.repealStatus !== "None";
+  const repealDate = formatTokyoDate(revision.repealDate);
+
+  const heading = resolveHeadingLabel(revision.refreshStatus);
+  const caution = resolveCautionText(revision.refreshStatus);
+
+  return (
+    <header className="law-running-header">
+      <div className="min-w-0">
+        <p className="law-running-header__law">{lawName}</p>
+        <p className="law-running-header__section">{heading}</p>
+        <dl className="law-running-header__meta mt-1 space-y-0.5 text-[11px] text-neutral-600">
+          {effectiveFrom && (
+            <div className="flex gap-1">
+              <dt>施行日:</dt>
+              <dd>{effectiveFrom}</dd>
+            </div>
+          )}
+          {sourceUpdatedAt && (
+            <div className="flex gap-1">
+              <dt>e-Gov更新:</dt>
+              <dd>{sourceUpdatedAt}</dd>
+            </div>
+          )}
+          {lastCheck && (
+            <div className="flex gap-1">
+              <dt>最終確認:</dt>
+              <dd>{lastCheck}</dd>
+            </div>
+          )}
+          {repealed && repealDate && (
+            <div className="flex gap-1 font-bold text-[#9d1f58]">
+              <dt>廃止:</dt>
+              <dd>{repealDate}</dd>
+            </div>
+          )}
+        </dl>
+        {caution && (
+          <p
+            data-law-refresh-caution={revision.refreshStatus}
+            className="mt-1 text-[11px] text-amber-700"
+          >
+            {caution}
+          </p>
+        )}
+      </div>
+      <a
+        href={`https://laws.e-gov.go.jp/law/${encodeURIComponent(egovLawId)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[11px] font-bold text-[#9d1f58] hover:underline"
+      >
+        e-Govで改正・施行情報を確認
+      </a>
+    </header>
+  );
+}
+
+function resolveHeadingLabel(status: LawRefreshDisplayStatus): string {
+  switch (status) {
+    case "verified":
+      return "e-Gov現行施行版";
+    case "check_failed":
+      return "最終検証済みe-Gov版";
+    case "never_checked":
+      return "e-Gov版（最新確認未完了）";
+  }
+}
+
+function resolveCautionText(
+  status: LawRefreshDisplayStatus,
+): string | null {
+  switch (status) {
+    case "check_failed":
+      return "更新確認に失敗しました。表示中の版は最終検証済み版です。";
+    case "never_checked":
+      return "e-Govとの最新確認が完了していません。";
+    default:
+      return null;
+  }
 }
 
 function ConfirmedRelationsPartialError({ onRetry }: { onRetry: () => void }) {
