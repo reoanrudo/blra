@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import {
   sortConfirmedRelationRows,
   type ConfirmedRelation,
@@ -23,17 +23,24 @@ interface ConfirmedRelationRow {
   targetArticleSortOrder: number;
 }
 
+/**
+ * 指定 Revision が現行法令集（ksk-2026）へ収録された法令の current Revision かを検査する。
+ *
+ * 確認済み関係は current Revision を既定とするため、Entry が指す固定 Revision
+ * （カタログ baseline）ではなく `Law.currentRevisionId` と一致することを要求する。
+ */
 async function getCurrentEditionRevision(
   lawRevisionId: string,
 ): Promise<boolean> {
   const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT revision.id
+    `SELECT law."currentRevisionId" AS id
        FROM "LawRevision" revision
+       JOIN "Law" law ON law."id" = revision."lawId"
        JOIN "LawBookEntry" entry
-         ON entry."lawId" = revision."lawId"
-        AND entry."lawRevisionId" = revision.id
+         ON entry."lawId" = law."id"
        JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
       WHERE revision.id = $1
+        AND law."currentRevisionId" = revision.id
         AND edition."editionKey" = $2
       LIMIT 1`,
     lawRevisionId,
@@ -45,8 +52,10 @@ async function getCurrentEditionRevision(
 async function getActiveConfirmedRelationRows(
   lawRevisionId: string,
 ): Promise<ConfirmedRelationRow[]> {
-  const sourceScope = lawBookArticleScopeSql("source", "source_entry");
-  const targetScope = lawBookArticleScopeSql("target", "target_entry");
+  // source・target ともに Law.currentRevisionId に属する current 版だけを公開する。
+  // 旧 Revision の source/target を持つ関係は、たとえ revokedAt IS NULL でも返さない。
+  const sourceScope = currentLawBookArticleScopeSql("source", "source_entry", "source_law");
+  const targetScope = currentLawBookArticleScopeSql("target", "target_entry", "target_law");
   return prisma.$queryRawUnsafe<ConfirmedRelationRow[]>(
     `SELECT
        relation.id,
@@ -63,16 +72,15 @@ async function getActiveConfirmedRelationRows(
        target."sortOrder" AS "targetArticleSortOrder"
      FROM "ConfirmedArticleRelation" relation
      JOIN "Article" source ON source.id = relation."sourceArticleId"
+     JOIN "Law" source_law ON source_law.id = source."lawId"
      JOIN "Article" target ON target.id = relation."targetArticleId"
      JOIN "Law" target_law ON target_law.id = target."lawId"
      JOIN "LawBookEntry" source_entry
-       ON source_entry."lawId" = source."lawId"
-      AND source_entry."lawRevisionId" = source."lawRevisionId"
+       ON source_entry."lawId" = source_law."id"
      JOIN "LawBookEdition" source_edition
        ON source_edition.id = source_entry."editionId"
      JOIN "LawBookEntry" target_entry
-       ON target_entry."lawId" = target."lawId"
-      AND target_entry."lawRevisionId" = target."lawRevisionId"
+       ON target_entry."lawId" = target_law."id"
      JOIN "LawBookEdition" target_edition
        ON target_edition.id = target_entry."editionId"
      WHERE source."lawRevisionId" = $1

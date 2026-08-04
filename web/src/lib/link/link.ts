@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 
 export interface OutgoingLinkRow {
   id: string;
@@ -32,14 +32,21 @@ export interface IncomingLinkRow {
   sourceLawShortName: string | null;
 }
 
-/** Fetch all outgoing links (resolved+unresolved) for a set of article IDs in one query */
+/**
+ * 指定 Article IDs から出る Link（解決済み+未解決）を1クエリで取得する。
+ *
+ * source Article は `Law.currentRevisionId` に属する current 版だけを対象とする。
+ * target Article も current Revision に属するときだけ解決済みとして公開し、
+ * target が旧 Revision の場合は未解決扱い（targetId = null）へ落とす。
+ */
 export async function getOutgoingLinksForTree(
   articleIds: string[],
 ): Promise<OutgoingLinkRow[]> {
   if (articleIds.length === 0) return [];
   const placeholders = articleIds.map((_, i) => `$${i + 1}`).join(", ");
   const editionKeyParam = articleIds.length + 1;
-  const targetScope = lawBookArticleScopeSql("tgt", "target_entry");
+  const sourceScope = currentLawBookArticleScopeSql("src", "source_entry", "src_law");
+  const targetScope = currentLawBookArticleScopeSql("tgt", "target_entry", "tgt_law");
 
   return prisma.$queryRawUnsafe<OutgoingLinkRow[]>(
     `SELECT
@@ -56,32 +63,47 @@ export async function getOutgoingLinksForTree(
       tgt."caption" AS "targetCaption",
       tgt_law."shortName" AS "targetLawShortName"
     FROM "Link" lnk
+    JOIN "Article" src ON lnk."sourceId" = src.id
+      AND src."deletedAt" IS NULL
+    JOIN "Law" src_law ON src."lawId" = src_law.id
+    JOIN "LawBookEntry" source_entry
+      ON source_entry."lawId" = src_law.id
+    JOIN "LawBookEdition" source_edition ON source_edition.id = source_entry."editionId"
     LEFT JOIN "Article" tgt ON lnk."targetId" = tgt.id
       AND tgt."deletedAt" IS NULL
-      AND EXISTS (
-        SELECT 1
-        FROM "LawBookEntry" target_entry
-        JOIN "LawBookEdition" target_edition ON target_edition.id = target_entry."editionId"
-        WHERE target_entry."lawId" = tgt."lawId"
-          AND target_entry."lawRevisionId" = tgt."lawRevisionId"
-          AND target_edition."editionKey" = $${editionKeyParam}
-          AND ${targetScope}
-      )
     LEFT JOIN "Law" tgt_law ON tgt."lawId" = tgt_law.id
-    WHERE lnk."sourceId" IN (${placeholders})`,
+    LEFT JOIN "LawBookEntry" target_entry
+      ON target_entry."lawId" = tgt_law.id
+    LEFT JOIN "LawBookEdition" target_edition ON target_edition.id = target_entry."editionId"
+    WHERE lnk."sourceId" IN (${placeholders})
+      AND source_edition."editionKey" = $${editionKeyParam}
+      AND ${sourceScope}
+      AND (
+        tgt.id IS NULL
+        OR (
+          target_edition."editionKey" = $${editionKeyParam}
+          AND ${targetScope}
+        )
+      )`,
     ...articleIds,
     CURRENT_LAW_BOOK_EDITION_KEY,
   );
 }
 
-/** Fetch incoming resolved links targeting any of the given article IDs */
+/**
+ * 指定 Article IDs を target とする解決済み incoming Link を取得する。
+ *
+ * source・target ともに `Law.currentRevisionId` に属する current 版だけを公開する。
+ * source が旧 Revision の Link は、たとえ isResolved=true でも返さない。
+ */
 export async function getIncomingLinksForTree(
   articleIds: string[],
 ): Promise<IncomingLinkRow[]> {
   if (articleIds.length === 0) return [];
   const placeholders = articleIds.map((_, i) => `$${i + 1}`).join(", ");
   const editionKeyParam = articleIds.length + 1;
-  const sourceScope = lawBookArticleScopeSql("src", "source_entry");
+  const sourceScope = currentLawBookArticleScopeSql("src", "source_entry", "src_law");
+  const targetScope = currentLawBookArticleScopeSql("tgt", "target_entry", "tgt_law");
 
   return prisma.$queryRawUnsafe<IncomingLinkRow[]>(
     `SELECT
@@ -99,12 +121,23 @@ export async function getIncomingLinksForTree(
     JOIN "Article" src ON lnk."sourceId" = src.id AND src."deletedAt" IS NULL
     JOIN "Law" src_law ON src."lawId" = src_law.id
     JOIN "LawBookEntry" source_entry
-      ON source_entry."lawId" = src."lawId" AND source_entry."lawRevisionId" = src."lawRevisionId"
+      ON source_entry."lawId" = src_law.id
     JOIN "LawBookEdition" source_edition ON source_edition.id = source_entry."editionId"
+    JOIN "Article" tgt ON lnk."targetId" = tgt.id AND tgt."deletedAt" IS NULL
+    JOIN "Law" tgt_law ON tgt."lawId" = tgt_law.id
+    JOIN "LawBookEntry" target_entry
+      ON target_entry."lawId" = tgt_law.id
     WHERE lnk."targetId" IN (${placeholders})
       AND lnk."isResolved" = true
       AND source_edition."editionKey" = $${editionKeyParam}
-      AND ${sourceScope}`,
+      AND ${sourceScope}
+      AND EXISTS (
+        SELECT 1
+        FROM "LawBookEdition" target_edition
+        WHERE target_edition.id = target_entry."editionId"
+          AND target_edition."editionKey" = $${editionKeyParam}
+      )
+      AND ${targetScope}`,
     ...articleIds,
     CURRENT_LAW_BOOK_EDITION_KEY,
   );

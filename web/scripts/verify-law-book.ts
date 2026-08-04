@@ -11,7 +11,7 @@
 import { PrismaClient } from "@prisma/client";
 import { LAW_BOOK_2026 } from "./law-book-2026";
 import { CIVIL_CODE_PRINTED_ARTICLES } from "./lib/seed-verified-excerpt-ranges";
-import { lawBookArticleScopeSql } from "../src/lib/law-book/sql-scope";
+import { lawBookCatalogArticleScopeSql } from "../src/lib/law-book/sql-scope";
 
 const CIVIL_CODE_EGOV_ID = "129AC0000000089";
 const ARCHITECTS_ACT_EGOV_ID = "325AC1000000202";
@@ -219,7 +219,9 @@ async function main(): Promise<void> {
     );
     assert(Number(outsideLinks[0].count) === 0, `収録台帳外を参照するLinkがあります: ${outsideLinks[0].count}`);
 
-    const publicScope = lawBookArticleScopeSql("a", "e");
+    // 固定書籍版検証: catalog scope（LawBookEntry.lawRevisionId 固定 baseline）で検査する。
+    // 公開 current の検査は verify-current-laws.ts（Task 9）へ委譲する。
+    const catalogScope = lawBookCatalogArticleScopeSql("a", "e");
     const visibleArticles = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
       `SELECT COUNT(*)::bigint AS count
        FROM "Article" a
@@ -228,7 +230,7 @@ async function main(): Promise<void> {
        JOIN "LawBookEdition" edition ON edition.id = e."editionId"
        WHERE edition."editionKey" = 'ksk-2026'
          AND a."deletedAt" IS NULL
-         AND ${publicScope}`,
+         AND ${catalogScope}`,
     );
 
     console.log("=== 2026年版 DB完全性検証: OK ===");
