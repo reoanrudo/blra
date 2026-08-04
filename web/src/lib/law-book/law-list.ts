@@ -5,7 +5,6 @@ export interface LawListItem {
   printedTitle: string;
   displayOrder: number;
   inclusionMode: "full" | "excerpt";
-  printedPage: number;
   firstArticleId: string;
   // isCurrent は廃止（設計書§4.1）: クライアント側で currentLawId を別途管理する。
 }
@@ -26,5 +25,5 @@ export function chooseActiveLawId(
 }
 
 export function lawSelectLabel(law: LawListItem): string {
-  return `${law.displayOrder}. ${law.printedTitle} — p.${law.printedPage}`;
+  return `${law.displayOrder}. ${law.printedTitle}`;
 }
