@@ -25,6 +25,12 @@ interface ScrollActiveArticleContextValue {
   unregisterSentinel: (articleId: string) => void;
   /** スクロール末尾など、Observerだけでは判定できない位置のArticleを確定する */
   activateArticle: (articleId: string) => void;
+  /**
+   * クリック時のプログラマティックスクロール直後に呼ぶ。
+   * scrollTop 変更で発火する scroll イベントのハイライト再計算を
+   * 1フレーム分スキップし、クリック時の activateArticle と競合しないようにする。
+   */
+  suppressScrollSyncOneFrame: () => void;
   /** スクロールコンテナ（<main>）を登録し、scroll追従を有効化する */
   registerScrollContainer: (el: HTMLElement) => () => void;
   /** 追加取得Articleのリンク・注釈を実行時に統合する（Task C連携） */
@@ -60,6 +66,9 @@ export function ScrollActiveArticleProvider({
   // センチネルを文書順に保持する配列（二分探索用）
   const sentinelOrderRef = useRef<{ id: string; el: HTMLDivElement }[]>([]);
   const containerRef = useRef<HTMLElement | null>(null);
+  // クリック時のプログラマティックスクロールで発火する scroll イベントを
+  // 1フレーム分スキップするためのフラグ
+  const suppressScrollRef = useRef(false);
 
   // 追加取得Articleのリンクを統合するstate
   const [auxLinksByArticle, setAuxLinksByArticle] = useState<
@@ -138,12 +147,22 @@ export function ScrollActiveArticleProvider({
     [setActiveSafe],
   );
 
+  // クリック直後の scrollTop 変更で発火する scroll イベントを1フレーム分スキップ
+  const suppressScrollSyncOneFrame = useCallback(() => {
+    suppressScrollRef.current = true;
+    requestAnimationFrame(() => {
+      suppressScrollRef.current = false;
+    });
+  }, []);
+
   // スクロールコンテナを登録し、scroll ベースでアクティブ条文を計算する。
   const registerScrollContainer = useCallback((el: HTMLElement) => {
     containerRef.current = el;
     let ticking = false;
 
     const onScroll = () => {
+      // クリック時のプログラマティックスクロールなら1フレーム分スキップ
+      if (suppressScrollRef.current) return;
       if (!ticking) {
         ticking = true;
         requestAnimationFrame(() => {
@@ -202,6 +221,7 @@ export function ScrollActiveArticleProvider({
       registerSentinel,
       unregisterSentinel,
       activateArticle,
+      suppressScrollSyncOneFrame,
       registerScrollContainer,
       registerAuxData,
     }),
@@ -211,6 +231,7 @@ export function ScrollActiveArticleProvider({
       registerSentinel,
       unregisterSentinel,
       activateArticle,
+      suppressScrollSyncOneFrame,
       registerScrollContainer,
       registerAuxData,
     ],
