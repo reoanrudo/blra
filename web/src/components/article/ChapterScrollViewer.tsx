@@ -82,7 +82,8 @@ export default function ChapterScrollViewer({
   outgoingBySource,
 }: ChapterScrollViewerProps) {
   const mainRef = useScrollContainer();
-  const { registerAuxData, activateArticle } = useScrollActiveArticle() ?? {};
+  const { registerAuxData, activateArticle, registerScrollContainer } =
+    useScrollActiveArticle() ?? {};
 
   const [segments, setSegments] = useState<LawScrollSegment[]>([
     {
@@ -394,6 +395,14 @@ export default function ChapterScrollViewer({
     handleScrollEnd();
     return () => container.removeEventListener("scroll", handleScrollEnd);
   }, [mainRef, articles, canFetchAfter, activateArticle]);
+
+  // スクロールコンテナを登録し、scroll ベースのハイライト追従を有効化。
+  // IntersectionObserver 単体では高速スクロールに遅延するため。
+  useEffect(() => {
+    const container = mainRef?.current;
+    if (!container || !registerScrollContainer) return;
+    return registerScrollContainer(container);
+  }, [mainRef, registerScrollContainer]);
 
   return (
     <div className="chapter-scroll-viewer">
