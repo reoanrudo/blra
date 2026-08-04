@@ -1826,6 +1826,33 @@ git commit -m "docs(refresh): record initial current-law rollout"
 
 mappingファイルが0件なら存在しないdirectoryをstageせず、結果文書だけをコミットする。最後に `git status --short` で既存 `AGENTS.md` 以外がcleanであることを確認する。
 
+- [ ] **Step 10: Task 9 backfill 完了後に legacy range fallback を除去する**
+
+Task 9 の DB backfill（durableNodeKey/bodyChecksum/RangeResolution 生成）が完了し、
+durable key ベースの RangeResolution が全ての検証済み抄録法令をカバーした時点で、
+`web/src/lib/law-book/current-scope.ts` の legacy fallback ブロック
+（`LawBookEntryRange` を使った `stableNodeKey` ベースの `OR EXISTS (...)` 節、
+および上部の JSDoc にある legacy fallback 説明）を削除する。
+
+手順:
+
+1. `npm run lawbook:current:verify -- --online` を実行し、検証済み Range の
+   resolution が全て `resolved` であることを確認する（legacy fallback に依存
+   する法令が 0 件であることを保証）。
+2. `web/src/lib/law-book/current-scope.ts` の legacy fallback ブロックと、
+   該当箇所の `TODO(Task 9 backfill完了後)` コメントを削除する。
+3. 既存テストが全件通過することを確認する:
+
+```bash
+cd web
+npx vitest run src/__tests__/integration/current-law-read-scope.test.ts
+npx tsc --noEmit
+npm test
+```
+
+Expected: 全 PASS。legacy fallback 削除後も公開 Article の範囲は durable key
+ベースの RangeResolution だけでカバーされるため、テスト結果が変わらないこと。
+
 ---
 
 ## Final Verification Matrix
