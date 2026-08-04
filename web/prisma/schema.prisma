@@ -193,6 +193,53 @@ enum LawBookRangeType {
   entire_document
 }
 
+enum LawRefreshTrigger {
+  scheduled
+  manual
+}
+
+enum LawRefreshRunStatus {
+  running
+  succeeded
+  partial
+  failed
+}
+
+enum LawRefreshLawStatus {
+  unchanged
+  updated
+  held
+  failed
+}
+
+enum LawRefreshPhase {
+  checking
+  fetching
+  parsing
+  diffing
+  verifying
+  activating
+  completed
+}
+
+enum ArticleRevisionMappingKind {
+  unchanged
+  modified
+  renumbered
+  removed
+}
+
+enum ArticleRevisionMappingStatus {
+  automatic
+  verified
+  ambiguous
+}
+
+enum LawBookRangeResolutionStatus {
+  resolved
+  blocked
+}
+
 // ─── 法令パッケージ（署名付き配布単位） ───
 
 model LawPackage {
@@ -207,6 +254,7 @@ model LawPackage {
   status           LawPackageStatus @default(draft)
   createdAt        DateTime         @default(now())
   revisions        LawRevision[]
+  refreshRun       LawRefreshRun?
 
   @@index([status, effectiveAt])
 }
@@ -214,7 +262,7 @@ model LawPackage {
 // ─── 法令リビジョン（改正単位ごとの法令スナップショット） ───
 
 model LawRevision {
-  id                 String            @id @default(cuid())
+  id                 String                        @id @default(cuid())
   lawId              String
   packageId          String
   officialVersionKey String
@@ -225,13 +273,19 @@ model LawRevision {
   sourceUrl          String
   xmlStorageKey      String
   xmlChecksum        String
-  status             LawRevisionStatus @default(staged)
-  createdAt          DateTime          @default(now())
+  status             LawRevisionStatus             @default(staged)
+  sourceUpdatedAt    DateTime?
+  repealStatus       String?
+  repealDate         DateTime?
+  createdAt          DateTime                      @default(now())
   articles           Article[]
-  currentForLaw      Law?              @relation("CurrentLawRevision")
+  mappingsFrom       ArticleRevisionMapping[]      @relation("ArticleRevisionMappingFromRevision")
+  mappingsTo         ArticleRevisionMapping[]      @relation("ArticleRevisionMappingToRevision")
+  currentForLaw      Law?                          @relation("CurrentLawRevision")
   lawBookEntries     LawBookEntry[]
-  law                Law               @relation("LawRevisions", fields: [lawId], references: [id])
-  package            LawPackage        @relation(fields: [packageId], references: [id])
+  rangeResolutions   LawBookEntryRangeResolution[]
+  law                Law                           @relation("LawRevisions", fields: [lawId], references: [id])
+  package            LawPackage                    @relation(fields: [packageId], references: [id])
 
   @@unique([lawId, officialVersionKey])
   @@index([lawId, status, effectiveFrom])
@@ -241,19 +295,22 @@ model LawRevision {
 // ─── 法令 ───
 
 model Law {
-  id                String             @id @default(cuid())
-  egovLawId         String             @unique // e-Gov法令ID（例: "325AC0000000201"）。export/importのstable key
+  id                String                   @id @default(cuid())
+  egovLawId         String                   @unique // e-Gov法令ID（例: "325AC0000000201"）。export/importのstable key
   name              String // 正式名称: 建築基準法, 建築基準法施行令
   shortName         String? // 略称: 建基法, 建基令（建築業界標準）
   category          RegulationCategory // 法規種別（傍注アイコン準拠）
-  currentRevisionId String?            @unique // 現在有効なリビジョンID（実DB統合）
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  currentRevisionId String?                  @unique // 現在有効なリビジョンID（実DB統合）
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
   articles          Article[]
-  currentRevision   LawRevision?       @relation("CurrentLawRevision", fields: [currentRevisionId], references: [id])
+  articleMappings   ArticleRevisionMapping[] @relation("ArticleRevisionMappingLaw")
+  currentRevision   LawRevision?             @relation("CurrentLawRevision", fields: [currentRevisionId], references: [id])
   lawBookEntries    LawBookEntry[]
-  revisions         LawRevision[]      @relation("LawRevisions")
+  refreshResults    LawRefreshLawResult[]
+  revisions         LawRevision[]            @relation("LawRevisions")
   sectionRules      SectionRule[]
+  syncState         LawSyncState?
 
   @@index([category])
   @@index([shortName])
@@ -303,7 +360,9 @@ model Article {
   // リビジョン管理（実DB統合）
   lawRevisionId   String // 所属リビジョンID
   stableNodeKey   String // リビジョン内安定キー（XMLノード対応）
+  durableNodeKey  String?
   contentChecksum String // 本文チェックサム（差分検出用）
+  bodyChecksum    String?
   inlineMarkup    Json?       @db.Json // インラインマークアップ（注記・ルビ等）
   tableMetadata   Json?       @db.Json // テーブル構造メタデータ
   lawRevision     LawRevision @relation(fields: [lawRevisionId], references: [id])
@@ -315,6 +374,8 @@ model Article {
   relatedCandidatesTo    RelatedArticleCandidate[]  @relation("RelatedCandidateTarget")
   confirmedRelationsFrom ConfirmedArticleRelation[] @relation("ConfirmedRelationSource")
   confirmedRelationsTo   ConfirmedArticleRelation[] @relation("ConfirmedRelationTarget")
+  mappingsFrom           ArticleRevisionMapping[]   @relation("ArticleRevisionMappingFromArticle")
+  mappingsTo             ArticleRevisionMapping[]   @relation("ArticleRevisionMappingToArticle")
 
   // ハイライト
   systemHighlights SystemHighlight[]
@@ -802,7 +863,7 @@ model LawBookEntry {
 
 // 法書項目の範囲（条文範囲・ページ範囲）
 model LawBookEntryRange {
-  id                    String                    @id @default(cuid())
+  id                    String                        @id @default(cuid())
   lawBookEntryId        String
   rangeType             LawBookRangeType
   startStableNodeKey    String?
@@ -811,13 +872,107 @@ model LawBookEntryRange {
   officialCitationEnd   String?
   inclusionReason       String?
   sortOrder             Int
-  verificationStatus    LawBookVerificationStatus @default(planned)
+  verificationStatus    LawBookVerificationStatus     @default(planned)
   verifiedAt            DateTime?
   verifiedBy            String?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @default(now()) @updatedAt
-  lawBookEntry          LawBookEntry              @relation(fields: [lawBookEntryId], references: [id], onDelete: Cascade)
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @default(now()) @updatedAt
+  lawBookEntry          LawBookEntry                  @relation(fields: [lawBookEntryId], references: [id], onDelete: Cascade)
+  resolutions           LawBookEntryRangeResolution[]
 
   @@unique([lawBookEntryId, sortOrder])
   @@index([lawBookEntryId, verificationStatus])
+}
+
+model LawRefreshRun {
+  id          String                @id @default(cuid())
+  targetDate  DateTime              @db.Date
+  trigger     LawRefreshTrigger
+  status      LawRefreshRunStatus   @default(running)
+  startedAt   DateTime              @default(now())
+  completedAt DateTime?
+  summary     Json?
+  packageId   String?               @unique
+  package     LawPackage?           @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  results     LawRefreshLawResult[]
+
+  @@index([targetDate, startedAt])
+}
+
+model LawRefreshLawResult {
+  id                  String              @id @default(cuid())
+  runId               String
+  lawId               String
+  previousRevisionId  String?
+  candidateRevisionId String?
+  observedVersionKey  String?
+  status              LawRefreshLawStatus
+  phase               LawRefreshPhase
+  diffSummary         Json?
+  errorCode           String?
+  errorDetail         String?
+  startedAt           DateTime            @default(now())
+  completedAt         DateTime?
+  run                 LawRefreshRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  law                 Law                 @relation(fields: [lawId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, lawId])
+  @@index([lawId, startedAt])
+}
+
+model LawSyncState {
+  lawId                  String    @id
+  lastAttemptAt          DateTime?
+  lastSuccessfulCheckAt  DateTime?
+  lastUpdatedAt          DateTime?
+  lastObservedVersionKey String?
+  lastEgovUpdatedAt      DateTime?
+  lastErrorCode          String?
+  lastErrorDetail        String?
+  repealStatus           String?
+  repealDate             DateTime?
+  updatedAt              DateTime  @updatedAt
+  law                    Law       @relation(fields: [lawId], references: [id], onDelete: Cascade)
+}
+
+model ArticleRevisionMapping {
+  id             String                       @id @default(cuid())
+  lawId          String
+  fromRevisionId String
+  toRevisionId   String
+  fromArticleId  String
+  toArticleId    String?
+  kind           ArticleRevisionMappingKind
+  status         ArticleRevisionMappingStatus
+  method         String
+  rationale      String?
+  verifiedBy     String?
+  verifiedAt     DateTime?
+  createdAt      DateTime                     @default(now())
+  law            Law                          @relation("ArticleRevisionMappingLaw", fields: [lawId], references: [id], onDelete: Restrict)
+  fromRevision   LawRevision                  @relation("ArticleRevisionMappingFromRevision", fields: [fromRevisionId], references: [id], onDelete: Restrict)
+  toRevision     LawRevision                  @relation("ArticleRevisionMappingToRevision", fields: [toRevisionId], references: [id], onDelete: Restrict)
+  fromArticle    Article                      @relation("ArticleRevisionMappingFromArticle", fields: [fromArticleId], references: [id], onDelete: Restrict)
+  toArticle      Article?                     @relation("ArticleRevisionMappingToArticle", fields: [toArticleId], references: [id], onDelete: SetNull)
+
+  @@unique([fromRevisionId, toRevisionId, fromArticleId])
+  @@index([fromArticleId, status])
+  @@index([toArticleId])
+}
+
+model LawBookEntryRangeResolution {
+  id                  String                       @id @default(cuid())
+  lawBookEntryRangeId String
+  lawRevisionId       String
+  startDurableNodeKey String?
+  endDurableNodeKey   String?
+  status              LawBookRangeResolutionStatus
+  errorCode           String?
+  verifiedAt          DateTime?
+  createdAt           DateTime                     @default(now())
+  lawBookEntryRange   LawBookEntryRange            @relation(fields: [lawBookEntryRangeId], references: [id], onDelete: Cascade)
+  lawRevision         LawRevision                  @relation(fields: [lawRevisionId], references: [id], onDelete: Restrict)
+
+  @@unique([lawBookEntryRangeId, lawRevisionId])
+  @@index([lawRevisionId, status])
 }
