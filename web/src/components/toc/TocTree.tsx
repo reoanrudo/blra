@@ -161,12 +161,11 @@ export default function TocTree({
         // 先にDOM直接操作でハイライトを切り替える。
         applyHighlightDirect(containerRef.current, articleId);
 
-        // ── React State更新は次フレームに遅延 ──
-        // DOMは既に更新済みなので、React再描画は追従確認するだけ。
-        // 右パネル・適用バー等の更新はここで行われる。
-        requestAnimationFrame(() => {
-          scrollState?.activateArticle(articleId);
-        });
+        // ── React State更新（スクロール追従・右パネル等の同期用） ──
+        // DOM直接操作でハイライトは既に切り替わっている。
+        // ここで React State も更新し、スクロール追従と右パネル等を同期させる。
+        // FullLawViewer は memo 化済みなので再描画コストは軽い。
+        scrollState?.activateArticle(articleId);
         return;
       }
 
