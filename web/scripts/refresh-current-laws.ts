@@ -319,6 +319,7 @@ async function main(): Promise<number> {
         trigger: "manual",
         mode,
         lawIds: cliArgs.lawIds.length > 0 ? cliArgs.lawIds : undefined,
+        reviewDir: cliArgs.reviewDir,
       },
       deps,
     );
