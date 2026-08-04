@@ -93,7 +93,7 @@ e-Govは条文差分ファイルではなく法令全文を返すため、変更
 
 ### 6.1 排他と実行記録
 
-更新処理は一意なrun IDを作り、PostgreSQL advisory lockで同時実行を防ぐ。各runは開始日時、終了日時、起動元（scheduled/manual）、対象日、成功・無変更・保留・失敗件数を記録する。
+更新処理は一意なrun IDを作り、PostgreSQL advisory lockで同時実行を防ぐ。更新runと法令別結果を永続化するモデルを追加し、各runの開始日時、終了日時、起動元（scheduled/manual）、対象日、成功・無変更・保留・失敗件数を記録する。法令別結果には旧版、新版候補、処理段階、差分件数、公開可否、エラーコードを持たせる。
 
 同じe-Gov版番号とXMLチェックサムを再処理しても重複RevisionやArticleを作らない冪等処理にする。
 
@@ -115,7 +115,7 @@ e-Govは条文差分ファイルではなく法令全文を返すため、変更
 
 ### 6.4 ステージング
 
-1回の更新runを1つの `LawPackage` として記録し、manifestへ各法令の旧版、新版、原本チェックサム、差分要約、検証結果を含める。公開リポジトリへ署名鍵やDB接続情報を保存しない。
+1回の更新runを1つの `LawPackage` として記録し、manifestへ各法令の旧版、新版、原本チェックサム、差分要約、検証結果を含める。検証完了後にmanifest checksumと署名を確定し、署名済みmanifestと実際のステージング内容が一致する場合だけpackageを `verified` にする。公開リポジトリへ署名鍵やDB接続情報を保存しない。
 
 変更法令ごとに新しい `LawRevision(status=staged)` とArticleスナップショットを作る。既存RevisionとArticleは上書き・物理削除しない。
 
@@ -165,7 +165,7 @@ e-Govは条文差分ファイルではなく法令全文を返すため、変更
 
 ## 8. URLと利用者データの保全
 
-旧Article IDと新Article IDの対応をRevision間マッピングとして保存する。対応種別は `unchanged`、`modified`、`renumbered`、`removed` を区別し、根拠、照合方法、確認状態を保持する。
+旧Article IDと新Article IDの対応を、旧Revision・新Revision・旧Article・新Articleを明示したRevision間マッピングとして永続化する。旧Articleから同じ新Revisionへの確定マッピングは最大1件とする。対応種別は `unchanged`、`modified`、`renumbered`、`removed` を区別し、根拠、照合方法、確認状態を保持する。
 
 - unchanged / modified: 古いURLから現行Articleへ転送する
 - renumbered: 確定済み対応だけ転送する
@@ -188,7 +188,9 @@ Article IDの新規生成ではXML走査順の連番を永続同一性として�
 
 確認済み関連条文はRevision境界を越えて自動継承しない。sourceまたはtargetのchecksumが変わった関係は既存方針どおり失効・再確認対象とする。
 
-`LawBookEntryRange` は書籍カタログの公式引用範囲を根拠として保持する。新Revisionでは `officialCitationStart` / `officialCitationEnd` とdurable keyから範囲を再解決する。既に検証済みの範囲が1件でも解決不能または曖昧なら、その法令を公開しない。未検証の抄録105件へ推測範囲を新規登録しない。
+`LawBookEntryRange` は書籍カタログの公式引用範囲を根拠として保持し、旧Revision用の `startStableNodeKey` / `endStableNodeKey` を新Revisionの値で上書きしない。新Revisionごとの解決結果を別の範囲解決レコードへ保存し、元Range、対象Revision、解決した開始・終了durable key、検証状態を関連付ける。
+
+新Revisionでは `officialCitationStart` / `officialCitationEnd` とdurable keyから範囲を再解決する。既に検証済みの範囲が1件でも解決不能または曖昧なら、その法令を公開しない。未検証の抄録105件へ推測範囲を新規登録しない。
 
 ## 10. 検証ゲート
 
@@ -241,7 +243,7 @@ e-Govのタイムアウト、HTTPエラー、不正XML、差分の曖昧さ、�
 ## 12. 自動運用と管理操作
 
 - 実行時刻: 毎日04:00 JST
-- 起動元: 公開環境のスケジューラーと管理者の手動操作
+- 起動元: 公開環境のスケジューラーと認証済み管理者の手動操作
 - e-Gov照会: 少数並列、timeout、指数backoff、最大試行回数あり
 - 排他: DB advisory lock
 - 結果: run単位・法令単位の監査ログ
@@ -264,7 +266,7 @@ e-Govのタイムアウト、HTTPエラー、不正XML、差分の曖昧さ、�
 
 最終確認に失敗している場合、「最新版」と断定しない。最後に検証できた版と、確認失敗日時を区別する。e-Gov公式画面へのリンクは維持する。
 
-管理画面または管理者専用操作には次を表示する。
+管理画面または管理者専用操作には次を表示する。更新起動と内部エラー詳細を返す経路は、一般公開APIにしない。
 
 - 今すぐ確認
 - 最新runの実行状態
@@ -332,7 +334,7 @@ e-Govのタイムアウト、HTTPエラー、不正XML、差分の曖昧さ、�
 
 実装計画では、次をコードとmigrationの具体的な単位へ分解する。
 
-- 更新run・法令別状態・Article対応表のPrismaモデル名と制約
+- 更新run・法令別状態・Article対応表・Revision別範囲解決表のPrismaモデル名と制約
 - durable key生成規則のタグ別詳細
 - 大幅変更を保留するガードレールの初期値
 - 公開クエリをカタログ所属とcurrentRevisionへ分離する共通SQL
