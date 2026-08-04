@@ -24,7 +24,9 @@
     "lawbook:verify": "npx tsx scripts/verify-law-book.ts",
     "lawbook:current:keygen": "npx tsx scripts/generate-law-package-signing-key.ts",
     "lawbook:current:check": "npx tsx scripts/refresh-current-laws.ts check",
-    "lawbook:current:refresh": "npx tsx scripts/refresh-current-laws.ts refresh"
+    "lawbook:current:refresh": "npx tsx scripts/refresh-current-laws.ts refresh",
+    "lawbook:current:backfill": "npx tsx scripts/backfill-current-law-durable-keys.ts",
+    "lawbook:current:verify": "npx tsx scripts/verify-current-laws.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
