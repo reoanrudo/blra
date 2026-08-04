@@ -37,6 +37,9 @@ reference/hourei-rag/
 # 取込パイプラインの原本XML（再取得可能）
 data/raw/
 
+# e-Gov現行版XMLの不変store（再取得可能・チェックサムで一意）
+web/var/law-xml/
+
 # brainstorm visual companion
 .superpowers/
 
