@@ -283,17 +283,16 @@ async function main(): Promise<void> {
       await prisma.$executeRawUnsafe(
         `INSERT INTO "LawBookEntry" (
            "id", "editionId", "lawId", "lawRevisionId", "displayOrder", "inclusionMode",
-           "printedTitle", "printedPage", "catalogSourceLocator", "verificationStatus",
+           "printedTitle", "catalogSourceLocator", "verificationStatus",
            "verificationNote", "sourceUrl", "sourceStorageKey", "sourceChecksum",
            "sourceFetchedAt", "articleCount"
-         ) VALUES ($1, $2, $3, $4, $5, $6::"LawBookInclusionMode", $7, $8, $9,
-           $10::"LawBookVerificationStatus", $11, $12, $13, $14, $15::timestamp, $16)
+         ) VALUES ($1, $2, $3, $4, $5, $6::"LawBookInclusionMode", $7, $8,
+           $9::"LawBookVerificationStatus", $10, $11, $12, $13, $14::timestamp, $15)
          ON CONFLICT ("editionId", "lawId") DO UPDATE SET
            "lawRevisionId" = EXCLUDED."lawRevisionId",
            "displayOrder" = EXCLUDED."displayOrder",
            "inclusionMode" = EXCLUDED."inclusionMode",
            "printedTitle" = EXCLUDED."printedTitle",
-           "printedPage" = EXCLUDED."printedPage",
            "verificationStatus" = EXCLUDED."verificationStatus",
            "verificationNote" = EXCLUDED."verificationNote",
            "sourceUrl" = EXCLUDED."sourceUrl",
@@ -309,8 +308,7 @@ async function main(): Promise<void> {
         entry.displayOrder,
         entry.inclusionMode,
         entry.printedTitle,
-        entry.printedPage,
-        `総目次 p.${entry.printedPage}`,
+        `総目次`,
         verificationStatus,
         entry.inclusionMode === "excerpt" ? "抄録の条番号範囲は要二次照合" : null,
         officialLawDataUrl(entry.egovLawId),

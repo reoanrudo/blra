@@ -4,9 +4,8 @@ const EDITION_KEY = "ksk-2026";
 const CIVIL_CODE_EGOV_ID = "129AC0000000089";
 const VERIFIED_BY = "operator:ocr-20260728";
 
-interface PrintedArticleEvidence {
+interface ArticleEvidence {
   articleNumberNormalized: string;
-  printedPages: number[];
   evidenceFiles: string[];
 }
 
@@ -16,88 +15,87 @@ interface ArticleRow {
   articleNumberNormalized: string;
 }
 
-const pageEvidence = {
-  1242: "1785240027901.jpg",
-  1243: "1785240027879.jpg",
-  1244: "1785240027853.jpg",
-  1245: "1785240027828.jpg",
-  1246: "1785240027801.jpg",
-  1247: "1785240027745.jpg",
-  1248: "1785240158168.jpg",
-  1249: "1785240158129.jpg",
+const SOURCE_IMAGES = {
+  a: "1785240027901.jpg",
+  b: "1785240027879.jpg",
+  c: "1785240027853.jpg",
+  d: "1785240027828.jpg",
+  e: "1785240027801.jpg",
+  f: "1785240027745.jpg",
+  g: "1785240158168.jpg",
+  h: "1785240158129.jpg",
 } as const;
 
-function evidence(articleNumberNormalized: string, ...printedPages: Array<keyof typeof pageEvidence>): PrintedArticleEvidence {
-  return {
-    articleNumberNormalized,
-    printedPages,
-    evidenceFiles: printedPages.map((page) => pageEvidence[page]),
-  };
+function evidence(
+  articleNumberNormalized: string,
+  ...evidenceFiles: string[]
+): ArticleEvidence {
+  return { articleNumberNormalized, evidenceFiles };
 }
 
-/** 紙面p.1242〜1249を目視とOCRで二重確認した掲載順。 */
-export const CIVIL_CODE_PRINTED_ARTICLES: PrintedArticleEvidence[] = [
-  evidence("1", 1242),
-  evidence("206", 1242),
-  evidence("207", 1242),
-  evidence("209", 1242),
-  evidence("210", 1242),
-  evidence("211", 1242),
-  evidence("212", 1242),
-  evidence("213", 1242, 1243),
-  evidence("213の2", 1243),
-  evidence("213の3", 1243),
-  evidence("214", 1243),
-  evidence("215", 1243),
-  evidence("216", 1243),
-  evidence("217", 1243),
-  evidence("218", 1243),
-  evidence("219", 1243),
-  evidence("220", 1243, 1244),
-  evidence("221", 1244),
-  evidence("222", 1244),
-  evidence("223", 1244),
-  evidence("224", 1244),
-  evidence("225", 1244),
-  evidence("226", 1244),
-  evidence("227", 1244),
-  evidence("228", 1244),
-  evidence("229", 1244),
-  evidence("230", 1244),
-  evidence("231", 1244),
-  evidence("232", 1244),
-  evidence("233", 1244, 1245),
-  evidence("234", 1245),
-  evidence("235", 1245),
-  evidence("236", 1245),
-  evidence("237", 1245),
-  evidence("238", 1245),
-  evidence("264の2", 1245),
-  evidence("264の3", 1245),
-  evidence("264の8", 1245, 1246),
-  evidence("264の9", 1246),
-  evidence("264の10", 1246),
-  evidence("264の14", 1246),
-  evidence("415", 1246),
-  evidence("541", 1247),
-  evidence("542", 1247),
-  evidence("543", 1247),
-  evidence("559", 1247),
-  evidence("562", 1247),
-  evidence("563", 1247, 1248),
-  evidence("564", 1248),
-  evidence("565", 1248),
-  evidence("566", 1248),
-  evidence("567", 1248),
-  evidence("632", 1248),
-  evidence("633", 1248),
-  evidence("634", 1248),
-  evidence("635", 1249),
-  evidence("636", 1249),
-  evidence("637", 1249),
-  evidence("641", 1249),
-  evidence("642", 1249),
-  evidence("709", 1249),
+/** 目視とOCRで二重確認した掲載順。 */
+export const CIVIL_CODE_ARTICLE_EVIDENCE: ArticleEvidence[] = [
+  evidence("1", SOURCE_IMAGES.a),
+  evidence("206", SOURCE_IMAGES.a),
+  evidence("207", SOURCE_IMAGES.a),
+  evidence("209", SOURCE_IMAGES.a),
+  evidence("210", SOURCE_IMAGES.a),
+  evidence("211", SOURCE_IMAGES.a),
+  evidence("212", SOURCE_IMAGES.a),
+  evidence("213", SOURCE_IMAGES.a, SOURCE_IMAGES.b),
+  evidence("213の2", SOURCE_IMAGES.b),
+  evidence("213の3", SOURCE_IMAGES.b),
+  evidence("214", SOURCE_IMAGES.b),
+  evidence("215", SOURCE_IMAGES.b),
+  evidence("216", SOURCE_IMAGES.b),
+  evidence("217", SOURCE_IMAGES.b),
+  evidence("218", SOURCE_IMAGES.b),
+  evidence("219", SOURCE_IMAGES.b),
+  evidence("220", SOURCE_IMAGES.b, SOURCE_IMAGES.c),
+  evidence("221", SOURCE_IMAGES.c),
+  evidence("222", SOURCE_IMAGES.c),
+  evidence("223", SOURCE_IMAGES.c),
+  evidence("224", SOURCE_IMAGES.c),
+  evidence("225", SOURCE_IMAGES.c),
+  evidence("226", SOURCE_IMAGES.c),
+  evidence("227", SOURCE_IMAGES.c),
+  evidence("228", SOURCE_IMAGES.c),
+  evidence("229", SOURCE_IMAGES.c),
+  evidence("230", SOURCE_IMAGES.c),
+  evidence("231", SOURCE_IMAGES.c),
+  evidence("232", SOURCE_IMAGES.c),
+  evidence("233", SOURCE_IMAGES.c, SOURCE_IMAGES.d),
+  evidence("234", SOURCE_IMAGES.d),
+  evidence("235", SOURCE_IMAGES.d),
+  evidence("236", SOURCE_IMAGES.d),
+  evidence("237", SOURCE_IMAGES.d),
+  evidence("238", SOURCE_IMAGES.d),
+  evidence("264の2", SOURCE_IMAGES.d),
+  evidence("264の3", SOURCE_IMAGES.d),
+  evidence("264の8", SOURCE_IMAGES.d, SOURCE_IMAGES.e),
+  evidence("264の9", SOURCE_IMAGES.e),
+  evidence("264の10", SOURCE_IMAGES.e),
+  evidence("264の14", SOURCE_IMAGES.e),
+  evidence("415", SOURCE_IMAGES.e),
+  evidence("541", SOURCE_IMAGES.f),
+  evidence("542", SOURCE_IMAGES.f),
+  evidence("543", SOURCE_IMAGES.f),
+  evidence("559", SOURCE_IMAGES.f),
+  evidence("562", SOURCE_IMAGES.f),
+  evidence("563", SOURCE_IMAGES.f, SOURCE_IMAGES.g),
+  evidence("564", SOURCE_IMAGES.g),
+  evidence("565", SOURCE_IMAGES.g),
+  evidence("566", SOURCE_IMAGES.g),
+  evidence("567", SOURCE_IMAGES.g),
+  evidence("632", SOURCE_IMAGES.g),
+  evidence("633", SOURCE_IMAGES.g),
+  evidence("634", SOURCE_IMAGES.g),
+  evidence("635", SOURCE_IMAGES.h),
+  evidence("636", SOURCE_IMAGES.h),
+  evidence("637", SOURCE_IMAGES.h),
+  evidence("641", SOURCE_IMAGES.h),
+  evidence("642", SOURCE_IMAGES.h),
+  evidence("709", SOURCE_IMAGES.h),
 ];
 
 export async function seedVerifiedExcerptRanges(prisma: PrismaClient): Promise<number> {
@@ -125,7 +123,7 @@ export async function seedVerifiedExcerptRanges(prisma: PrismaClient): Promise<n
   if (entryIds.size !== 1) throw new Error(`民法（抄）のEntryが一意ではありません: ${entryIds.size}`);
   const entryId = rows[0].entryId;
   const articleByNumber = new Map(rows.map((row) => [row.articleNumberNormalized, row]));
-  const missing = CIVIL_CODE_PRINTED_ARTICLES.filter(
+  const missing = CIVIL_CODE_ARTICLE_EVIDENCE.filter(
     (item) => !articleByNumber.has(item.articleNumberNormalized),
   );
   if (missing.length > 0) {
@@ -139,12 +137,9 @@ export async function seedVerifiedExcerptRanges(prisma: PrismaClient): Promise<n
       entryId,
     );
 
-    for (const [index, item] of CIVIL_CODE_PRINTED_ARTICLES.entries()) {
+    for (const [index, item] of CIVIL_CODE_ARTICLE_EVIDENCE.entries()) {
       const article = articleByNumber.get(item.articleNumberNormalized)!;
       const citation = `民法第${item.articleNumberNormalized}条`;
-      const pageLabel = item.printedPages.length === 1
-        ? `p.${item.printedPages[0]}`
-        : `p.${item.printedPages[0]}-${item.printedPages[item.printedPages.length - 1]}`;
       await tx.$executeRawUnsafe(
         `INSERT INTO "LawBookEntryRange" (
            id, "lawBookEntryId", "rangeType", "startStableNodeKey", "endStableNodeKey",
@@ -156,7 +151,7 @@ export async function seedVerifiedExcerptRanges(prisma: PrismaClient): Promise<n
         entryId,
         article.stableNodeKey,
         citation,
-        `紙面${pageLabel}（${item.evidenceFiles.join(", ")}）`,
+        `検証画像（${item.evidenceFiles.join(", ")}）`,
         index + 1,
         VERIFIED_BY,
       );
@@ -170,10 +165,10 @@ export async function seedVerifiedExcerptRanges(prisma: PrismaClient): Promise<n
            "updatedAt" = CURRENT_TIMESTAMP
        WHERE id = $1`,
       entryId,
-      "紙面p.1242-1249照合済み。掲載61条を個別Range化。第638条から第640条までは紙面上『削除』表示のためArticle Rangeなし。",
+      "収録範囲照合済み。掲載61条を個別Range化。第638条から第640条までは原典上「削除」表示のためArticle Rangeなし。",
       VERIFIED_BY,
     );
   });
 
-  return CIVIL_CODE_PRINTED_ARTICLES.length;
+  return CIVIL_CODE_ARTICLE_EVIDENCE.length;
 }
