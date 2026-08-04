@@ -1498,7 +1498,7 @@ git commit -m "fix(refresh): isolate current revision derived data"
 - Produces: `resolveArticleRoute(articleId: string, repository?: ArticleSuccessorRepository): Promise<ArticleRouteResolution>`
 - Produces: `getHistoricalArticleWithTree(articleId: string): Promise<HistoricalArticleDocument | null>`
 
-- [ ] **Step 1: 複数Revisionをまたぐ後継解決と循環拒否の失敗テストを書く**
+- [x] **Step 1: 複数Revisionをまたぐ後継解決と循環拒否の失敗テストを書く**
 
 ```typescript
 it("rev1からrev3の現行Articleまで対応表をたどる", async () => {
@@ -1520,13 +1520,13 @@ it("mapping循環を内部エラーとして拒否する", async () => {
 });
 ```
 
-- [ ] **Step 2: module未作成で失敗することを確認する**
+- [x] **Step 2: module未作成で失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/article-successor.test.ts`
 
 Expected: import error。
 
-- [ ] **Step 3: route resolutionを実装する**
+- [x] **Step 3: route resolutionを実装する**
 
 ```typescript
 export type ArticleRouteResolution =
@@ -1539,15 +1539,15 @@ export type ArticleRouteResolution =
 
 Articleが `Law.currentRevisionId` 所属ならcurrent。確定mappingを最大120hopまでたどり、current所属のtoArticleへ着けばredirect。`removed` またはtoArticleId nullならremoved。mapping未確定ならhistorical。visited setで循環を拒否する。
 
-- [ ] **Step 4: 記事pageへ転送と履歴表示を組み込む**
+- [x] **Step 4: 記事pageへ転送と履歴表示を組み込む**
 
 `page.tsx` は本文取得前にresolutionを求める。redirectは `permanentRedirect(readerArticleHref(articleId))`。removed/historicalは現行scopeを迂回する読み取り専用repositoryから旧Article subtree、法令名、公式版番号、施行日を取得し、`HistoricalArticleNotice` で「削除済み」または「現行条文との対応未確認」を表示する。編集・ハイライト作成操作は出さない。
 
-- [ ] **Step 5: 保存済み利用者データが旧Articleのままである統合テストを書く**
+- [x] **Step 5: 保存済み利用者データが旧Articleのままである統合テストを書く**
 
 旧ArticleへUserHighlightとArticleAnnotationを作り、後継mapping作成後も両recordの `articleId` と `snapshotLawRevisionId` が変わらないことをassertする。
 
-- [ ] **Step 6: URL/履歴テストを通す**
+- [x] **Step 6: URL/履歴テストを通す**
 
 Run:
 
@@ -1559,7 +1559,7 @@ npx tsc --noEmit
 
 Expected: 全PASS。
 
-- [ ] **Step 7: 旧URL対応をコミットする**
+- [x] **Step 7: 旧URL対応をコミットする**
 
 ```bash
 git add web/src/lib/law-refresh/article-successor.ts web/src/components/article/HistoricalArticleNotice.tsx web/src/app/articles/'[id]'/page.tsx web/src/lib/article/article.ts web/src/__tests__/article-successor.test.ts web/src/__tests__/integration/current-law-old-url.test.ts web/e2e/current-law-refresh.spec.ts

@@ -367,3 +367,86 @@ export async function getChapterArticlesWithTrees(
 
   return { articles, scopeAncestor };
 }
+
+// ─── 旧 Revision 履歴表示（Task 13） ───
+
+/**
+ * 旧 Revision 所属 Article の履歴表示用ドキュメント。
+ *
+ * removed / historical のいずれかで表示する際、現行スコープを迂回して旧本文を
+ * 読み出すために使う。編集・ハイライト作成操作は出さない読み取り専用データ。
+ */
+export interface HistoricalArticleDocument {
+  /** 旧 Article の subtree（root + 子孫）。ArticleRow と同じ形状。 */
+  tree: ArticleRow[];
+  /** 法令名（Law.name）。 */
+  lawName: string;
+  /** 旧 Article が属する LawRevision の公式版キー（LawRevision.officialVersionKey）。 */
+  officialVersionKey: string;
+  /** 旧 Article が属する LawRevision の施行日（LawRevision.effectiveFrom、ISO 文字列）。 */
+  effectiveFrom: string | null;
+}
+
+/**
+ * 現行スコープを迂回して、旧 Revision 所属 Article の subtree を読み出す。
+ *
+ * 計画書 Task 13 Step 4 の要件:
+ * - deletedAt に関係なく旧 Revision の Article を取得する（改正で削除された条も表示）。
+ * - LawBookEntry / Law.currentRevisionId のフィルタを適用しない（現行スコープ外）。
+ * - 法令名、公式版番号、施行日を併せて返す。
+ *
+ * getArticleWithTree と同じ再帰 CTE を使うが、LawBookEntry 結合と現行 Revision
+ * フィルタを除去している点が異なる。
+ *
+ * Article が存在しない、または Revision メタデータが取得できない場合は null。
+ */
+export async function getHistoricalArticleWithTree(
+  articleId: string,
+): Promise<HistoricalArticleDocument | null> {
+  const tree = await prisma.$queryRawUnsafe<ArticleRow[]>(
+    `
+    WITH RECURSIVE article_tree AS (
+      SELECT a.*, l.name AS "lawName", 0 AS depth,
+             ARRAY[a."sortOrder"] AS path
+      FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
+      WHERE a.id = $1
+
+      UNION ALL
+
+      SELECT a.*, at."lawName", at.depth + 1,
+             at.path || a."sortOrder"
+      FROM "Article" a
+      INNER JOIN article_tree at ON a."parentId" = at.id
+      WHERE a."lawRevisionId" = at."lawRevisionId"
+        AND a."deletedAt" IS NULL
+    )
+    SELECT * FROM article_tree ORDER BY path
+    `,
+    articleId,
+  );
+
+  if (tree.length === 0) return null;
+
+  const rootArticle = tree[0]!;
+  const revisionRows = await prisma.$queryRawUnsafe<
+    Array<{ officialVersionKey: string; effectiveFrom: Date | null }>
+  >(
+    `SELECT revision."officialVersionKey", revision."effectiveFrom"
+     FROM "LawRevision" revision
+     WHERE revision.id = $1
+     LIMIT 1`,
+    rootArticle.lawRevisionId,
+  );
+  const revision = revisionRows[0];
+  if (!revision) return null;
+
+  return {
+    tree,
+    lawName: rootArticle.lawName,
+    officialVersionKey: revision.officialVersionKey,
+    effectiveFrom: revision.effectiveFrom
+      ? revision.effectiveFrom.toISOString()
+      : null,
+  };
+}
