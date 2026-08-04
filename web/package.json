@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "test:integration": "vitest run src/__tests__/integration/",
     "test:e2e": "npx tsx scripts/e2e-law-book.ts",
     "test:e2e:browser": "playwright test",

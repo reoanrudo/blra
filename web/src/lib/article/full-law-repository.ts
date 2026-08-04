@@ -1,4 +1,8 @@
-import { buildFullLawToc } from "@/lib/article/full-law-document";
+import {
+  buildFullLawToc,
+  type FullLawRevisionMetadata,
+  type LawRefreshDisplayStatus,
+} from "@/lib/article/full-law-document";
 import type {
   FullLawDocument,
   FullLawNode,
@@ -15,13 +19,46 @@ interface RevisionMetadataRow {
   lawShortName: string | null;
   revisionId: string;
   editionKey: string;
-  sourceDate: string | null;
+  effectiveFrom: string;
+  sourceUpdatedAt: string | null;
+  fetchedAt: string;
+  lastSuccessfulCheckAt: string | null;
+  lastAttemptAt: string | null;
+  lastErrorCode: string | null;
+  repealStatus: string | null;
+  repealDate: string | null;
+}
+
+/**
+ * 表示用更新状態を判定する。
+ *
+ * - lastSuccessfulCheckAt が無ければ never_checked（一度も確認成功していない）
+ * - lastErrorCode があり、かつ最終試行が最終成功より新しければ check_failed
+ * - それ以外は verified
+ */
+function deriveRefreshStatus(row: RevisionMetadataRow): LawRefreshDisplayStatus {
+  if (!row.lastSuccessfulCheckAt) {
+    return "never_checked";
+  }
+  if (
+    row.lastErrorCode &&
+    row.lastAttemptAt &&
+    row.lastAttemptAt > row.lastSuccessfulCheckAt
+  ) {
+    return "check_failed";
+  }
+  return "verified";
 }
 
 /**
  * 指定 Revision のメタデータを取得する。
  * Task 11: 指定 Revision が Law.currentRevisionId と一致しない場合は null を返す。
  * LawBookEntry は (editionId, lawId) のカタログ所属のみを表し、Revision 結合はしない。
+ *
+ * Task 14: LawRevision の effectiveFrom/sourceUpdatedAt/fetchedAt と、
+ * LEFT JOIN した LawSyncState の確認状態（lastSuccessfulCheckAt/lastAttemptAt/
+ * lastErrorCode/repealStatus/repealDate）を取得する。
+ * LawSyncState が存在しない場合は全て null となり never_checked 扱い。
  */
 async function getRevisionMetadata(
   lawRevisionId: string,
@@ -34,7 +71,14 @@ async function getRevisionMetadata(
        law."shortName" AS "lawShortName",
        revision.id AS "revisionId",
        edition."editionKey",
-       to_char(edition."effectiveAsOf" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "sourceDate"
+       to_char(revision."effectiveFrom" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "effectiveFrom",
+       to_char(revision."sourceUpdatedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "sourceUpdatedAt",
+       to_char(revision."fetchedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "fetchedAt",
+       to_char(sync."lastSuccessfulCheckAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "lastSuccessfulCheckAt",
+       to_char(sync."lastAttemptAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "lastAttemptAt",
+       sync."lastErrorCode",
+       sync."repealStatus",
+       to_char(sync."repealDate" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "repealDate"
      FROM "LawRevision" revision
      JOIN "Law" law ON law.id = revision."lawId"
      JOIN "LawBookEntry" entry
@@ -44,6 +88,7 @@ async function getRevisionMetadata(
         WHERE edition_inner."editionKey" = $2
       )
      JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
+     LEFT JOIN "LawSyncState" sync ON sync."lawId" = law.id
      WHERE revision.id = $1
        AND law."currentRevisionId" = revision.id
        AND edition."editionKey" = $2
@@ -52,6 +97,30 @@ async function getRevisionMetadata(
     CURRENT_LAW_BOOK_EDITION_KEY,
   );
   return rows[0] ?? null;
+}
+
+/**
+ * Repository行からDTOのRevisionメタデータへ詰め替える。
+ * effectiveFrom は施行日（YYYY-MM-DD）を得るため、タイムゾーン込みの時刻から日付部を切り出す。
+ * 表示の正確性が最優先のため、値の欠落時は安全な既定値へ落とす。
+ */
+export function buildRevisionMetadata(
+  row: RevisionMetadataRow,
+): FullLawRevisionMetadata {
+  const effectiveFromDay = row.effectiveFrom?.slice(0, 10) ?? "";
+  return {
+    id: row.revisionId,
+    editionKey: row.editionKey,
+    effectiveFrom: effectiveFromDay,
+    sourceUpdatedAt: row.sourceUpdatedAt,
+    fetchedAt: row.fetchedAt,
+    lastSuccessfulCheckAt: row.lastSuccessfulCheckAt,
+    lastAttemptAt: row.lastAttemptAt,
+    refreshStatus: deriveRefreshStatus(row),
+    refreshErrorCode: row.lastErrorCode,
+    repealStatus: row.repealStatus,
+    repealDate: row.repealDate,
+  };
 }
 
 async function getRevisionNodes(
@@ -220,11 +289,7 @@ export async function getFullLawDocument(
       name: metadata.lawName,
       shortName: metadata.lawShortName,
     },
-    revision: {
-      id: metadata.revisionId,
-      editionKey: metadata.editionKey,
-      sourceDate: metadata.sourceDate,
-    },
+    revision: buildRevisionMetadata(metadata),
     toc: buildFullLawToc(nodes),
     nodes,
     linksBySource,
