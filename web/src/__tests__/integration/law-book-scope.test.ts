@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 const EDITION_KEY = "ksk-2026";
 const CIVIL_CODE_EGOV_ID = "129AC0000000089";
 
-const CIVIL_CODE_PRINTED_ARTICLES = [
+const CIVIL_CODE_ARTICLE_NUMBERS = [
   "1",
   "206",
   "207",
@@ -144,7 +144,7 @@ describe("2026年版の有効データ境界 (integration)", () => {
     expect(Number(rows[0].count)).toBe(0);
   });
 
-  it("民法（抄）は紙面1242〜1249頁の掲載61条だけをArticle Rangeに持つ", async () => {
+  it("民法（抄）は収録61条だけをArticle Rangeに持つ", async () => {
     if (!dbAvailable) return;
 
     const rows = await prisma.$queryRawUnsafe<Array<{ articleNumberNormalized: string }>>(
@@ -167,6 +167,6 @@ describe("2026年版の有効データ境界 (integration)", () => {
       CIVIL_CODE_EGOV_ID,
     );
 
-    expect(rows.map((row) => row.articleNumberNormalized)).toEqual(CIVIL_CODE_PRINTED_ARTICLES);
+    expect(rows.map((row) => row.articleNumberNormalized)).toEqual(CIVIL_CODE_ARTICLE_NUMBERS);
   });
 });

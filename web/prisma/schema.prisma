@@ -776,7 +776,6 @@ model LawBookEntry {
   sectionName          String?
   inclusionMode        LawBookInclusionMode
   printedTitle         String
-  printedPage          Int
   catalogSourceLocator String
   verificationStatus   LawBookVerificationStatus @default(planned)
   verificationNote     String?
@@ -800,7 +799,7 @@ model LawBookEntry {
   @@index([lawRevisionId])
 }
 
-// 法書項目の範囲（条文範囲・ページ範囲）
+// 法書項目の収録範囲
 model LawBookEntryRange {
   id                    String                    @id @default(cuid())
   lawBookEntryId        String
