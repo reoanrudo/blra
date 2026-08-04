@@ -20,6 +20,7 @@ function repository(
       lawName: "建築基準法",
       stableNodeKey: "article:20",
     }),
+    findCurrentRevisionId: async () => null,
     findRevisionIntervals: async () => [
       {
         id: "revision-2026",
