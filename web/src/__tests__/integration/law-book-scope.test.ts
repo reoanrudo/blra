@@ -89,9 +89,11 @@ afterAll(async () => {
 });
 
 describe("2026年版の有効データ境界 (integration)", () => {
-  it("収録台帳外のArticleが有効状態で残っていない", async () => {
+  it("収録台帳外（law単位）のArticleが有効状態で残っていない", async () => {
     if (!dbAvailable) return;
 
+    // 収録 law の current Article（Entry Revision と一致しない刷新版）は維持されるため、
+    // Revision 単位ではなく law 単位で収録外を判定する（Task 10 の不変要件）。
     const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
       `SELECT COUNT(*)::bigint AS count
        FROM "Article" a
@@ -102,7 +104,6 @@ describe("2026年版の有効データ境界 (integration)", () => {
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = $1
              AND e."lawId" = a."lawId"
-             AND e."lawRevisionId" = a."lawRevisionId"
          )`,
       EDITION_KEY,
     );
@@ -110,7 +111,7 @@ describe("2026年版の有効データ境界 (integration)", () => {
     expect(Number(rows[0].count)).toBe(0);
   });
 
-  it("収録台帳外のArticleを参照する解決済みLinkがない", async () => {
+  it("収録台帳外（law単位）のArticleを参照する解決済みLinkがない", async () => {
     if (!dbAvailable) return;
 
     const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
@@ -124,7 +125,6 @@ describe("2026年版の有効データ境界 (integration)", () => {
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = $1
              AND e."lawId" = source."lawId"
-             AND e."lawRevisionId" = source."lawRevisionId"
          )
          OR (
            link."isResolved" = true
@@ -135,7 +135,6 @@ describe("2026年版の有効データ境界 (integration)", () => {
              JOIN "LawBookEdition" edition ON edition.id = e."editionId"
              WHERE edition."editionKey" = $1
                AND e."lawId" = target."lawId"
-               AND e."lawRevisionId" = target."lawRevisionId"
            )
          )`,
       EDITION_KEY,

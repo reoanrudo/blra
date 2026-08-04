@@ -22,6 +22,7 @@ import {
   parseLawXml,
 } from "../src/lib/law-refresh/parse-law-xml";
 import type { ArticleRow } from "../src/lib/law-refresh/types";
+import { catalogRevisionForIngest } from "../src/lib/law-book/catalog-maintenance";
 import { LAWS, type LawConfig } from "./laws-config";
 
 // ─── Constants ───
@@ -296,24 +297,34 @@ async function insertArticleBatch(prisma: PrismaClient, batch: ArticleRow[]): Pr
  * seed-law-book -> ingest の標準手順で、取込後の台帳を実データと同期する。
  * seed 時点では Article がまだないため source_verified だが、正常に Article を
  * 保持できた時点で seed-law-book と同じ判定により structure_validated へ進める。
+ *
+ * catalog ingest は Law.currentRevisionId ではなく LawBookEntry.lawRevisionId
+ * （固定書籍版 baseline Revision）を対象にするため、本関数も Entry の Revision で
+ * 集計・更新する。現行 Revision は刷新プロセス（Tasks 4-8）が別途管理する。
  */
 async function synchronizeLawBookEntryAfterIngest(
   prisma: PrismaClient,
   lawId: string,
 ): Promise<void> {
-  const revisions = await prisma.$queryRawUnsafe<Array<{ id: string; articleCount: bigint }>>(
-    `SELECT l."currentRevisionId" AS id, COUNT(a.id)::bigint AS "articleCount"
-     FROM "Law" l
+  const entries = await prisma.$queryRawUnsafe<Array<{ id: string; revisionId: string; articleCount: bigint }>>(
+    `SELECT
+       e.id,
+       e."lawRevisionId" AS "revisionId",
+       COUNT(a.id)::bigint AS "articleCount"
+     FROM "LawBookEntry" e
+     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
      LEFT JOIN "Article" a
-       ON a."lawId" = l.id
-      AND a."lawRevisionId" = l."currentRevisionId"
+       ON a."lawId" = e."lawId"
+      AND a."lawRevisionId" = e."lawRevisionId"
       AND a."deletedAt" IS NULL
-     WHERE l.id = $1 AND l."currentRevisionId" IS NOT NULL
-     GROUP BY l."currentRevisionId"`,
+     WHERE e."lawId" = $1 AND e."lawRevisionId" IS NOT NULL
+     GROUP BY e.id, e."lawRevisionId"`,
     lawId,
   );
-  const revision = revisions[0];
-  if (!revision || Number(revision.articleCount) === 0) return;
+  const entry = entries[0];
+  if (!entry || Number(entry.articleCount) === 0) return;
+
+  const revisionId = catalogRevisionForIngest(entry.revisionId);
 
   await prisma.$transaction([
     prisma.$executeRawUnsafe(
@@ -323,14 +334,14 @@ async function synchronizeLawBookEntryAfterIngest(
            "updatedAt" = CURRENT_TIMESTAMP
        WHERE "lawId" = $1 AND "lawRevisionId" = $2`,
       lawId,
-      revision.id,
-      Number(revision.articleCount),
+      revisionId,
+      Number(entry.articleCount),
     ),
     prisma.$executeRawUnsafe(
       `UPDATE "LawRevision"
        SET "status" = 'active'
        WHERE id = $1`,
-      revision.id,
+      revisionId,
     ),
   ]);
 }
@@ -433,8 +444,30 @@ async function main() {
     for (const [egovId, parsed] of parsedByLaw) {
       const internalLawId = egovToInternal.get(egovId)!;
 
-      // 既存Articleがある場合はスキップ（冪等性確保）
-      const existingCount = await prisma.article.count({ where: { lawId: internalLawId, deletedAt: null } });
+      // catalog ingest は Law.currentRevisionId ではなく LawBookEntry.lawRevisionId
+      // （固定書籍版 baseline Revision）へ Article を投入する。
+      const entryRevisionRows = await prisma.$queryRawUnsafe<Array<{ revisionId: string; articleCount: bigint }>>(
+        `SELECT e."lawRevisionId" AS "revisionId",
+                COUNT(a.id)::bigint AS "articleCount"
+         FROM "LawBookEntry" e
+         JOIN "LawBookEdition" edition ON edition.id = e."editionId"
+         LEFT JOIN "Article" a
+           ON a."lawId" = e."lawId"
+          AND a."lawRevisionId" = e."lawRevisionId"
+          AND a."deletedAt" IS NULL
+         WHERE e."lawId" = $1 AND e."lawRevisionId" IS NOT NULL
+         GROUP BY e."lawRevisionId"`,
+        internalLawId,
+      );
+      const entryRevision = entryRevisionRows[0]?.revisionId;
+      if (!entryRevision) {
+        throw new Error(`${parsed.config.egovLawId}: LawBookEntry.lawRevisionId がありません。先にseed-law-book.tsを実行してください`);
+      }
+      const revisionId = catalogRevisionForIngest(entryRevision);
+      const existingCount = Number(entryRevisionRows[0]?.articleCount ?? 0);
+
+      // 対象 Revision に既に Article がある場合はスキップ（Revision 単位の冪等性）。
+      // Law 全体の current Article 数ではなく Entry Revision の件数で判定する。
       if (existingCount > 0) {
         totalSkipped += parsed.rows.length;
         console.log(`  ${parsed.config.shortName.padEnd(14)} スキップ (既存 ${existingCount} 行)`);
@@ -443,14 +476,6 @@ async function main() {
       }
 
       // lawId を一時IDから内部IDに置換
-      const revisions = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-        'SELECT "currentRevisionId" AS id FROM "Law" WHERE id = $1 AND "currentRevisionId" IS NOT NULL',
-        internalLawId,
-      );
-      const revisionId = revisions[0]?.id;
-      if (!revisionId) {
-        throw new Error(`${parsed.config.egovLawId}: currentRevisionIdがありません。先にseed-law-book.tsを実行してください`);
-      }
       for (const r of parsed.rows) {
         r.lawId = internalLawId;
         r.lawRevisionId = revisionId;
