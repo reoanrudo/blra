@@ -18,6 +18,7 @@ import {
 import { LAWS } from "./laws-config";
 import { enforceLawBookScope } from "./lib/enforce-law-book-scope";
 import { seedVerifiedExcerptRanges } from "./lib/seed-verified-excerpt-ranges";
+import { shouldInitializeCurrentRevision } from "../src/lib/law-book/catalog-maintenance";
 
 const DATA_DIR = path.join(
   __dirname,
@@ -196,85 +197,79 @@ async function main(): Promise<void> {
       const xmlChecksum = sha256(fs.readFileSync(xmlPath));
       const sourceStorageKey = path.relative(path.join(__dirname, ".."), xmlPath);
       const sourceFetchedAt = fs.statSync(xmlPath).mtime.toISOString();
-      const articleCountRows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-        'SELECT COUNT(*)::bigint AS count FROM "Article" WHERE "lawId" = $1 AND "deletedAt" IS NULL',
-        law.id,
-      );
-      let articleCount = Number(articleCountRows[0].count);
-      let revisionId = law.currentRevisionId;
-      const officialRevisionId = `rev_${metadata.revisionInfo.revisionId}`;
+      // Entry baseline Revision は公式版で固定。Law.currentRevisionId（現行 Revision）とは独立。
+      const revisionId = `rev_${metadata.revisionInfo.revisionId}`;
+      const officialVersionKey = metadata.revisionInfo.revisionId;
 
-      if (revisionId?.startsWith("rev_legacy_")) {
-        // 既存Articleは取得時点が確定していないため、公式2026 Revisionへ上書きしない。
-        // ソフト削除して旧Revisionに保持し、ハイライト等の外部キーを維持する。
+      // baseline Revision 行を upsert する（seed は catalog 責務なので常に staged 扱い）。
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "LawRevision" (
+           "id", "lawId", "packageId", "officialVersionKey", "promulgationDate",
+           "effectiveFrom", "fetchedAt", "sourceUrl", "xmlStorageKey", "xmlChecksum", "status"
+         ) VALUES ($1, $2, $3, $4, $5::timestamp, $6::timestamp, $7::timestamp, $8, $9, $10, $11::"LawRevisionStatus")
+         ON CONFLICT ("lawId", "officialVersionKey") DO UPDATE SET
+           "packageId" = EXCLUDED."packageId",
+           "promulgationDate" = EXCLUDED."promulgationDate",
+           "effectiveFrom" = EXCLUDED."effectiveFrom",
+           "fetchedAt" = EXCLUDED."fetchedAt",
+           "sourceUrl" = EXCLUDED."sourceUrl",
+           "xmlStorageKey" = EXCLUDED."xmlStorageKey",
+           "xmlChecksum" = EXCLUDED."xmlChecksum"`,
+        revisionId,
+        law.id,
+        PACKAGE_ID,
+        officialVersionKey,
+        metadata.lawInfo.promulgationDate,
+        metadata.revisionInfo.enforcementDate ?? LAW_BOOK_EDITION_2026.effectiveAsOf,
+        sourceFetchedAt,
+        officialLawDataUrl(entry.egovLawId),
+        sourceStorageKey,
+        xmlChecksum,
+        "staged",
+      );
+
+      // baseline Revision の既存Article件数で冪等判定（Law全体ではなくEntry Revision 限定）。
+      const articleCountRows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+        'SELECT COUNT(*)::bigint AS count FROM "Article" WHERE "lawId" = $1 AND "lawRevisionId" = $2 AND "deletedAt" IS NULL',
+        law.id,
+        revisionId,
+      );
+      const articleCount = Number(articleCountRows[0].count);
+
+      // 旧 rev_legacy_* Revision は取得時点が未確定のため非公開化（歴史の整頓）。
+      // この操作は baseline Revision の整備であって currentRevisionId の切り替えではない。
+      if (law.currentRevisionId?.startsWith("rev_legacy_")) {
         await prisma.$executeRawUnsafe(
           `UPDATE "LawRevision" SET
              "officialVersionKey" = 'legacy-pre-law-book-2026',
              "xmlChecksum" = 'legacy-unverified',
              "status" = 'superseded'
            WHERE "id" = $1`,
-          revisionId,
-        );
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO "LawRevision" (
-             "id", "lawId", "packageId", "officialVersionKey", "promulgationDate",
-             "effectiveFrom", "fetchedAt", "sourceUrl", "xmlStorageKey", "xmlChecksum", "status"
-           ) VALUES ($1, $2, $3, $4, $5::timestamp, $6::timestamp, $7::timestamp, $8, $9, $10, 'staged')
-           ON CONFLICT ("lawId", "officialVersionKey") DO NOTHING`,
-          officialRevisionId,
-          law.id,
-          PACKAGE_ID,
-          metadata.revisionInfo.revisionId,
-          metadata.lawInfo.promulgationDate,
-          metadata.revisionInfo.enforcementDate ?? LAW_BOOK_EDITION_2026.effectiveAsOf,
-          sourceFetchedAt,
-          officialLawDataUrl(entry.egovLawId),
-          sourceStorageKey,
-          xmlChecksum,
+          law.currentRevisionId,
         );
         await prisma.$executeRawUnsafe(
           'UPDATE "Article" SET "deletedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP WHERE "lawRevisionId" = $1 AND "deletedAt" IS NULL',
-          revisionId,
+          law.currentRevisionId,
         );
-        await prisma.$executeRawUnsafe(
-          'UPDATE "Law" SET "currentRevisionId" = $2, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1',
-          law.id,
-          officialRevisionId,
-        );
-        revisionId = officialRevisionId;
-        articleCount = 0;
-      } else if (!revisionId) {
-        revisionId = officialRevisionId;
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO "LawRevision" (
-             "id", "lawId", "packageId", "officialVersionKey", "promulgationDate",
-             "effectiveFrom", "fetchedAt", "sourceUrl", "xmlStorageKey", "xmlChecksum", "status"
-           ) VALUES ($1, $2, $3, $4, $5::timestamp, $6::timestamp, $7::timestamp, $8, $9, $10, $11::"LawRevisionStatus")
-           ON CONFLICT ("lawId", "officialVersionKey") DO NOTHING`,
-          revisionId,
-          law.id,
-          PACKAGE_ID,
-          metadata.revisionInfo.revisionId,
-          metadata.lawInfo.promulgationDate,
-          metadata.revisionInfo.enforcementDate ?? LAW_BOOK_EDITION_2026.effectiveAsOf,
-          sourceFetchedAt,
-          officialLawDataUrl(entry.egovLawId),
-          sourceStorageKey,
-          xmlChecksum,
-          "staged",
-        );
+      }
+
+      // 現行 Revision（Law.currentRevisionId）は初回導入時（null）だけ baseline で初期化する。
+      // 既に刷新プロセスが現行 Revision を設定している場合は絶対に巻き戻さない。
+      if (shouldInitializeCurrentRevision(law.currentRevisionId)) {
         await prisma.$executeRawUnsafe(
           'UPDATE "Law" SET "currentRevisionId" = $2, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1',
           law.id,
           revisionId,
         );
-      } else {
-        const revisionStatus = articleCount > 0 ? "active" : "staged";
+      }
+
+      // baseline Revision の状態は catalog の管理下。既に active な現行 Revision が別に
+      // 存在しても baseline Revision の status を上書きしない（staged のままで整備）。
+      if (articleCount > 0) {
         await prisma.$executeRawUnsafe(
-          `UPDATE "LawRevision" SET "status" = $2::"LawRevisionStatus"
-           WHERE "id" = $1 AND "xmlChecksum" = $3`,
+          `UPDATE "LawRevision" SET "status" = 'active'::"LawRevisionStatus"
+           WHERE "id" = $1 AND "xmlChecksum" = $2 AND "status" = 'staged'`,
           revisionId,
-          revisionStatus,
           xmlChecksum,
         );
       }

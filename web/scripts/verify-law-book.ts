@@ -1,5 +1,12 @@
 #!/usr/bin/env npx tsx
-/** 2026年版のDB完全性を検証し、不一致が1件でもあれば非0終了する。 */
+/**
+ * 2026年版 固定書籍版（catalog）の DB 完全性を検証し、不一致が1件でもあれば非0終了する。
+ *
+ * catalog verifier は Entry baseline（LawBookEntry.lawRevisionId）の完全性を検査する。
+ * Law.currentRevisionId は刷新プロセス（Tasks 4-8）が別途管理するため、
+ * `Entry.lawRevisionId === Law.currentRevisionId` を要求しない。
+ * 公開 current の検査は Task 9 の verifier（verify-current-laws.ts）へ委譲する。
+ */
 
 import { PrismaClient } from "@prisma/client";
 import { LAW_BOOK_2026 } from "./law-book-2026";
@@ -80,7 +87,7 @@ async function main(): Promise<void> {
       entries.every((entry, index) => entry.egovLawId === manifestIds[index]),
       "DB台帳と実行マニフェストの法令ID/掲載順が一致しません",
     );
-    assert(entries.every((entry) => entry.lawRevisionId === entry.currentRevisionId), "Entryが現行Revisionを参照していません");
+    assert(entries.every((entry) => entry.lawRevisionId !== null), "Entry.lawRevisionId が未設定の収録文書があります");
     assert(entries.every((entry) => entry.sourceChecksum?.length === 64), "原本SHA-256がないEntryがあります");
     assert(entries.every((entry) => Number(entry.actualArticleCount) > 0), "Articleが0件の収録文書があります");
     assert(
@@ -169,6 +176,9 @@ async function main(): Promise<void> {
     );
 
     const totalArticles = entries.reduce((sum, entry) => sum + Number(entry.actualArticleCount), 0);
+    // 収録台帳外 = 当該 law が Edition に1件も Entry を持たない（law 単位）。
+    // 収録 law の current Article（Entry Revision と一致しない刷新版）は維持されるため、
+    // Revision 単位ではなく law 単位で収録外を判定する。
     const outsideArticles = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
       `SELECT COUNT(*)::bigint AS count
        FROM "Article" a
@@ -179,7 +189,6 @@ async function main(): Promise<void> {
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = 'ksk-2026'
              AND e."lawId" = a."lawId"
-             AND e."lawRevisionId" = a."lawRevisionId"
          )`,
     );
     assert(Number(outsideArticles[0].count) === 0, `収録台帳外の有効Articleがあります: ${outsideArticles[0].count}`);
@@ -195,7 +204,6 @@ async function main(): Promise<void> {
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = 'ksk-2026'
              AND e."lawId" = source."lawId"
-             AND e."lawRevisionId" = source."lawRevisionId"
          )
          OR (
            link."isResolved" = true
@@ -206,7 +214,6 @@ async function main(): Promise<void> {
              JOIN "LawBookEdition" edition ON edition.id = e."editionId"
              WHERE edition."editionKey" = 'ksk-2026'
                AND e."lawId" = target."lawId"
-               AND e."lawRevisionId" = target."lawRevisionId"
            )
          )`,
     );
