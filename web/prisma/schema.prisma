@@ -262,32 +262,35 @@ model LawPackage {
 // ─── 法令リビジョン（改正単位ごとの法令スナップショット） ───
 
 model LawRevision {
-  id                 String                        @id @default(cuid())
-  lawId              String
-  packageId          String
-  officialVersionKey String
-  promulgationDate   DateTime?
-  effectiveFrom      DateTime
-  effectiveTo        DateTime?
-  fetchedAt          DateTime
-  sourceUrl          String
-  xmlStorageKey      String
-  xmlChecksum        String
-  status             LawRevisionStatus             @default(staged)
-  sourceUpdatedAt    DateTime?
-  repealStatus       String?
-  repealDate         DateTime?
-  createdAt          DateTime                      @default(now())
-  articles           Article[]
-  mappingsFrom       ArticleRevisionMapping[]      @relation("ArticleRevisionMappingFromRevision")
-  mappingsTo         ArticleRevisionMapping[]      @relation("ArticleRevisionMappingToRevision")
-  currentForLaw      Law?                          @relation("CurrentLawRevision")
-  lawBookEntries     LawBookEntry[]
-  rangeResolutions   LawBookEntryRangeResolution[]
-  law                Law                           @relation("LawRevisions", fields: [lawId], references: [id])
-  package            LawPackage                    @relation(fields: [packageId], references: [id])
+  id                        String                        @id @default(cuid())
+  lawId                     String
+  packageId                 String
+  officialVersionKey        String
+  promulgationDate          DateTime?
+  effectiveFrom             DateTime
+  effectiveTo               DateTime?
+  fetchedAt                 DateTime
+  sourceUrl                 String
+  xmlStorageKey             String
+  xmlChecksum               String
+  status                    LawRevisionStatus             @default(staged)
+  sourceUpdatedAt           DateTime?
+  repealStatus              String?
+  repealDate                DateTime?
+  createdAt                 DateTime                      @default(now())
+  articles                  Article[]
+  mappingsFrom              ArticleRevisionMapping[]      @relation("ArticleRevisionMappingFromRevision")
+  mappingsTo                ArticleRevisionMapping[]      @relation("ArticleRevisionMappingToRevision")
+  refreshResultsAsPrevious  LawRefreshLawResult[]         @relation("LawRefreshResultPreviousRevision")
+  refreshResultsAsCandidate LawRefreshLawResult[]         @relation("LawRefreshResultCandidateRevision")
+  currentForLaw             Law?                          @relation("CurrentLawRevision")
+  lawBookEntries            LawBookEntry[]
+  rangeResolutions          LawBookEntryRangeResolution[]
+  law                       Law                           @relation("LawRevisions", fields: [lawId], references: [id])
+  package                   LawPackage                    @relation(fields: [packageId], references: [id])
 
   @@unique([lawId, officialVersionKey])
+  @@unique([id, lawId])
   @@index([lawId, status, effectiveFrom])
   @@index([packageId])
 }
@@ -401,6 +404,7 @@ model Article {
   // CREATE INDEX idx_article_caption ON "Article" USING gin (caption gin_bigm_ops) WHERE "deletedAt" IS NULL;
 
   @@unique([lawRevisionId, stableNodeKey])
+  @@unique([id, lawRevisionId, lawId])
   @@index([lawId])
   @@index([parentId])
   @@index([parentId, sortOrder])
@@ -915,6 +919,8 @@ model LawRefreshLawResult {
   completedAt         DateTime?
   run                 LawRefreshRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
   law                 Law                 @relation(fields: [lawId], references: [id], onDelete: Restrict)
+  previousRevision    LawRevision?        @relation("LawRefreshResultPreviousRevision", fields: [previousRevisionId], references: [id], onDelete: Restrict)
+  candidateRevision   LawRevision?        @relation("LawRefreshResultCandidateRevision", fields: [candidateRevisionId], references: [id], onDelete: Restrict)
 
   @@unique([runId, lawId])
   @@index([lawId, startedAt])
@@ -950,10 +956,10 @@ model ArticleRevisionMapping {
   verifiedAt     DateTime?
   createdAt      DateTime                     @default(now())
   law            Law                          @relation("ArticleRevisionMappingLaw", fields: [lawId], references: [id], onDelete: Restrict)
-  fromRevision   LawRevision                  @relation("ArticleRevisionMappingFromRevision", fields: [fromRevisionId], references: [id], onDelete: Restrict)
-  toRevision     LawRevision                  @relation("ArticleRevisionMappingToRevision", fields: [toRevisionId], references: [id], onDelete: Restrict)
-  fromArticle    Article                      @relation("ArticleRevisionMappingFromArticle", fields: [fromArticleId], references: [id], onDelete: Restrict)
-  toArticle      Article?                     @relation("ArticleRevisionMappingToArticle", fields: [toArticleId], references: [id], onDelete: SetNull)
+  fromRevision   LawRevision                  @relation("ArticleRevisionMappingFromRevision", fields: [fromRevisionId, lawId], references: [id, lawId], onDelete: Restrict)
+  toRevision     LawRevision                  @relation("ArticleRevisionMappingToRevision", fields: [toRevisionId, lawId], references: [id, lawId], onDelete: Restrict)
+  fromArticle    Article                      @relation("ArticleRevisionMappingFromArticle", fields: [fromArticleId, fromRevisionId, lawId], references: [id, lawRevisionId, lawId], onDelete: Restrict)
+  toArticle      Article?                     @relation("ArticleRevisionMappingToArticle", fields: [toArticleId, toRevisionId, lawId], references: [id, lawRevisionId, lawId], onDelete: Restrict)
 
   @@unique([fromRevisionId, toRevisionId, fromArticleId])
   @@index([fromArticleId, status])
