@@ -50,6 +50,7 @@ export function ScrollActiveArticleProvider({
   linksByArticle,
 }: ProviderProps) {
   const [activeArticleId, setActiveArticleId] = useState<string | null>(null);
+  const activeArticleIdRef = useRef<string | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelMapRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const lastEntryRef = useRef<Map<string, number>>(new Map());
@@ -60,6 +61,27 @@ export function ScrollActiveArticleProvider({
   >(new Map());
 
   useEffect(() => {
+    let rafId: number | null = null;
+
+    const flushActive = () => {
+      rafId = null;
+      if (lastEntryRef.current.size > 0) {
+        let latest: string | null = null;
+        let latestTime = 0;
+        lastEntryRef.current.forEach((time, id) => {
+          if (time > latestTime) {
+            latestTime = time;
+            latest = id;
+          }
+        });
+        // 同一条文なら setState を発火させず再描画カスケードを防ぐ
+        if (latest && latest !== activeArticleIdRef.current) {
+          activeArticleIdRef.current = latest;
+          setActiveArticleId(latest);
+        }
+      }
+    };
+
     const observer = new IntersectionObserver(
       (entries) => {
         const now = Date.now();
@@ -72,19 +94,9 @@ export function ScrollActiveArticleProvider({
             lastEntryRef.current.delete(articleId);
           }
         }
-
-        if (lastEntryRef.current.size > 0) {
-          let latest: string | null = null;
-          let latestTime = 0;
-          lastEntryRef.current.forEach((time, id) => {
-            if (time > latestTime) {
-              latestTime = time;
-              latest = id;
-            }
-          });
-          if (latest) {
-            setActiveArticleId(latest);
-          }
+        // rAF で1フレームにつき1回にバッチ化
+        if (rafId === null) {
+          rafId = requestAnimationFrame(flushActive);
         }
       },
       {
@@ -100,6 +112,7 @@ export function ScrollActiveArticleProvider({
     });
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       observer.disconnect();
     };
   }, []);
@@ -122,7 +135,10 @@ export function ScrollActiveArticleProvider({
   }, []);
 
   const activateArticle = useCallback((articleId: string) => {
-    setActiveArticleId(articleId);
+    if (articleId !== activeArticleIdRef.current) {
+      activeArticleIdRef.current = articleId;
+      setActiveArticleId(articleId);
+    }
   }, []);
 
   const registerAuxData = useCallback(

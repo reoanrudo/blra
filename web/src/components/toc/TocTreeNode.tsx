@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { isExpandableTocLevel, nodeLabel } from "@/lib/article/toc-tree";
 import type { TocNode } from "@/lib/article/toc-tree";
 
@@ -8,14 +9,14 @@ interface TocTreeNodeProps {
   depth: number;
   expanded: boolean;
   hasChildren: boolean;
-  onToggle: () => void;
-  onClick: () => void;
+  onToggle: (id: string) => void;
+  onClick: (id: string) => void;
   isCurrent: boolean;
   isAncestor: boolean;
   showCategoryBoundary: boolean;
 }
 
-export default function TocTreeNode({
+function TocTreeNodeImpl({
   node,
   depth,
   expanded,
@@ -30,9 +31,9 @@ export default function TocTreeNode({
 
   function handleClick() {
     if (isHeading) {
-      onToggle();
+      onToggle(node.id);
     } else {
-      onClick();
+      onClick(node.id);
     }
   }
 
@@ -70,3 +71,6 @@ export default function TocTreeNode({
     </>
   );
 }
+
+const TocTreeNode = memo(TocTreeNodeImpl);
+export default TocTreeNode;
