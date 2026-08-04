@@ -88,31 +88,51 @@ export default function TocTree({
 
   const handleArticleClick = useCallback(
     (articleId: string) => {
-      // 目次ハイライトを即座に切り替える（スクロール完了を待たない）
-      scrollState?.activateArticle(articleId);
-      const target = document.querySelector<HTMLElement>(
-        fullLawTargetSelector(articleId),
-      );
+      // ターゲット要素を特定。ID セレクタ優先、フォールバックは data-article-id。
+      const target =
+        document.querySelector<HTMLElement>(fullLawTargetSelector(articleId)) ??
+        document.querySelector<HTMLElement>(
+          `[data-scroll-article-id="${CSS.escape(articleId)}"]`,
+        );
+
       if (target) {
-        // scrollIntoView ではなく scrollTop を直接設定して瞬時ジャンプする。
-        // ネストしたスクロールコンテナでのアニメーション介入を回避する。
-        const scroller = scrollContainerRef?.current;
+        // ■ DOM操作を最優先: React State更新より先にジャンプする。
+        // activateArticle が React再描画カスケードを引き起こすため、
+        // 先にジャンプして体感遅延をゼロにする。
+        const scroller =
+          scrollContainerRef?.current ??
+          document.querySelector<HTMLElement>('[data-scroll-container]');
+
         if (scroller) {
           const scrollerRect = scroller.getBoundingClientRect();
           const targetRect = target.getBoundingClientRect();
           const delta = targetRect.top - scrollerRect.top - SCROLL_OFFSET_PX;
-          scroller.scrollTop += delta;
+          if (delta !== 0) {
+            scroller.scrollTop += delta;
+          }
         } else {
-          // フォールバック: コンテナが取れない場合は scrollIntoView
-          target.scrollIntoView({ block: "start", behavior: "auto" });
+          target.scrollIntoView({ block: "start" });
         }
+
+        // URL更新（瞬時・非同期処理なし）
         window.history.replaceState(
           window.history.state,
           "",
           readerArticleHref(articleId),
         );
+
+        // ■ React State更新はジャンプ後に実行。
+        // rIC でアイドル時に回し、ジャンプをブロックしない。
+        const activate = () => scrollState?.activateArticle(articleId);
+        if ("requestIdleCallback" in window) {
+          requestIdleCallback(activate, { timeout: 16 });
+        } else {
+          requestAnimationFrame(activate);
+        }
         return;
       }
+
+      // ターゲットがDOMにない（未描画の条文）→ルーター遷移
       router.push(readerArticleHref(articleId));
     },
     [router, scrollState, scrollContainerRef],
