@@ -134,6 +134,10 @@ export default function TocTree({
 
       if (target) {
         // ── 本文ジャンプ（純粋なDOM操作・瞬時） ──
+        // クリック後の scrollTop 変更で発火する scroll イベントによる
+        // ハイライト再計算を1フレーム分スキップ（競合回避）
+        scrollState?.suppressScrollSyncOneFrame();
+
         const scroller =
           scrollContainerRef?.current ??
           document.querySelector<HTMLElement>('[data-scroll-container]');
@@ -157,15 +161,15 @@ export default function TocTree({
         );
 
         // ── 目次ハイライト切替（純粋なDOM操作・瞬時） ──
-        // React State更新は100ms以上の再描画カスケードを引き起こすため、
-        // 先にDOM直接操作でハイライトを切り替える。
+        // React再描画を待たずにDOM直接操作でハイライトを切り替える。
         applyHighlightDirect(containerRef.current, articleId);
 
-        // ── React State更新（スクロール追従・右パネル等の同期用） ──
-        // DOM直接操作でハイライトは既に切り替わっている。
-        // ここで React State も更新し、スクロール追従と右パネル等を同期させる。
-        // FullLawViewer は memo 化済みなので再描画コストは軽い。
-        scrollState?.activateArticle(articleId);
+        // ── React State更新は次フレームに遅延 ──
+        // scrollTop 変更の scroll イベントは suppressScrollSyncOneFrame で
+        // スキップ済みなので競合しない。右パネル等の同期はここで行われる。
+        requestAnimationFrame(() => {
+          scrollState?.activateArticle(articleId);
+        });
         return;
       }
 
