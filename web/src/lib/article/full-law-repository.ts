@@ -5,7 +5,7 @@ import type {
 } from "@/lib/article/full-law-document";
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 
 interface RevisionMetadataRow {
@@ -18,6 +18,11 @@ interface RevisionMetadataRow {
   sourceDate: string | null;
 }
 
+/**
+ * 指定 Revision のメタデータを取得する。
+ * Task 11: 指定 Revision が Law.currentRevisionId と一致しない場合は null を返す。
+ * LawBookEntry は (editionId, lawId) のカタログ所属のみを表し、Revision 結合はしない。
+ */
 async function getRevisionMetadata(
   lawRevisionId: string,
 ): Promise<RevisionMetadataRow | null> {
@@ -34,9 +39,13 @@ async function getRevisionMetadata(
      JOIN "Law" law ON law.id = revision."lawId"
      JOIN "LawBookEntry" entry
        ON entry."lawId" = law.id
-      AND entry."lawRevisionId" = revision.id
+      AND entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
      WHERE revision.id = $1
+       AND law."currentRevisionId" = revision.id
        AND edition."editionKey" = $2
      LIMIT 1`,
     lawRevisionId,
@@ -48,7 +57,7 @@ async function getRevisionMetadata(
 async function getRevisionNodes(
   lawRevisionId: string,
 ): Promise<FullLawNode[]> {
-  const articleScope = lawBookArticleScopeSql("tree", "entry");
+  const articleScope = currentLawBookArticleScopeSql("tree", "entry", "law");
   return prisma.$queryRawUnsafe<FullLawNode[]>(
     `WITH RECURSIVE tree AS (
        SELECT
@@ -71,6 +80,8 @@ async function getRevisionNodes(
          article."lawId",
          article."regulationType",
          article."stableNodeKey",
+         article."durableNodeKey",
+         article."deletedAt",
          article."lawRevisionId",
          ARRAY[article."sortOrder"] AS path
        FROM "Article" article
@@ -100,6 +111,8 @@ async function getRevisionNodes(
          article."lawId",
          article."regulationType",
          article."stableNodeKey",
+         article."durableNodeKey",
+         article."deletedAt",
          article."lawRevisionId",
          tree.path || article."sortOrder"
        FROM "Article" article
@@ -109,9 +122,13 @@ async function getRevisionNodes(
      )
      SELECT tree.*
      FROM tree
+     JOIN "Law" law ON law.id = tree."lawId"
      JOIN "LawBookEntry" entry
-       ON entry."lawId" = tree."lawId"
-      AND entry."lawRevisionId" = tree."lawRevisionId"
+       ON entry."lawId" = law.id
+      AND entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
      WHERE edition."editionKey" = $2
        AND ${articleScope}
@@ -124,8 +141,8 @@ async function getRevisionNodes(
 async function getRevisionResolvedLinks(
   lawRevisionId: string,
 ): Promise<OutgoingLinkRow[]> {
-  const sourceScope = lawBookArticleScopeSql("source", "source_entry");
-  const targetScope = lawBookArticleScopeSql("target", "target_entry");
+  const sourceScope = currentLawBookArticleScopeSql("source", "source_entry", "source_law");
+  const targetScope = currentLawBookArticleScopeSql("target", "target_entry", "target_law");
   return prisma.$queryRawUnsafe<OutgoingLinkRow[]>(
     `SELECT
        link.id,
@@ -142,16 +159,23 @@ async function getRevisionResolvedLinks(
        target_law."shortName" AS "targetLawShortName"
      FROM "Link" link
      JOIN "Article" source ON source.id = link."sourceId"
+     JOIN "Law" source_law ON source_law.id = source."lawId"
      JOIN "LawBookEntry" source_entry
-       ON source_entry."lawId" = source."lawId"
-      AND source_entry."lawRevisionId" = source."lawRevisionId"
+       ON source_entry."lawId" = source_law.id
+      AND source_entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" source_edition
        ON source_edition.id = source_entry."editionId"
      JOIN "Article" target ON target.id = link."targetId"
      JOIN "Law" target_law ON target_law.id = target."lawId"
      JOIN "LawBookEntry" target_entry
-       ON target_entry."lawId" = target."lawId"
-      AND target_entry."lawRevisionId" = target."lawRevisionId"
+       ON target_entry."lawId" = target_law.id
+      AND target_entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" target_edition
        ON target_edition.id = target_entry."editionId"
      WHERE source."lawRevisionId" = $1
@@ -177,6 +201,8 @@ export async function getFullLawDocument(
     getRevisionResolvedLinks(lawRevisionId),
   ]);
 
+  // metadata が null = 指定 Revision が Law.currentRevisionId ではない、
+  // またはカタログ未収録。いずれにせよ公開対象ではない。
   if (!metadata || nodes.length === 0) return null;
 
   const linksBySource = links.reduce<Record<string, OutgoingLinkRow[]>>(

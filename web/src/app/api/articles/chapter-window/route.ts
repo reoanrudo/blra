@@ -5,7 +5,7 @@ import {
 } from "@/lib/article/chapter-window";
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 
 /**
  * 同一法令スクロールのscope単位段階読込API（設計書 §4.3）
@@ -39,18 +39,19 @@ export async function GET(request: NextRequest) {
   }
 
   // Article の lawRevisionId を取得（Revision識別子として応答へ含める）
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const lawBookScope = currentLawBookArticleScopeSql("a", "e", "l");
   const metaRows = await prisma.$queryRawUnsafe<
     Array<{ lawRevisionId: string }>
   >(
     `
     SELECT a."lawRevisionId"
     FROM "Article" a
+    JOIN "Law" l ON l.id = a."lawId"
     JOIN "LawBookEntry" e
-      ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+      ON e."lawId" = l.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE a.id = $1
-      AND a."deletedAt" IS NULL
       AND edition."editionKey" = $2
       AND ${lawBookScope}
     LIMIT 1

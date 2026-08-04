@@ -1301,7 +1301,7 @@ git commit -m "fix(refresh): keep catalog maintenance revision-safe"
 - Keeps: `lawBookCatalogArticleScopeSql(articleAlias, entryAlias): string` for fixed `ksk-2026` verification
 - Public invariant: `Article.lawRevisionId = Law.currentRevisionId`
 
-- [ ] **Step 1: Entryが旧版を指していても公開本文はcurrentだけを返す失敗テストを書く**
+- [x] **Step 1: Entryが旧版を指していても公開本文はcurrentだけを返す失敗テストを書く**
 
 ```typescript
 it("書籍Entryの固定RevisionではなくLaw.currentRevisionを公開する", async () => {
@@ -1321,13 +1321,13 @@ it("書籍Entryの固定RevisionではなくLaw.currentRevisionを公開する",
 
 同じfixtureで `/api/laws` 相当repositoryの `firstArticleId` がcandidate Article、検索結果に旧Articleが0件であることもassertする。
 
-- [ ] **Step 2: 現行実装が旧Entry Revisionを返して失敗することを確認する**
+- [x] **Step 2: 現行実装が旧Entry Revisionを返して失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/integration/current-law-read-scope.test.ts`
 
 Expected: current documentがnull、またはfirstArticleIdが旧ArticleとなりFAIL。
 
-- [ ] **Step 3: catalog scopeとcurrent scopeを分離する**
+- [x] **Step 3: catalog scopeとcurrent scopeを分離する**
 
 ```typescript
 export function currentLawBookArticleScopeSql(
@@ -1366,13 +1366,13 @@ export function currentLawBookArticleScopeSql(
 
 既存 `lawBookArticleScopeSql` は `lawBookCatalogArticleScopeSql` へ改名して固定書籍版検証だけに残す。Task 12で全consumerを分類し終えるまでは、型検査を壊さないdeprecated aliasとして旧名をexportする。
 
-- [ ] **Step 4: reader/list/search系SQLの結合条件を更新する**
+- [x] **Step 4: reader/list/search系SQLの結合条件を更新する**
 
 全対象で `LawBookEntry` は `(editionId, lawId)` のカタログ所属だけを表し、`e.lawRevisionId = a.lawRevisionId` を削除する。Article選択には必ず `a.lawRevisionId = l.currentRevisionId` と `currentLawBookArticleScopeSql(...)` を入れる。`getFullLawDocument(id)` は指定RevisionがそのLawのcurrentでない場合nullを返す。
 
 `bench-search.ts` も同じcurrent scope helperを使い、固定Entry Revisionではなく公開currentを測定する。
 
-- [ ] **Step 5: read scope統合テストと既存reader/searchテストを通す**
+- [x] **Step 5: read scope統合テストと既存reader/searchテストを通す**
 
 Run:
 
@@ -1385,7 +1385,7 @@ npx tsc --noEmit
 
 Expected: 全PASS。
 
-- [ ] **Step 6: 公開read scopeをコミットする**
+- [x] **Step 6: 公開read scopeをコミットする**
 
 ```bash
 git add web/src/lib/law-book/current-scope.ts web/src/lib/law-book/sql-scope.ts web/src/app/page.tsx web/src/app/api/laws/route.ts web/src/app/api/law-toc/route.ts web/src/app/api/articles/by-number/route.ts web/src/app/api/articles/preview/route.ts web/src/app/api/articles/chapter-window/route.ts web/src/app/api/search/route.ts web/src/app/api/search/suggest/route.ts web/src/lib/article/article.ts web/src/lib/article/chapter-window.ts web/src/lib/article/full-law-repository.ts web/scripts/bench-search.ts web/src/__tests__/integration/current-law-read-scope.test.ts

@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import type { LawListItem } from "@/lib/law-book/law-list";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 
 export async function GET() {
-  const firstArticleScope = lawBookArticleScopeSql("a", "e");
+  const firstArticleScope = currentLawBookArticleScopeSql("a", "e", "l");
   const rows = await prisma.$queryRawUnsafe<Omit<LawListItem, "isCurrent">[]>(
     `SELECT
        l."id",
@@ -23,7 +23,6 @@ export async function GET() {
        SELECT a."id"
        FROM "Article" a
        WHERE a."lawId" = l."id"
-         AND a."lawRevisionId" = e."lawRevisionId"
          AND a."deletedAt" IS NULL
          AND ${firstArticleScope}
        ORDER BY a."sortOrder", a."id"
@@ -31,6 +30,7 @@ export async function GET() {
      ) first_article ON true
      WHERE edition."editionKey" = $1
        AND e."verificationStatus" IN ('structure_validated', 'link_validated', 'approved')
+       AND l."currentRevisionId" IS NOT NULL
      ORDER BY e."displayOrder"`,
     CURRENT_LAW_BOOK_EDITION_KEY,
   );
