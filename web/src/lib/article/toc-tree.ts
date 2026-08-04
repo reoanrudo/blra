@@ -102,3 +102,21 @@ export function getAncestorIds(nodes: TocNode[], targetId: string): Set<string> 
   }
   return ancestors;
 }
+
+/**
+ * nodeMap を外部から渡す getAncestorIds。
+ * nodes が変わらない限り同じ nodeMap を使い回せるため、
+ * スクロールのたびに725ノードのMapを再構築するオーバーヘッドを回避する。
+ */
+export function getAncestorIdsWithMap(
+  nodeMap: Map<string, TocNode>,
+  targetId: string,
+): Set<string> {
+  const ancestors = new Set<string>();
+  let current = nodeMap.get(targetId);
+  while (current && current.parentId) {
+    ancestors.add(current.parentId);
+    current = nodeMap.get(current.parentId);
+  }
+  return ancestors;
+}

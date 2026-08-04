@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import SearchPracticePanel from "@/components/search/SearchPracticePanel";
 import TocPanel from "@/components/toc/TocPanel";
 import type { TocNode } from "@/lib/article/toc-tree";
@@ -15,6 +15,20 @@ interface LeftPanelProps {
 }
 
 const VIEW_STORAGE_KEY = "reader-left-panel-view";
+
+// TocPanel ラッパーを memo 化し、タブUI部分の再描画を回避する。
+// currentArticleId 変化時に TocPanel のみ再描画され、ボタン等はスキップされる。
+const TocPanelSection = memo(function TocPanelSection({
+  toc,
+  currentArticleId,
+  loading,
+}: {
+  toc: TocNode[];
+  currentArticleId: string | null;
+  loading: boolean;
+}) {
+  return <TocPanel nodes={toc} currentArticleId={currentArticleId} loading={loading} />;
+});
 
 export default function LeftPanel({
   toc,
@@ -83,8 +97,8 @@ export default function LeftPanel({
           </p>
         )}
         {view === "toc" && documentStatus !== "error" && (
-          <TocPanel
-            nodes={toc}
+          <TocPanelSection
+            toc={toc}
             currentArticleId={currentArticleId}
             loading={documentStatus === "loading"}
           />

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentLawId } from "@/contexts/CurrentLawContext";
 import {
-  getAncestorIds,
+  getAncestorIdsWithMap,
   shouldExpandTocNodeByDefault,
   type TocNode,
 } from "@/lib/article/toc-tree";
@@ -22,6 +22,8 @@ interface TocPanelProps {
   currentArticleId: string | null;
   loading: boolean;
 }
+
+const EMPTY_SET = new Set<string>();
 
 interface LawListResponse {
   editionKey: string;
@@ -127,6 +129,10 @@ export default function TocPanel({
   const [lawsLoading, setLawsLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // nodeMap をキャッシュ。nodes が変わらない限り再利用する。
+  // getAncestorIds が毎回725ノードのMapを構築するのを防ぐ。
+  const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+
   useEffect(() => {
     let active = true;
     loadLawList()
@@ -159,33 +165,30 @@ export default function TocPanel({
   }, [currentLawId, nodes]);
 
   useEffect(() => {
-    if (!currentArticleId || nodes.length === 0) return;
-    const ancestors = getAncestorIds(nodes, currentArticleId);
+    if (!currentArticleId || nodeMap.size === 0) return;
+    const ancestors = getAncestorIdsWithMap(nodeMap, currentArticleId);
     if (ancestors.size === 0) return;
     setExpandedIds((current) => {
       let changed = false;
-      const next = new Set(current);
       ancestors.forEach((id) => {
-        if (!next.has(id)) {
-          next.add(id);
+        if (!current.has(id)) {
           changed = true;
         }
       });
-      // 実際に展開すべき先祖が増えた場合だけ更新・保存する
-      if (changed) {
-        saveExpanded(currentLawId, next);
-        return next;
-      }
-      return current;
+      if (!changed) return current;
+      const next = new Set(current);
+      ancestors.forEach((id) => next.add(id));
+      saveExpanded(currentLawId, next);
+      return next;
     });
-  }, [currentArticleId, currentLawId, nodes]);
+  }, [currentArticleId, currentLawId, nodeMap]);
 
   const ancestorIds = useMemo(
     () =>
       currentArticleId
-        ? getAncestorIds(nodes, currentArticleId)
-        : new Set<string>(),
-    [currentArticleId, nodes],
+        ? getAncestorIdsWithMap(nodeMap, currentArticleId)
+        : EMPTY_SET,
+    [currentArticleId, nodeMap],
   );
   const activeLawId = chooseActiveLawId(laws, currentLawId);
 
