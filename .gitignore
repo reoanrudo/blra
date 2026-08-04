@@ -37,6 +37,9 @@ reference/hourei-rag/
 # 取込パイプラインの原本XML（再取得可能）
 data/raw/
 
+# 法令更新パッケージ署名用の秘密鍵（再生成可能・絶対にGit管理しない）
+.secrets/
+
 # e-Gov現行版XMLの不変store（再取得可能・チェックサムで一意）
 web/var/law-xml/
 
