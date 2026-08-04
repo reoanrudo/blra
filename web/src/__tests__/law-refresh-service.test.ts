@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { EgovLawVersion } from "@/lib/law-refresh/egov-client";
 import type {
   CandidateVerificationReport,
+  CandidateVerificationInput,
 } from "@/lib/law-refresh/verify-candidate";
 import type { LawRevisionDiff } from "@/lib/law-refresh/diff-law-revisions";
 import type { ParsedLawDocument } from "@/lib/law-refresh/types";
+import type { ReviewedRevisionDecision } from "@/lib/law-refresh/reviewed-mappings";
 import {
   refreshCurrentLaws,
   type RefreshCurrentLawsRequest,
@@ -650,5 +652,331 @@ describe("refreshCurrentLaws", () => {
     expect(deps.calls.withRefreshLock).toBe(1);
     expect(deps.calls.createRefreshRun).toBe(1);
     expect(deps.calls.completeRefreshRun).toBe(1);
+  });
+});
+
+// ─── reviewed decision 読込テスト（R1 修正） ───
+
+/**
+ * テスト用の reviewed decision サンプル。
+ * lawId / revisionId / checksum は各テストで上書きして使う。
+ */
+function sampleReviewedDecision(
+  overrides: Partial<ReviewedRevisionDecision> = {},
+): ReviewedRevisionDecision {
+  return {
+    schemaVersion: 1,
+    lawId: "325AC0000000201",
+    fromRevisionId: "rev-1",
+    toRevisionId: "rev-egov-2",
+    fromXmlChecksum: "old-checksum",
+    toXmlChecksum: "fake-checksum",
+    mappings: [
+      {
+        fromDurableNodeKey: "main/article:1",
+        toDurableNodeKey: "main/article:2",
+        kind: "renumbered",
+        rationale: "テスト用の改番承認",
+      },
+    ],
+    approvedGuards: [],
+    verifiedBy: "tester",
+    verifiedAt: "2026-08-04T00:00:00Z",
+    rationale: "テスト用承認",
+    ...overrides,
+  };
+}
+
+describe("refreshCurrentLaws: reviewed decision 読込", () => {
+  it("reviewed decision で保留中の候補を公開可能にする", async () => {
+    // verifyCandidate は reviewedDecision の有無で結果を切り替える mock。
+    // reviewedDecision が渡ってくれば publishable、なければ held。
+    const verifyCandidate = vi.fn(
+      (input: CandidateVerificationInput): CandidateVerificationReport => {
+        if (input.reviewedDecision) {
+          return publishableReport();
+        }
+        return heldReport();
+      },
+    );
+
+    const decision = sampleReviewedDecision();
+    let loadCallCount = 0;
+    const deps: RefreshDeps = {
+      getLawVersionAt: vi.fn(async () => UPDATED_VERSION),
+      getLawXmlAt: vi.fn(async (version: EgovLawVersion) => ({
+        lawId: version.lawId,
+        revisionId: version.revisionId,
+        xml: "<Law><MainProvision/></Law>",
+        checksum: "fake-checksum",
+        sourceUrl: "https://example.invalid",
+        fetchedAt: new Date(),
+      })),
+      getCurrentRevisionId: vi.fn(async () => "rev-1"),
+      getLastObservedVersionKey: vi.fn(async () => "rev-old"),
+      getLawRanges: vi.fn(async () => []),
+      createRefreshRun: vi.fn(async () => ({
+        id: "run-1",
+        targetDate: "2026-08-04",
+        trigger: "manual" as const,
+        status: "running" as const,
+      })),
+      createLawRefreshLawResult: vi.fn(async () => "result-1"),
+      stageCandidateRevision: vi.fn(async () => ({
+        revisionId: "rev-candidate",
+        reused: false,
+        articleCount: 1,
+        mappings: [],
+        rangeResolutions: [],
+      })),
+      activateCandidateRevision: vi.fn(async () => {}),
+      recordUnchangedCheck: vi.fn(async () => {}),
+      recordFailedCheck: vi.fn(async () => {}),
+      recordHeldCandidate: vi.fn(async () => {}),
+      completeRefreshRun: vi.fn(async () => {}),
+      withRefreshLock: (async <T>(work: () => Promise<T>): Promise<T> => {
+        return await work();
+      }) as never,
+      loadSigningKey: vi.fn(async () => ({
+        privateKey: {} as never,
+        keyId: "test-key",
+      })),
+      signRefreshManifest: vi.fn(() => ({
+        manifest: { runId: "run-1", targetDate: "2026-08-04", laws: [] },
+        manifestChecksum: "checksum",
+        signature: "sig",
+        signerKeyId: "test-key",
+      })),
+      parseLawXml: vi.fn(() => parsedDoc("rev-egov-2")),
+      diffLawRevisions: vi.fn(() => HELD_DIFF),
+      verifyCandidate,
+      resolveVerifiedRanges: vi.fn(() => []),
+      store: {
+        put: vi.fn(async () => ({
+          lawId: "x",
+          revisionId: "rev",
+          checksum: "c",
+          storedPath: "/tmp/x.xml",
+        })),
+      } as never,
+      loadReviewedRevisionDecision: vi.fn(async () => {
+        loadCallCount++;
+        return decision;
+      }) as never,
+    };
+
+    const report = await refreshCurrentLaws(
+      {
+        asOf: "2026-08-04",
+        trigger: "manual",
+        mode: "refresh",
+        lawIds: ["325AC0000000201"],
+        reviewDir: "/tmp/test-review-dir",
+      },
+      deps,
+    );
+
+    // reviewed decision が読み込まれ、verifyCandidate へ渡されたことで公開可能になった
+    expect(loadCallCount).toBe(1);
+    const verifyInput = verifyCandidate.mock.calls[0]?.[0] as
+      | CandidateVerificationInput
+      | undefined;
+    expect(verifyInput?.reviewedDecision).toEqual(decision);
+    expect(report.counts).toEqual({
+      checked: 1,
+      unchanged: 0,
+      updated: 1,
+      held: 0,
+      failed: 0,
+    });
+    expect(report.laws[0]?.status).toBe("updated");
+  });
+
+  it("reviewDir 指定でもファイル不在時は undefined で通常パス（held）になる", async () => {
+    // loadReviewedRevisionDecision が undefined（ファイル不在）を返す
+    let loadCallCount = 0;
+    const deps: RefreshDeps = {
+      getLawVersionAt: vi.fn(async () => UPDATED_VERSION),
+      getLawXmlAt: vi.fn(async (version: EgovLawVersion) => ({
+        lawId: version.lawId,
+        revisionId: version.revisionId,
+        xml: "<Law><MainProvision/></Law>",
+        checksum: "fake-checksum",
+        sourceUrl: "https://example.invalid",
+        fetchedAt: new Date(),
+      })),
+      getCurrentRevisionId: vi.fn(async () => "rev-1"),
+      getLastObservedVersionKey: vi.fn(async () => "rev-old"),
+      getLawRanges: vi.fn(async () => []),
+      createRefreshRun: vi.fn(async () => ({
+        id: "run-1",
+        targetDate: "2026-08-04",
+        trigger: "manual" as const,
+        status: "running" as const,
+      })),
+      createLawRefreshLawResult: vi.fn(async () => "result-1"),
+      stageCandidateRevision: vi.fn(async () => ({
+        revisionId: "rev-candidate",
+        reused: false,
+        articleCount: 1,
+        mappings: [],
+        rangeResolutions: [],
+      })),
+      activateCandidateRevision: vi.fn(async () => {}),
+      recordUnchangedCheck: vi.fn(async () => {}),
+      recordFailedCheck: vi.fn(async () => {}),
+      recordHeldCandidate: vi.fn(async () => {}),
+      completeRefreshRun: vi.fn(async () => {}),
+      withRefreshLock: (async <T>(work: () => Promise<T>): Promise<T> => {
+        return await work();
+      }) as never,
+      loadSigningKey: vi.fn(async () => ({
+        privateKey: {} as never,
+        keyId: "test-key",
+      })),
+      signRefreshManifest: vi.fn(() => ({
+        manifest: { runId: "run-1", targetDate: "2026-08-04", laws: [] },
+        manifestChecksum: "checksum",
+        signature: "sig",
+        signerKeyId: "test-key",
+      })),
+      parseLawXml: vi.fn(() => parsedDoc("rev-egov-2")),
+      diffLawRevisions: vi.fn(() => HELD_DIFF),
+      verifyCandidate: vi.fn(() => heldReport()),
+      resolveVerifiedRanges: vi.fn(() => []),
+      store: {
+        put: vi.fn(async () => ({
+          lawId: "x",
+          revisionId: "rev",
+          checksum: "c",
+          storedPath: "/tmp/x.xml",
+        })),
+      } as never,
+      loadReviewedRevisionDecision: vi.fn(async () => {
+        loadCallCount++;
+        return undefined;
+      }) as never,
+    };
+
+    const report = await refreshCurrentLaws(
+      {
+        asOf: "2026-08-04",
+        trigger: "manual",
+        mode: "refresh",
+        lawIds: ["325AC0000000201"],
+        reviewDir: "/tmp/test-review-dir",
+      },
+      deps,
+    );
+
+    // ファイル不在で loadReviewedRevisionDecision は呼ばれたが undefined を返した
+    expect(loadCallCount).toBe(1);
+    // reviewedDecision が undefined のため held 扱い
+    expect(report.counts).toEqual({
+      checked: 1,
+      unchanged: 0,
+      updated: 0,
+      held: 1,
+      failed: 0,
+    });
+    expect(report.laws[0]?.status).toBe("held");
+  });
+
+  it("reviewed decision 読込エラーは REVIEW_FILE_INVALID へ変換される", async () => {
+    // loadReviewedRevisionDecision が例外を投げる（不正JSON/checksum不一致を想定）
+    let loadCallCount = 0;
+    const recordFailedSpy = vi.fn(async () => {});
+    const deps: RefreshDeps = {
+      getLawVersionAt: vi.fn(async () => UPDATED_VERSION),
+      getLawXmlAt: vi.fn(async (version: EgovLawVersion) => ({
+        lawId: version.lawId,
+        revisionId: version.revisionId,
+        xml: "<Law><MainProvision/></Law>",
+        checksum: "fake-checksum",
+        sourceUrl: "https://example.invalid",
+        fetchedAt: new Date(),
+      })),
+      getCurrentRevisionId: vi.fn(async () => "rev-1"),
+      getLastObservedVersionKey: vi.fn(async () => "rev-old"),
+      getLawRanges: vi.fn(async () => []),
+      createRefreshRun: vi.fn(async () => ({
+        id: "run-1",
+        targetDate: "2026-08-04",
+        trigger: "manual" as const,
+        status: "running" as const,
+      })),
+      createLawRefreshLawResult: vi.fn(async () => "result-1"),
+      stageCandidateRevision: vi.fn(async () => ({
+        revisionId: "rev-candidate",
+        reused: false,
+        articleCount: 1,
+        mappings: [],
+        rangeResolutions: [],
+      })),
+      activateCandidateRevision: vi.fn(async () => {}),
+      recordUnchangedCheck: vi.fn(async () => {}),
+      recordFailedCheck: recordFailedSpy,
+      recordHeldCandidate: vi.fn(async () => {}),
+      completeRefreshRun: vi.fn(async () => {}),
+      withRefreshLock: (async <T>(work: () => Promise<T>): Promise<T> => {
+        return await work();
+      }) as never,
+      loadSigningKey: vi.fn(async () => ({
+        privateKey: {} as never,
+        keyId: "test-key",
+      })),
+      signRefreshManifest: vi.fn(() => ({
+        manifest: { runId: "run-1", targetDate: "2026-08-04", laws: [] },
+        manifestChecksum: "checksum",
+        signature: "sig",
+        signerKeyId: "test-key",
+      })),
+      parseLawXml: vi.fn(() => parsedDoc("rev-egov-2")),
+      diffLawRevisions: vi.fn(() => HELD_DIFF),
+      verifyCandidate: vi.fn(() => publishableReport()),
+      resolveVerifiedRanges: vi.fn(() => []),
+      store: {
+        put: vi.fn(async () => ({
+          lawId: "x",
+          revisionId: "rev",
+          checksum: "c",
+          storedPath: "/tmp/x.xml",
+        })),
+      } as never,
+      loadReviewedRevisionDecision: vi.fn(async () => {
+        loadCallCount++;
+        throw new Error("REVIEW_CHECKSUM_MISMATCH: toXmlChecksum が候補と一致しません");
+      }) as never,
+    };
+
+    const report = await refreshCurrentLaws(
+      {
+        asOf: "2026-08-04",
+        trigger: "manual",
+        mode: "refresh",
+        lawIds: ["325AC0000000201"],
+        reviewDir: "/tmp/test-review-dir",
+      },
+      deps,
+    );
+
+    // 読込エラーが REVIEW_FILE_INVALID へ変換されて failed 扱い
+    expect(loadCallCount).toBe(1);
+    expect(report.counts).toEqual({
+      checked: 1,
+      unchanged: 0,
+      updated: 0,
+      held: 0,
+      failed: 1,
+    });
+    expect(report.laws[0]?.status).toBe("failed");
+    expect(report.laws[0]?.errorCode).toBe("REVIEW_FILE_INVALID");
+    // recordFailedCheck へ errorCode が伝播している
+    const failedSpy = recordFailedSpy as unknown as {
+      mock: { calls: Array<Record<string, unknown>> };
+    };
+    expect(failedSpy.mock.calls[0]?.[0]).toMatchObject({
+      errorCode: "REVIEW_FILE_INVALID",
+    });
   });
 });

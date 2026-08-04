@@ -65,6 +65,13 @@ export interface RefreshCurrentLawsRequest {
   mode: "check" | "dry-run" | "refresh";
   /** 対象法令のe-Gov law ID一覧。省略時は LAW_BOOK_EDITION_2026 の120件。 */
   lawIds?: string[];
+  /**
+   * 人手確認済み Revision pair decision の JSON を置いたディレクトリ（任意）。
+   * 指定時、各法令ごとに `<reviewDir>/<lawId>.json` を読み込み、
+   * `deps.loadReviewedRevisionDecision` へ渡す。ファイル不在時は undefined（通常パス）。
+   * 読込エラー（不正JSON/checksum不一致等）は `REVIEW_FILE_INVALID` へ変換される。
+   */
+  reviewDir?: string;
 }
 
 export interface RefreshRunReport {
@@ -158,9 +165,10 @@ export interface RefreshDeps {
   store?: FileSystemLawXmlStore;
 
   // reviewed decision 読込（Task 5）。ファイル未存在時は undefined を返す。
+  // expected は部分指定可能（undefined のフィールドは検証をスキップ）。
   loadReviewedRevisionDecision?: (
     path: string,
-    expected: ReviewedDecisionExpected,
+    expected: Partial<ReviewedDecisionExpected>,
   ) => Promise<ReviewedRevisionDecision | undefined>;
 }
 
@@ -238,6 +246,18 @@ async function mapWithConcurrency<T, R>(
 // ─── error code 変換 ───
 
 /**
+ * reviewed decision ファイルの読込失敗を表す例外。
+ * `toErrorCode` で REVIEW_FILE_INVALID へ変換される。
+ */
+class ReviewFileInvalidError extends Error {
+  readonly code = "REVIEW_FILE_INVALID";
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = "ReviewFileInvalidError";
+  }
+}
+
+/**
  * 法令ごとの例外を公開 error code へ変換する。
  * 未知の例外は INTERNAL_ERROR に倒す。
  */
@@ -255,6 +275,7 @@ function toErrorCode(error: unknown): string {
     return "EGOV_NOT_IN_EFFECT";
   }
   if (/REFRESH_ALREADY_RUNNING/.test(message)) return "REFRESH_ALREADY_RUNNING";
+  if (error instanceof ReviewFileInvalidError) return "REVIEW_FILE_INVALID";
   return "INTERNAL_ERROR";
 }
 
@@ -380,10 +401,35 @@ async function processOneLaw(
   // 範囲
   const ranges = await deps.getLawRanges(lawId);
 
-  // reviewed decision（任意）
+  // reviewed decision（任意）。CLI から reviewDir が渡されたときだけ読み込む。
+  // ファイルが存在しなければ undefined（通常パス: held 扱い）。
+  // 読込エラー（不正JSON/checksum不一致等）は REVIEW_FILE_INVALID へ変換される。
   let reviewedDecision: ReviewedRevisionDecision | undefined;
-  // reviewed decision の読込は CLI から reviewDir が渡されたときだけ行う。
-  // service 本体は deps.loadReviewedRevisionDecision が呼ばれたときだけ読む。
+  if (request.reviewDir && deps.loadReviewedRevisionDecision) {
+    const reviewFilePath = `${request.reviewDir}/${lawId}.json`;
+    // expected には processOneLaw スコープ内で利用可能な値を渡す。
+    // fromXmlChecksum は旧版 XML を取得していないため現時点では省略（M1 で対応）。
+    // reviewed-mappings 側は undefined の expected フィールドを検証しない。
+    const expected: Partial<ReviewedDecisionExpected> = {
+      lawId,
+      fromRevisionId: previousRevisionId ?? "",
+      toRevisionId: observedVersionKey,
+      toXmlChecksum: fetched.checksum,
+    };
+    try {
+      reviewedDecision = await deps.loadReviewedRevisionDecision(
+        reviewFilePath,
+        expected,
+      );
+    } catch (error) {
+      throw new ReviewFileInvalidError(
+        `${reviewFilePath} の読み込みに失敗しました: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        error,
+      );
+    }
+  }
 
   // verify
   const report = deps.verifyCandidate({

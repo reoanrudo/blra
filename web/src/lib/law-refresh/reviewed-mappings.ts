@@ -210,10 +210,14 @@ export function parseReviewedRevisionDecision(
  * ファイルパスから reviewed decision を読み込んで検証する。
  * ファイルが存在しない・読めない場合は Node の ENOENT 等がそのまま投げられる。
  * 内容の検証は `parseReviewedRevisionDecision` へ委譲する。
+ *
+ * `expected` は部分指定可能（undefined のフィールドは検証をスキップ）。
+ * これにより呼出側で旧版 XML checksum（fromXmlChecksum）が未取得でも
+ * revision ID の一致のみ検証できる。
  */
 export async function loadReviewedRevisionDecision(
   path: string,
-  expected: ReviewedDecisionExpected,
+  expected: Partial<ReviewedDecisionExpected>,
 ): Promise<ReviewedRevisionDecision> {
   const content = await readFile(path, "utf8");
   return parseReviewedRevisionDecision(content, expected);
