@@ -6,6 +6,7 @@ import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim();
   const prefix = request.nextUrl.searchParams.get("prefix");
+  const lawId = request.nextUrl.searchParams.get("lawId")?.trim();
 
   if (!q) {
     return NextResponse.json({ articles: [] });
@@ -16,6 +17,15 @@ export async function GET(request: NextRequest) {
     `a."level" = 'article'`,
     `(a."articleNumber" = $1 OR a."articleNumberNormalized" = $1)`,
   ];
+
+  const params: (string | number)[] = [q];
+  let paramIdx = 2;
+
+  if (lawId) {
+    conditions.push(`a."lawId" = $${paramIdx}`);
+    params.push(lawId);
+    paramIdx++;
+  }
 
   if (prefix === "法") {
     conditions.push(`l."category" = 'law'`);
@@ -29,6 +39,7 @@ export async function GET(request: NextRequest) {
   const articles = await prisma.$queryRawUnsafe<
     {
       id: string;
+      lawId: string;
       articleNumber: string | null;
       caption: string | null;
       lawName: string;
@@ -37,6 +48,7 @@ export async function GET(request: NextRequest) {
   >(
     `SELECT
       a.id,
+      a."lawId",
       a."articleNumber",
       a."caption",
       l."name" AS "lawName",
@@ -47,11 +59,11 @@ export async function GET(request: NextRequest) {
       ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE ${whereClause}
-      AND edition."editionKey" = $2
+      AND edition."editionKey" = $${paramIdx}
       AND ${lawBookScope}
     ORDER BY a."sortOrder"
     LIMIT 20`,
-    q,
+    ...params,
     CURRENT_LAW_BOOK_EDITION_KEY,
   );
 

@@ -25,7 +25,10 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24時間
 const memoryCache = new Map<string, TocCacheEntry>();
 
 function buildKey(editionKey: string, lawRevisionId: string, lawId: string): string {
-  return `${editionKey}:${lawRevisionId}:${lawId}`;
+  // キャッシュスキーマのバージョン。構造変更時にインクリメントして
+  // 古いキャッシュ（table_struct 含む等）を無効化する。
+  const CACHE_VERSION = "v2";
+  return `${CACHE_VERSION}:${editionKey}:${lawRevisionId}:${lawId}`;
 }
 
 /** TocNode の基本Schema検証。破損データを検出する。 */
@@ -38,6 +41,8 @@ function isValidTocNodes(value: unknown): value is TocNode[] {
     if (typeof n.id !== "string") return false;
     if (typeof n.level !== "string") return false;
     if (typeof n.sortOrder !== "number") return false;
+    // table_struct/table を含む古いキャッシュは無効化
+    if (n.level === "table_struct" || n.level === "table") return false;
   }
   return true;
 }

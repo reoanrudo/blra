@@ -97,24 +97,54 @@ export async function getArticleBreadcrumb(articleId: string): Promise<ArticleRo
 
 /** Look up the display label for an article level row.
  *  構造化番号を算用数字化して返す（設計書§4.1）。DB値は変更しない。 */
+/**
+ * 全角括弧・全角英数字を半角に変換する。
+ * ラベル表示の統一用（「（１）」→「(1)」「（ｉ）」→「(i)」）。
+ */
+function toHalfWidth(s: string): string {
+  return s
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/[０-９Ａ-Ｚａ-ｚ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+}
+
 export function articleLabel(row: ArticleRow): string {
   switch (row.level) {
     case "article":
       return `第${formatStructuredNumber(row.articleNumber)}条`;
     case "paragraph":
-      return row.paragraphNumber ?? "";
+      return toHalfWidth(row.paragraphNumber ?? "");
     case "item":
       // 号番号は法令の号構造のため原文のまま（設計書§4.3）
-      return row.itemNumber || row.articleNumber || "";
+      // 全角括弧・英数字は半角に統一
+      return toHalfWidth(row.itemNumber || row.articleNumber || "");
     case "subitem1":
     case "subitem2":
     case "subitem3":
       // 号の枝番は号構造の一部のため原文のまま（設計書§4.3）
-      return row.subitemNumber ?? "";
+      // 全角括弧・英数字は半角に統一
+      return toHalfWidth(row.subitemNumber ?? "");
     case "column":
       return row.columnNumber ? `Column ${row.columnNumber}` : "";
-    case "appdx_table":
-      return `別表第${formatStructuredNumber(row.articleNumber)}`;
+    case "appdx_table": {
+      // articleNumber が実データでは文字列 "null" の場合がある。
+      // その場合は text 先頭の「別表第X」から番号を取り出す。
+      const rawNum = row.articleNumber;
+      const hasValidNumber = rawNum && rawNum !== "null";
+      if (hasValidNumber) {
+        return `別表第${formatStructuredNumber(rawNum)}`;
+      }
+      // text から「別表第X」を抽出（例: "別表第一\n耐火建築物…" → "別表第一"）
+      const titleMatch = row.text?.match(/^別表第([^\s\n]+)/);
+      if (titleMatch) {
+        const extracted = titleMatch[1];
+        return `別表第${formatStructuredNumber(extracted)}`;
+      }
+      // caption や title から補完
+      if (row.title && row.title !== "null") return row.title;
+      if (row.caption && row.caption !== "null") return row.caption;
+      return "別表";
+    }
     case "suppl_provision":
       return row.title ?? "附則";
     case "table_struct":

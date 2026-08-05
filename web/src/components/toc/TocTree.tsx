@@ -17,10 +17,10 @@ const SCROLL_OFFSET_PX = 80;
 
 /** 通常状態の className（isCurrent/isAncestor でないノード） */
 const TOC_NODE_CLASS_NORMAL =
-  "w-full flex items-center gap-1 px-2 py-1 text-left text-xs text-neutral-700";
+  "w-full flex items-center gap-1 px-2 py-1 text-left text-sm text-neutral-700";
 /** アクティブ（current）状態の className */
 const TOC_NODE_CLASS_CURRENT =
-  "w-full flex items-center gap-1 px-2 py-1 text-left text-xs bg-[#fff4f9] border-l-2 border-[#d92f7e] font-semibold text-[#9d1f58]";
+  "w-full flex items-center gap-1 px-2 py-1 text-left text-sm bg-[#fff4f9] border-l-2 border-[#d92f7e] font-semibold text-[#9d1f58]";
 
 /**
  * DOM直接操作で目次ハイライトを瞬時に切り替える。
