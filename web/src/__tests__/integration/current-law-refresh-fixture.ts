@@ -346,6 +346,7 @@ export async function createCurrentLawRefreshFixture(
     mappings: [],
     rangeResolutions: [],
     sync: syncMetadata,
+    diffSummary: null,
   };
 
   // activateCandidate オプション: ksk-2026 Edition 所属の LawBookEntry（旧 Revision 指向）を作成し、

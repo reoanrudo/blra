@@ -1,6 +1,7 @@
 import {
   buildFullLawToc,
   type FullLawRevisionMetadata,
+  type LawChangeNotice,
   type LawRefreshDisplayStatus,
 } from "@/lib/article/full-law-document";
 import type {
@@ -27,6 +28,11 @@ interface RevisionMetadataRow {
   lastErrorCode: string | null;
   repealStatus: string | null;
   repealDate: string | null;
+  /**
+   * 直近の更新で保存された差分サマリー（設計書 §13.2）。
+   * LawRefreshLawResult.diffSummary の JSON。未保存時は null。
+   */
+  diffSummary: string | null;
 }
 
 /**
@@ -78,7 +84,8 @@ async function getRevisionMetadata(
        to_char(sync."lastAttemptAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "lastAttemptAt",
        sync."lastErrorCode",
        sync."repealStatus",
-       to_char(sync."repealDate" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "repealDate"
+       to_char(sync."repealDate" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "repealDate",
+       refresh_result."diffSummary"::text AS "diffSummary"
      FROM "LawRevision" revision
      JOIN "Law" law ON law.id = revision."lawId"
      JOIN "LawBookEntry" entry
@@ -89,6 +96,15 @@ async function getRevisionMetadata(
       )
      JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
      LEFT JOIN "LawSyncState" sync ON sync."lawId" = law.id
+     LEFT JOIN LATERAL (
+       SELECT lr."diffSummary"
+       FROM "LawRefreshLawResult" lr
+       WHERE lr."lawId" = law.id
+         AND lr."candidateRevisionId" = revision.id
+         AND lr."status" = 'updated'
+       ORDER BY lr."completedAt" DESC
+       LIMIT 1
+     ) refresh_result ON true
      WHERE revision.id = $1
        AND law."currentRevisionId" = revision.id
        AND edition."editionKey" = $2
@@ -120,6 +136,47 @@ export function buildRevisionMetadata(
     refreshErrorCode: row.lastErrorCode,
     repealStatus: row.repealStatus,
     repealDate: row.repealDate,
+    changeNotice: parseChangeNotice(row.diffSummary),
+  };
+}
+
+/**
+ * DBから取得した diffSummary JSON文字列から変更通知データを構築する。
+ *
+ * 設計書 §13.2 の表示条件:
+ * - changedArticleNumbers が空（unchanged, 初回導入）→ null
+ * - パース失敗や想定外の形式 → null（安全側へ落とす）
+ */
+function parseChangeNotice(
+  diffSummaryJson: string | null,
+): LawChangeNotice | null {
+  if (!diffSummaryJson) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(diffSummaryJson);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const summary = parsed as Record<string, unknown>;
+  const changedArticleNumbers = summary.changedArticleNumbers;
+  if (!Array.isArray(changedArticleNumbers)) return null;
+  const numbers = changedArticleNumbers.filter(
+    (n): n is string => typeof n === "string" && n.length > 0,
+  );
+  if (numbers.length === 0) return null;
+
+  const counts = summary.counts;
+  const changeCount =
+    typeof counts === "object" && counts !== null
+      ? (counts as Record<string, number>).modified ?? 0 +
+        ((counts as Record<string, number>).added ?? 0) +
+        ((counts as Record<string, number>).removed ?? 0)
+      : numbers.length;
+
+  return {
+    changedArticleNumbers: numbers,
+    changeCount,
   };
 }
 

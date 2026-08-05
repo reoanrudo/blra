@@ -24,6 +24,7 @@ const documentFixture: FullLawDocument = {
     refreshErrorCode: null,
     repealStatus: "None",
     repealDate: null,
+    changeNotice: null,
   },
   toc: [],
   nodes: [],

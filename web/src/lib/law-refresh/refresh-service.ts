@@ -23,6 +23,7 @@
 import type { EgovLawVersion, FetchedLawXml } from "./egov-client";
 import type { ParsedLawDocument, ParsedLawNode } from "./types";
 import type { LawRevisionDiff } from "./diff-law-revisions";
+import { buildDiffSummary } from "./diff-summary";
 import type {
   CandidateVerificationReport,
   CandidateVerificationInput,
@@ -533,6 +534,7 @@ async function processOneLaw(
       observedVersionKey,
       egovUpdatedAt,
     },
+    diffSummary: buildDiffSummary(diff, !previousRevisionId),
   });
 
   return {

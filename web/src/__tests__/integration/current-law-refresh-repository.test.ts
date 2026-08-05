@@ -101,6 +101,7 @@ describe("current-law refresh repository", () => {
         mappings: staged.mappings,
         rangeResolutions: staged.rangeResolutions,
         sync: fixture.syncMetadata,
+        diffSummary: null,
       });
 
       // activate 後に current pointer が候補へ切り替わる
@@ -150,6 +151,7 @@ describe("current-law refresh repository", () => {
           mappings: staged.mappings,
           rangeResolutions: staged.rangeResolutions,
           sync: fixture.syncMetadata,
+          diffSummary: null,
         }),
       ).rejects.toMatchObject({ code: "CURRENT_REVISION_CHANGED" });
 
@@ -171,6 +173,7 @@ describe("current-law refresh repository", () => {
         mappings: staged.mappings,
         rangeResolutions: staged.rangeResolutions,
         sync: fixture.syncMetadata,
+        diffSummary: null,
       });
 
       const sync = await prisma.lawSyncState.findUnique({

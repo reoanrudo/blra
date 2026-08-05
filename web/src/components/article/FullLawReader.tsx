@@ -3,6 +3,7 @@
 import { useMemo, type ReactNode } from "react";
 import ArticleLayout from "@/components/article/ArticleLayout";
 import FullLawViewer from "@/components/article/FullLawViewer";
+import LawChangeNoticeBanner from "@/components/article/LawChangeNoticeBanner";
 import OfficialTextCopyBoundary from "@/components/article/OfficialTextCopyBoundary";
 import ScrollUrlSync from "@/components/article/ScrollUrlSync";
 import LeftPanel from "@/components/layout/LeftPanel";
@@ -113,6 +114,7 @@ function FullLawReadyLayout({
       center={
         <article className="law-page">
           <LawRunningHeader revision={document.revision} lawName={document.law.name} egovLawId={document.law.egovLawId} />
+          <LawChangeNoticeBanner notice={document.revision.changeNotice} egovLawId={document.law.egovLawId} />
           {relationsState.status === "error" && (
             <ConfirmedRelationsPartialError onRetry={relationsState.retry} />
           )}
