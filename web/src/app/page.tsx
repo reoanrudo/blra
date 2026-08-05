@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import {
   buildArticleHref,
   todayInJapan,
@@ -8,15 +9,17 @@ import {
 
 export default async function Home() {
   // 法令集の掲載順で最初の文書・条文へ遷移する。
+  // Task 11: Law.currentRevisionId の Article のみを公開対象とする。
+  const firstArticleScope = currentLawBookArticleScopeSql("a", "e", "l");
   const firstArticle = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `SELECT a.id
      FROM "LawBookEntry" e
      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
-     JOIN "Article" a
-       ON a."lawId" = e."lawId" AND a."lawRevisionId" = e."lawRevisionId"
+     JOIN "Law" l ON l.id = e."lawId"
+     JOIN "Article" a ON a."lawId" = l.id
      WHERE edition."editionKey" = $1
-       AND a."deletedAt" IS NULL
        AND a.level = 'article'
+       AND ${firstArticleScope}
      ORDER BY e."displayOrder", a."sortOrder", a.id
      LIMIT 1`,
     CURRENT_LAW_BOOK_EDITION_KEY,

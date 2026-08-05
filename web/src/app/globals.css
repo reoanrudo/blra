@@ -289,10 +289,12 @@
     text-align: center;
   }
 
-  .law-table__header-row .law-table__cell {
-    background: #f5f3ef;
-    color: #302b25;
-    font-weight: 800;
+  /* 分数の縦表示（分子・分母を上下に積み上げ、分子の下に罫線を引く） */
+  .law-fraction {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
     text-align: center;
   }
 

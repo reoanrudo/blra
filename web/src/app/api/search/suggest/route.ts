@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getOrCreateDefaultUser } from "@/lib/system/user";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 
 function escapeLike(str: string): string {
   return str.replace(/[%_\\]/g, "\\$&");
@@ -47,15 +47,16 @@ export async function GET(request: NextRequest) {
   // 2. Caption prefix match
   const escaped = escapeLike(q);
   const prefixPattern = `${escaped}%`;
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const lawBookScope = currentLawBookArticleScopeSql("a", "e", "l");
   const captionRows = await prisma.$queryRawUnsafe<{ id: string; caption: string }[]>(
     `SELECT a."id", a."caption"
      FROM "Article" a
+     JOIN "Law" l ON a."lawId" = l.id
      JOIN "LawBookEntry" e
-       ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+       ON e."lawId" = l.id
+      AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
-     WHERE a."deletedAt" IS NULL
-       AND edition."editionKey" = $2
+     WHERE edition."editionKey" = $2
        AND ${lawBookScope}
        AND a."caption" LIKE $1
      ORDER BY a."sortOrder"
@@ -84,11 +85,12 @@ export async function GET(request: NextRequest) {
   }[]>(
     `SELECT a."id", a."articleNumberNormalized", a."articleNumber"
      FROM "Article" a
+     JOIN "Law" l ON a."lawId" = l.id
      JOIN "LawBookEntry" e
-       ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+       ON e."lawId" = l.id
+      AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
-     WHERE a."deletedAt" IS NULL
-       AND edition."editionKey" = $2
+     WHERE edition."editionKey" = $2
        AND ${lawBookScope}
        AND a."level" = 'article'
        AND a."articleNumberNormalized" LIKE $1

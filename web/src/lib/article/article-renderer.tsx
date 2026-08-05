@@ -13,7 +13,49 @@ import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
 export { buildSegments } from "@/lib/article/article-segments";
+import type { TableCellStyle } from "@/lib/law-refresh/types";
 import type { ReactNode } from "react";
+
+/**
+ * tableMetadata JSON 文字列を TableCellStyle へパースする。
+ * 不正な JSON や想定外の形式の場合は null（従来の均一罫線へフォールバック）。
+ */
+function parseTableCellStyle(raw: string | null): TableCellStyle | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<TableCellStyle>;
+    if (
+      typeof parsed.borderTop !== "string" ||
+      typeof parsed.borderBottom !== "string" ||
+      typeof parsed.borderLeft !== "string" ||
+      typeof parsed.borderRight !== "string"
+    ) {
+      return null;
+    }
+    return {
+      borderTop: parsed.borderTop,
+      borderRight: parsed.borderRight,
+      borderBottom: parsed.borderBottom,
+      borderLeft: parsed.borderLeft,
+      colspan: typeof parsed.colspan === "number" ? parsed.colspan : 1,
+      rowspan: typeof parsed.rowspan === "number" ? parsed.rowspan : 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * TableCellStyle から各辺の罫線クラスを生成する。
+ */
+function borderClasses(style: TableCellStyle): string {
+  return [
+    style.borderTop === "solid" ? "border-t border-neutral-400" : "border-t-0",
+    style.borderRight === "solid" ? "border-r border-neutral-400" : "border-r-0",
+    style.borderBottom === "solid" ? "border-b border-neutral-400" : "border-b-0",
+    style.borderLeft === "solid" ? "border-l border-neutral-400" : "border-l-0",
+  ].join(" ");
+}
 
 /**
  * リンクのない本文テキストを表示トークン化して描画する（設計書§3）。
@@ -25,9 +67,6 @@ function renderDisplayTokens(text: string): ReactNode {
   const tokens = formatLegalText(text);
   if (tokens.length === 0) return null;
 
-  // 全トークンを span で囲む（plainトークンも含む）
-  // data-source-kind は選択座標計算で使用: plain は表示テキスト=原文のため offset 直接計算、
-  // number/unit/fraction は変換トークンのため一部選択でも全体へ拡張する。
   return tokens.map((token, i) => (
     <span
       key={`tok-${i}`}
@@ -42,15 +81,13 @@ function renderDisplayTokens(text: string): ReactNode {
 
 /**
  * テーブルセル用の表示トークン描画。
- * 分数（kind=fraction、または "数字/数字" パターン）を縦表示にする。
- * 法令集（冊子）と同様に、分子を上・分母を下に重ねて表示。
+ * 分数（"数字/数字" パターン）を縦表示にする。
  */
 function renderDisplayTokensForTable(text: string): ReactNode {
   const tokens = formatLegalText(text);
   if (tokens.length === 0) return null;
 
   return tokens.map((token, i) => {
-    // 分数トークン、または "数字/数字" パターンを縦表示に
     const isFraction = token.kind === "fraction" || /^\d+\/\d+$/.test(token.displayText);
     if (isFraction) {
       const [num, denom] = token.displayText.split("/");
@@ -217,69 +254,6 @@ export function ArticleNode({
   );
 }
 
-/**
- * 各列の最長テキスト長から列幅の比率（パーセント）を計算する。
- *
- * 法令集（冊子）の別表レイアウトを再現するため、列幅を内容の長さに
- * 比例して配分する。短い見出し列（「（い）」「（ろ）」等）は狭く、
- * 長い説明列は広くなる。
- *
- * ただし、テキスト長ゼロの列にも最低幅を保証し、極端に長い列が
- * 全体を占有しないよう上限も設ける。
- */
-function computeColWidths(
-  rows: { row: ArticleRow; cells: ArticleRow[] }[],
-): string[] {
-  // colspan 等でセル数が異なる場合、最大セル数の行のみを使って
-  // 列幅を計算する（ヘッダー行の colspan を除外するため）。
-  const maxCells = rows.reduce((max, tr) => Math.max(max, tr.cells.length), 0);
-  const uniformRows = rows.filter((tr) => tr.cells.length === maxCells);
-  const colCount = maxCells;
-  if (colCount === 0) return [];
-
-  // 各列の最長テキスト長
-  const maxLens: number[] = new Array(colCount).fill(0);
-  // 各列の全テキストが短い見出し（4文字以下、ただし分数「1/5」等は除外）かどうか
-  const isShortCol: boolean[] = new Array(colCount).fill(true);
-  // 分数列（全行が分数パターン or 空）かどうか
-  const isFractionCol: boolean[] = new Array(colCount).fill(true);
-  for (const tr of uniformRows) {
-    tr.cells.forEach((cell, ci) => {
-      const text = (cell.text ?? "").trim();
-      const len = text.length;
-      if (len > maxLens[ci]!) maxLens[ci] = len;
-      // 分数（/ を含む）や5文字以上は短い見出し扱いしない
-      if (len > 4 || text.includes("/")) isShortCol[ci] = false;
-      // 空でなく分数パターンでなければ分数列ではない。
-      // DB上は漢数字分数（「五分の一」等）、表示時は算用数字（「1/5」）。
-      const isFractionText = /^\d+\/\d+$/.test(text) || /^[一二三四五六七八九十百]+分の[一二三四五六七八九十百]+$/.test(text);
-      if (text && !isFractionText) isFractionCol[ci] = false;
-    });
-  }
-
-  // 短い見出し列（(1)（い）等、全行4文字以下）は固定ピクセル幅。
-  // table-layout:auto でも px 指定の col は尊重されやすい。
-  // それ以外の列は内容に応じたパーセント配分。
-  const weights = maxLens.map((len, ci) => {
-    if (isShortCol[ci] || isFractionCol[ci]) return 0; // 固定px列は重み計算から除外
-    return Math.sqrt(Math.max(len, 2));
-  });
-  const total = weights.reduce((a, b) => a + b, 0);
-
-  return maxLens.map((len, ci) => {
-    if (isFractionCol[ci]) {
-      // 分数列は固定幅（縦分数+padding）
-      return "48px";
-    }
-    if (isShortCol[ci]) {
-      // 内容幅 + padding(8px) を概算。3文字まで対応。
-      return "32px";
-    }
-    const pct = total > 0 ? (weights[ci]! / total) * 100 : 100 / colCount;
-    return `${pct.toFixed(1)}%`;
-  });
-}
-
 export function TableBlock({
   tableNode,
   rows,
@@ -289,47 +263,6 @@ export function TableBlock({
   rows: { row: ArticleRow; cells: ArticleRow[] }[];
   anchorRows: ArticleRow[];
 }) {
-  const colWidths = computeColWidths(rows);
-
-  // 全行中の最大セル数を求める。
-  // セル数が最大に満たない行（ヘッダー行等）は、最初のセルに
-  // colspan を付けて列を合わせる。法令集（冊子）と同様に、
-  // 「居室の種類」が2列分をカバーし「割合」が最終列に揃うようにする。
-  const maxCells = rows.reduce((max, tr) => Math.max(max, tr.cells.length), 0);
-
-  // 最終列の空セルを上の非空セルと縦結合（rowspan）するための事前計算。
-  // 法令集（冊子）では、割合が空の行が上の分数セルと結合されて表示される。
-  // 対象: 全行が同じセル数（maxCells）の表のみ。
-  const lastColIndex = maxCells - 1;
-  const skipCells = new Set<string>(); // スキップするセルID
-  const rowSpans = new Map<string, number>(); // セルID → rowspan数
-  // rowspan 対象: 最大セル数の行のみで計算（colspan行は除外）
-  const uniformRowsForSpan = rows.filter((tr) => tr.cells.length === maxCells);
-  if (lastColIndex > 0 && uniformRowsForSpan.length > 1) {
-    let i = 0;
-    while (i < uniformRowsForSpan.length) {
-      const cell = uniformRowsForSpan[i]!.cells[lastColIndex];
-      const text = (cell?.text ?? "").trim();
-      if (text) {
-        // 非空セル: 連続する空セルを数える
-        let span = 1;
-        let j = i + 1;
-        while (j < uniformRowsForSpan.length) {
-          const nextCell = uniformRowsForSpan[j]!.cells[lastColIndex];
-          const nextText = (nextCell?.text ?? "").trim();
-          if (nextText) break;
-          skipCells.add(nextCell!.id);
-          span++;
-          j++;
-        }
-        if (span > 1) rowSpans.set(cell!.id, span);
-        i = j;
-      } else {
-        i++;
-      }
-    }
-  }
-
   return (
     <div
       id={fullLawAnchorId(tableNode.id)}
@@ -346,87 +279,36 @@ export function TableBlock({
         />
       ))}
       <table className="law-table w-full border-collapse text-xs">
-        {colWidths.length > 0 && (
-          <colgroup>
-            {colWidths.map((w, i) => (
-              <col key={i} style={{ width: w }} />
-            ))}
-          </colgroup>
-        )}
         <tbody>
-          {rows.map((tr, ri) => {
-            // 1行目が全て短い見出し（（い）（ろ）等、4文字以下）の場合のみ
-            // header-row として中央配置・背景色を付ける。
-            // 表1のように1行目が既に実質データ（地域名+用途リスト）の場合は
-            // header-row にせず、通常データ行と同様に左寄せにする。
-            const hasHeaderFirstRow =
-              rows.length > 0 &&
-              rows[0]!.cells.length > 0 &&
-              rows[0]!.cells.every(
-                (c) => (c.text ?? "").trim().length <= 4,
-              );
-            const isHeaderRow = ri === 0 && hasHeaderFirstRow;
-            const isSubHeaderRow = ri === 1 && hasHeaderFirstRow;
-            const rowClass = isHeaderRow
-              ? "law-table__header-row"
-              : isSubHeaderRow
-                ? "law-table__sub-header-row"
-                : "";
-            return (
+          {rows.map((tr) => (
             <tr
               id={fullLawAnchorId(tr.row.id)}
               key={tr.row.id}
               data-article-id={tr.row.id}
-              className={rowClass}
             >
-              {tr.cells.map((td, ci) => {
-                // 縦結合でスキップ対象のセルはレンダリングしない
-                if (skipCells.has(td.id)) return null;
-
-                // 短い見出しセル（「（い）」「（ろ）」「（1）」等、4文字以下）
-                // は折り返さず1行で収める。列幅を最小化して説明列に幅を譲る。
-                const isShortLabel = (td.text ?? "").trim().length <= 4;
-                // 分数セル（漢数字分数「五分の一」等）かどうか
-                const isFractionCell = /^[一二三四五六七八九十百]+分の[一二三四五六七八九十百]+$/.test((td.text ?? "").trim());
+              {tr.cells.map((td) => {
+                const style = parseTableCellStyle(td.tableMetadata);
                 // テキスト内に改行（\n）を含むセルは pre-line で改行を保持。
-                // 法令集（冊子）と同様に、番号付き項目を数字で改行して表示。
                 const hasLineBreaks = (td.text ?? "").includes("\n");
-
-                // セル数が最大列数に満たない場合、最初のセルに colspan を付けて
-                // 列を合わせる（残りのセルは右端に揃える）。
-                const cellCount = tr.cells.length;
-                const colspan = cellCount < maxCells && ci === 0
-                  ? maxCells - cellCount + 1
-                  : undefined;
-
-                // 最終列の縦結合（rowspan）
-                const rowspan = rowSpans.get(td.id);
-
-                const cellClass = `law-table__cell border border-neutral-400 px-2 py-1.5 align-top leading-relaxed${isShortLabel ? " law-table__cell--nowrap" : ""}${hasLineBreaks ? " law-table__cell--preline" : ""}${ri === 0 ? (colspan ? " law-table__cell--header-wide" : " law-table__cell--header") : ""}${isFractionCell ? " law-table__cell--fraction" : ""}`;
-
+                const preLine = hasLineBreaks ? " whitespace-pre-line" : "";
+                const cellClassName = style
+                  ? `law-table__cell ${borderClasses(style)} px-2 py-1.5 align-top leading-relaxed${preLine}`
+                  : `law-table__cell border border-neutral-400 px-2 py-1.5 align-top leading-relaxed${preLine}`;
                 return (
                   <td
                     key={td.id}
                     id={fullLawAnchorId(td.id)}
                     data-article-id={td.id}
-                    className={cellClass}
-                    colSpan={colspan}
-                    rowSpan={rowspan}
-                    style={{
-                      ...(isShortLabel && !colspan ? { width: "1%" } : {}),
-                      ...(isFractionCell ? { width: "48px" } : {}),
-                      ...(colspan ? { textAlign: "center", verticalAlign: "middle" } : {}),
-                      ...(rowspan ? { verticalAlign: "middle" } : {}),
-                      ...(ri === 0 ? { textAlign: "center", verticalAlign: "middle" } : {}),
-                    }}
+                    className={cellClassName}
+                    colSpan={style?.colspan && style.colspan > 1 ? style.colspan : undefined}
+                    rowSpan={style?.rowspan && style.rowspan > 1 ? style.rowspan : undefined}
                   >
-                    {td.text && renderDisplayTokensForTable(td.text)}
+                    {td.text && renderDisplayTokens(td.text)}
                   </td>
                 );
               })}
             </tr>
-            );
-          })}
+          ))}
         </tbody>
       </table>
     </div>

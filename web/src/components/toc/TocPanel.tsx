@@ -13,84 +13,16 @@ import {
   lawSelectLabel,
   type LawListItem,
 } from "@/lib/law-book/law-list";
-import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
+import { loadLawList } from "@/lib/law-book/law-list-client";
 import { readerArticleHref } from "@/lib/article/full-law-document";
 import TocTree from "./TocTree";
+
+const EMPTY_SET = new Set<string>();
 
 interface TocPanelProps {
   nodes: TocNode[];
   currentArticleId: string | null;
   loading: boolean;
-}
-
-const EMPTY_SET = new Set<string>();
-
-interface LawListResponse {
-  editionKey: string;
-  laws: LawListItem[];
-}
-
-const lawListMemoryCache = new Map<string, LawListItem[]>();
-const lawListRequestCache = new Map<string, Promise<LawListItem[]>>();
-const LAW_LIST_SESSION_KEY = "law-list-cache";
-
-function loadLawListFromSession(): LawListItem[] | null {
-  try {
-    const raw = sessionStorage.getItem(LAW_LIST_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as LawListResponse;
-    if (
-      parsed.editionKey === CURRENT_LAW_BOOK_EDITION_KEY &&
-      Array.isArray(parsed.laws) &&
-      parsed.laws.length > 0
-    ) {
-      return parsed.laws;
-    }
-  } catch {
-    // 保存データを利用できない場合はAPIから読み直す。
-  }
-  return null;
-}
-
-function saveLawListToSession(laws: LawListItem[]): void {
-  if (laws.length === 0) return;
-  try {
-    sessionStorage.setItem(
-      LAW_LIST_SESSION_KEY,
-      JSON.stringify({ editionKey: CURRENT_LAW_BOOK_EDITION_KEY, laws }),
-    );
-  } catch {
-    // private modeなどではメモリキャッシュだけを使う。
-  }
-}
-
-function loadLawList(): Promise<LawListItem[]> {
-  const memory = lawListMemoryCache.get(CURRENT_LAW_BOOK_EDITION_KEY);
-  if (memory) return Promise.resolve(memory);
-
-  const session = loadLawListFromSession();
-  if (session) {
-    lawListMemoryCache.set(CURRENT_LAW_BOOK_EDITION_KEY, session);
-    return Promise.resolve(session);
-  }
-
-  const pending = lawListRequestCache.get(CURRENT_LAW_BOOK_EDITION_KEY);
-  if (pending) return pending;
-
-  const request = fetch("/api/laws")
-    .then(async (response) => {
-      if (!response.ok) throw new Error("法令一覧を取得できませんでした");
-      const data = (await response.json()) as LawListResponse | LawListItem[];
-      const laws = Array.isArray(data) ? data : data.laws;
-      lawListMemoryCache.set(CURRENT_LAW_BOOK_EDITION_KEY, laws);
-      saveLawListToSession(laws);
-      return laws;
-    })
-    .finally(() => {
-      lawListRequestCache.delete(CURRENT_LAW_BOOK_EDITION_KEY);
-    });
-  lawListRequestCache.set(CURRENT_LAW_BOOK_EDITION_KEY, request);
-  return request;
 }
 
 function expandedStorageKey(lawId: string | null): string {

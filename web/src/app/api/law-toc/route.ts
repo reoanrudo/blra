@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import type { TocNode } from "@/lib/article/toc-tree";
 import { groupSupplementaryProvisions } from "@/lib/article/toc-supplements";
 
@@ -12,7 +12,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "lawId is required" }, { status: 400 });
   }
 
-  const lawBookScope = lawBookArticleScopeSql("toc_tree", "entry");
+  // 外部クエリで全ノードへ current scope を適用するため、
+  // CTE 側は current revision のドキュメントツリー全体を組み立てる（scope 判定は外部で行う）。
+  // CTE 内部の article alias = a、外部クエリの CTE alias = toc_tree。
+  const outerScope = currentLawBookArticleScopeSql("toc_tree", "entry", "law");
 
   const rows = await prisma.$queryRawUnsafe<(TocNode & { lawRevisionId: string })[]>(
     `WITH RECURSIVE toc_tree AS (
@@ -20,17 +23,12 @@ export async function GET(request: NextRequest) {
              a.caption, a."sortOrder", 0 AS depth,
              ARRAY[a."sortOrder"] AS path,
              split_part(a.text, E'\n', 1) AS "textFirstLine",
-             a."paragraphNumber", a."stableNodeKey", a."lawRevisionId"
+             a."paragraphNumber", a."stableNodeKey", a."durableNodeKey",
+             a."deletedAt", a."lawRevisionId", a."lawId"
       FROM "Article" a
-      WHERE a."lawId" = $1
-        AND EXISTS (
-          SELECT 1
-          FROM "LawBookEntry" e
-          JOIN "LawBookEdition" edition ON edition.id = e."editionId"
-          WHERE edition."editionKey" = $2
-            AND e."lawId" = a."lawId"
-            AND e."lawRevisionId" = a."lawRevisionId"
-        )
+      JOIN "Law" root_law ON root_law.id = a."lawId"
+      WHERE root_law.id = $1
+        AND a."lawRevisionId" = root_law."currentRevisionId"
         AND a."parentId" IS NULL
         AND a."deletedAt" IS NULL
       UNION ALL
@@ -38,10 +36,12 @@ export async function GET(request: NextRequest) {
              a.caption, a."sortOrder", t.depth + 1,
              t.path || a."sortOrder",
              split_part(a.text, E'\n', 1) AS "textFirstLine",
-             a."paragraphNumber", a."stableNodeKey", a."lawRevisionId"
+             a."paragraphNumber", a."stableNodeKey", a."durableNodeKey",
+             a."deletedAt", a."lawRevisionId", a."lawId"
       FROM "Article" a
       INNER JOIN toc_tree t ON a."parentId" = t.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = t."lawRevisionId"
         AND (
           a.level IN (
             'chapter', 'section', 'subsection', 'article',
@@ -54,11 +54,13 @@ export async function GET(request: NextRequest) {
            toc_tree.depth, toc_tree.path, toc_tree."textFirstLine", toc_tree."paragraphNumber",
            toc_tree."lawRevisionId"
     FROM toc_tree
+    JOIN "Law" law ON law.id = toc_tree."lawId"
     JOIN "LawBookEntry" entry
-      ON entry."lawId" = $1 AND entry."lawRevisionId" = toc_tree."lawRevisionId"
+      ON entry."lawId" = law.id
+     AND entry."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" selected_edition ON selected_edition.id = entry."editionId"
     WHERE selected_edition."editionKey" = $2
-      AND ${lawBookScope}
+      AND ${outerScope}
     ORDER BY path`,
     lawId,
     CURRENT_LAW_BOOK_EDITION_KEY,

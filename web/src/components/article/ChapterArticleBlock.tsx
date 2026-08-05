@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, useMemo } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useScrollActiveArticle } from "@/contexts/ScrollActiveArticleContext";
 import {
@@ -145,6 +146,22 @@ function CaptionWithArticleLinks({
   );
 }
 
+/**
+ * 本文中の「政令」という単語を太字にする。
+ * 法令集（冊子）では「政令」が強調表示されることが多い。
+ */
+function emphasizeCabinetOrder(text: string): ReactNode {
+  if (!text.includes("政令")) return text;
+  const parts = text.split(/(政令)/g);
+  return parts.map((part, i) =>
+    part === "政令" ? (
+      <strong key={i} style={{ fontWeight: 700 }}>政令</strong>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
 interface ChapterArticleBlockProps {
   articleRoot: ArticleRow;
   descendantNodes: ArticleRow[];
@@ -241,7 +258,7 @@ export default function ChapterArticleBlock({
             <span className="law-node__label--article-inline">{label}</span>
             <span className="law-node__article-inline-body">
               <span>{"　"}</span>
-              {inlineFirstParaText}
+              {emphasizeCabinetOrder(inlineFirstParaText ?? "")}
             </span>
           </p>
         </div>

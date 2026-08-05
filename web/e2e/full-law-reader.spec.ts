@@ -59,6 +59,21 @@ test.describe("Phase 1 全文法令リーダー", () => {
     await expect(source).toHaveAttribute("target", "_blank");
   });
 
+  test("現行版の施行日・確認状態を running header へ表示する", async ({ page }) => {
+    await page.goto(`/articles/${TEST_ARTICLE_ID}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+    // 計画書 Task 14 Step 4: verified なら見出し「e-Gov現行施行版」
+    await expect(
+      page.getByText("e-Gov現行施行版", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/施行日: 2026-/)).toBeVisible();
+    await expect(page.getByText(/最終確認:/)).toBeVisible();
+
+    // 従来の固定収録基準日は表示しない
+    await expect(page.getByText(/収録基準日:/)).toHaveCount(0);
+  });
+
   test("検索結果を比較用の新しいタブで開く", async ({ page }) => {
     await page.goto(`/articles/${TEST_ARTICLE_ID}`);
     await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();

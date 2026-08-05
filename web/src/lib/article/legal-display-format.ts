@@ -20,6 +20,7 @@ import {
   formatKanjiQuantity,
   isKanjiNumberPart,
 } from "@/lib/article/legal-number-format";
+import { kanjiToArabic } from "@/lib/article/normalize-article";
 
 /**
  * 表示トークン（設計書§3）。
@@ -37,6 +38,10 @@ export interface LegalDisplayToken {
   displayText: string;
   /** トークンの種類 */
   kind: "plain" | "number" | "unit" | "fraction";
+  /** kind === "fraction" のときの分子（算用数字文字列） */
+  fractionNumerator?: string;
+  /** kind === "fraction" のときの分母（算用数字文字列・カンマ付き） */
+  fractionDenominator?: string;
 }
 
 /**
@@ -142,6 +147,8 @@ export function formatLegalText(text: string): LegalDisplayToken[] {
         sourceEnd: fractionMatch.sourceEnd,
         displayText: fractionMatch.displayText,
         kind: "fraction",
+        fractionNumerator: fractionMatch.numerator,
+        fractionDenominator: fractionMatch.denominator,
       });
       pos = fractionMatch.sourceEnd;
       continue;
@@ -193,11 +200,18 @@ export function formatLegalText(text: string): LegalDisplayToken[] {
 /**
  * 分数パターン「<分母>分の<分子>」のマッチ。
  * 指定位置から始まる分数表現を検索する。
+ * 縦表示レンダリングのため、分子・分母の算用数字文字列も併せて返す。
  */
 function matchFractionAt(
   text: string,
   pos: number,
-): { sourceStart: number; sourceEnd: number; displayText: string } | null {
+): {
+  sourceStart: number;
+  sourceEnd: number;
+  displayText: string;
+  numerator: string;
+  denominator: string;
+} | null {
   // <漢数字>分の<漢数字> パターン
   const fractionPattern = /^([一二三四五六七八九十百千万億]+)分の([一二三四五六七八九十百千万億]+)/;
   const remaining = text.slice(pos);
@@ -205,10 +219,17 @@ function matchFractionAt(
   if (!match) return null;
 
   const fullMatch = match[0];
+  const denomKanji = match[1]!;
+  const numerKanji = match[2]!;
+  const denominator = kanjiToArabic(denomKanji).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const numerator = kanjiToArabic(numerKanji);
+
   return {
     sourceStart: pos,
     sourceEnd: pos + fullMatch.length,
     displayText: formatFraction(fullMatch),
+    numerator,
+    denominator,
   };
 }
 

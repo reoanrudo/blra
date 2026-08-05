@@ -1,11 +1,16 @@
-import { buildFullLawToc } from "@/lib/article/full-law-document";
+import {
+  buildFullLawToc,
+  type FullLawRevisionMetadata,
+  type LawChangeNotice,
+  type LawRefreshDisplayStatus,
+} from "@/lib/article/full-law-document";
 import type {
   FullLawDocument,
   FullLawNode,
 } from "@/lib/article/full-law-document";
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 
 interface RevisionMetadataRow {
@@ -15,9 +20,52 @@ interface RevisionMetadataRow {
   lawShortName: string | null;
   revisionId: string;
   editionKey: string;
-  sourceDate: string | null;
+  effectiveFrom: string;
+  sourceUpdatedAt: string | null;
+  fetchedAt: string;
+  lastSuccessfulCheckAt: string | null;
+  lastAttemptAt: string | null;
+  lastErrorCode: string | null;
+  repealStatus: string | null;
+  repealDate: string | null;
+  /**
+   * 直近の更新で保存された差分サマリー（設計書 §13.2）。
+   * LawRefreshLawResult.diffSummary の JSON。未保存時は null。
+   */
+  diffSummary: string | null;
 }
 
+/**
+ * 表示用更新状態を判定する。
+ *
+ * - lastSuccessfulCheckAt が無ければ never_checked（一度も確認成功していない）
+ * - lastErrorCode があり、かつ最終試行が最終成功より新しければ check_failed
+ * - それ以外は verified
+ */
+function deriveRefreshStatus(row: RevisionMetadataRow): LawRefreshDisplayStatus {
+  if (!row.lastSuccessfulCheckAt) {
+    return "never_checked";
+  }
+  if (
+    row.lastErrorCode &&
+    row.lastAttemptAt &&
+    row.lastAttemptAt > row.lastSuccessfulCheckAt
+  ) {
+    return "check_failed";
+  }
+  return "verified";
+}
+
+/**
+ * 指定 Revision のメタデータを取得する。
+ * Task 11: 指定 Revision が Law.currentRevisionId と一致しない場合は null を返す。
+ * LawBookEntry は (editionId, lawId) のカタログ所属のみを表し、Revision 結合はしない。
+ *
+ * Task 14: LawRevision の effectiveFrom/sourceUpdatedAt/fetchedAt と、
+ * LEFT JOIN した LawSyncState の確認状態（lastSuccessfulCheckAt/lastAttemptAt/
+ * lastErrorCode/repealStatus/repealDate）を取得する。
+ * LawSyncState が存在しない場合は全て null となり never_checked 扱い。
+ */
 async function getRevisionMetadata(
   lawRevisionId: string,
 ): Promise<RevisionMetadataRow | null> {
@@ -29,14 +77,36 @@ async function getRevisionMetadata(
        law."shortName" AS "lawShortName",
        revision.id AS "revisionId",
        edition."editionKey",
-       to_char(edition."effectiveAsOf" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "sourceDate"
+       to_char(revision."effectiveFrom" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "effectiveFrom",
+       to_char(revision."sourceUpdatedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "sourceUpdatedAt",
+       to_char(revision."fetchedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "fetchedAt",
+       to_char(sync."lastSuccessfulCheckAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "lastSuccessfulCheckAt",
+       to_char(sync."lastAttemptAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "lastAttemptAt",
+       sync."lastErrorCode",
+       sync."repealStatus",
+       to_char(sync."repealDate" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "repealDate",
+       refresh_result."diffSummary"::text AS "diffSummary"
      FROM "LawRevision" revision
      JOIN "Law" law ON law.id = revision."lawId"
      JOIN "LawBookEntry" entry
        ON entry."lawId" = law.id
-      AND entry."lawRevisionId" = revision.id
+      AND entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
+     LEFT JOIN "LawSyncState" sync ON sync."lawId" = law.id
+     LEFT JOIN LATERAL (
+       SELECT lr."diffSummary"
+       FROM "LawRefreshLawResult" lr
+       WHERE lr."lawId" = law.id
+         AND lr."candidateRevisionId" = revision.id
+         AND lr."status" = 'updated'
+       ORDER BY lr."completedAt" DESC
+       LIMIT 1
+     ) refresh_result ON true
      WHERE revision.id = $1
+       AND law."currentRevisionId" = revision.id
        AND edition."editionKey" = $2
      LIMIT 1`,
     lawRevisionId,
@@ -45,10 +115,75 @@ async function getRevisionMetadata(
   return rows[0] ?? null;
 }
 
+/**
+ * Repository行からDTOのRevisionメタデータへ詰め替える。
+ * effectiveFrom は施行日（YYYY-MM-DD）を得るため、タイムゾーン込みの時刻から日付部を切り出す。
+ * 表示の正確性が最優先のため、値の欠落時は安全な既定値へ落とす。
+ */
+export function buildRevisionMetadata(
+  row: RevisionMetadataRow,
+): FullLawRevisionMetadata {
+  const effectiveFromDay = row.effectiveFrom?.slice(0, 10) ?? "";
+  return {
+    id: row.revisionId,
+    editionKey: row.editionKey,
+    effectiveFrom: effectiveFromDay,
+    sourceUpdatedAt: row.sourceUpdatedAt,
+    fetchedAt: row.fetchedAt,
+    lastSuccessfulCheckAt: row.lastSuccessfulCheckAt,
+    lastAttemptAt: row.lastAttemptAt,
+    refreshStatus: deriveRefreshStatus(row),
+    refreshErrorCode: row.lastErrorCode,
+    repealStatus: row.repealStatus,
+    repealDate: row.repealDate,
+    changeNotice: parseChangeNotice(row.diffSummary),
+  };
+}
+
+/**
+ * DBから取得した diffSummary JSON文字列から変更通知データを構築する。
+ *
+ * 設計書 §13.2 の表示条件:
+ * - changedArticleNumbers が空（unchanged, 初回導入）→ null
+ * - パース失敗や想定外の形式 → null（安全側へ落とす）
+ */
+function parseChangeNotice(
+  diffSummaryJson: string | null,
+): LawChangeNotice | null {
+  if (!diffSummaryJson) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(diffSummaryJson);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const summary = parsed as Record<string, unknown>;
+  const changedArticleNumbers = summary.changedArticleNumbers;
+  if (!Array.isArray(changedArticleNumbers)) return null;
+  const numbers = changedArticleNumbers.filter(
+    (n): n is string => typeof n === "string" && n.length > 0,
+  );
+  if (numbers.length === 0) return null;
+
+  const counts = summary.counts;
+  const changeCount =
+    typeof counts === "object" && counts !== null
+      ? (counts as Record<string, number>).modified ?? 0 +
+        ((counts as Record<string, number>).added ?? 0) +
+        ((counts as Record<string, number>).removed ?? 0)
+      : numbers.length;
+
+  return {
+    changedArticleNumbers: numbers,
+    changeCount,
+  };
+}
+
 async function getRevisionNodes(
   lawRevisionId: string,
 ): Promise<FullLawNode[]> {
-  const articleScope = lawBookArticleScopeSql("tree", "entry");
+  const articleScope = currentLawBookArticleScopeSql("tree", "entry", "law");
   return prisma.$queryRawUnsafe<FullLawNode[]>(
     `WITH RECURSIVE tree AS (
        SELECT
@@ -71,7 +206,10 @@ async function getRevisionNodes(
          article."lawId",
          article."regulationType",
          article."stableNodeKey",
+         article."durableNodeKey",
+         article."deletedAt",
          article."lawRevisionId",
+         article."tableMetadata",
          ARRAY[article."sortOrder"] AS path
        FROM "Article" article
        WHERE article."lawRevisionId" = $1
@@ -100,7 +238,10 @@ async function getRevisionNodes(
          article."lawId",
          article."regulationType",
          article."stableNodeKey",
+         article."durableNodeKey",
+         article."deletedAt",
          article."lawRevisionId",
+         article."tableMetadata",
          tree.path || article."sortOrder"
        FROM "Article" article
        INNER JOIN tree ON article."parentId" = tree.id
@@ -109,9 +250,13 @@ async function getRevisionNodes(
      )
      SELECT tree.*
      FROM tree
+     JOIN "Law" law ON law.id = tree."lawId"
      JOIN "LawBookEntry" entry
-       ON entry."lawId" = tree."lawId"
-      AND entry."lawRevisionId" = tree."lawRevisionId"
+       ON entry."lawId" = law.id
+      AND entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
      WHERE edition."editionKey" = $2
        AND ${articleScope}
@@ -124,8 +269,8 @@ async function getRevisionNodes(
 async function getRevisionResolvedLinks(
   lawRevisionId: string,
 ): Promise<OutgoingLinkRow[]> {
-  const sourceScope = lawBookArticleScopeSql("source", "source_entry");
-  const targetScope = lawBookArticleScopeSql("target", "target_entry");
+  const sourceScope = currentLawBookArticleScopeSql("source", "source_entry", "source_law");
+  const targetScope = currentLawBookArticleScopeSql("target", "target_entry", "target_law");
   return prisma.$queryRawUnsafe<OutgoingLinkRow[]>(
     `SELECT
        link.id,
@@ -142,16 +287,23 @@ async function getRevisionResolvedLinks(
        target_law."shortName" AS "targetLawShortName"
      FROM "Link" link
      JOIN "Article" source ON source.id = link."sourceId"
+     JOIN "Law" source_law ON source_law.id = source."lawId"
      JOIN "LawBookEntry" source_entry
-       ON source_entry."lawId" = source."lawId"
-      AND source_entry."lawRevisionId" = source."lawRevisionId"
+       ON source_entry."lawId" = source_law.id
+      AND source_entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" source_edition
        ON source_edition.id = source_entry."editionId"
      JOIN "Article" target ON target.id = link."targetId"
      JOIN "Law" target_law ON target_law.id = target."lawId"
      JOIN "LawBookEntry" target_entry
-       ON target_entry."lawId" = target."lawId"
-      AND target_entry."lawRevisionId" = target."lawRevisionId"
+       ON target_entry."lawId" = target_law.id
+      AND target_entry."editionId" = (
+        SELECT edition_inner.id FROM "LawBookEdition" edition_inner
+        WHERE edition_inner."editionKey" = $2
+      )
      JOIN "LawBookEdition" target_edition
        ON target_edition.id = target_entry."editionId"
      WHERE source."lawRevisionId" = $1
@@ -177,6 +329,8 @@ export async function getFullLawDocument(
     getRevisionResolvedLinks(lawRevisionId),
   ]);
 
+  // metadata が null = 指定 Revision が Law.currentRevisionId ではない、
+  // またはカタログ未収録。いずれにせよ公開対象ではない。
   if (!metadata || nodes.length === 0) return null;
 
   const linksBySource = links.reduce<Record<string, OutgoingLinkRow[]>>(
@@ -194,11 +348,7 @@ export async function getFullLawDocument(
       name: metadata.lawName,
       shortName: metadata.lawShortName,
     },
-    revision: {
-      id: metadata.revisionId,
-      editionKey: metadata.editionKey,
-      sourceDate: metadata.sourceDate,
-    },
+    revision: buildRevisionMetadata(metadata),
     toc: buildFullLawToc(nodes),
     nodes,
     linksBySource,
