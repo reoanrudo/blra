@@ -45,10 +45,17 @@ export function nodeLabel(node: TocNode): string {
       if (node.caption) return `第${num}条${wrapCaption(node.caption)}`;
       return `第${num}条`;
     }
-    case "appdx_table":
-      if (node.title) return node.title;
-      if (node.articleNumber) return `別表第${formatStructuredNumber(node.articleNumber)}`;
-      return node.textFirstLine ?? "別表";
+    case "appdx_table": {
+      // 実データでは title="null", articleNumber="null"。
+      // textFirstLine に「別表第一」等が入っているため、それをそのまま使用。
+      const label = node.textFirstLine?.trim() ?? "";
+      if (label && label !== "null") return label;
+      if (node.title && node.title !== "null") return node.title;
+      if (node.articleNumber && node.articleNumber !== "null") {
+        return `別表第${formatStructuredNumber(node.articleNumber)}`;
+      }
+      return "別表";
+    }
     case "table_struct":
       return node.title ?? (node.articleNumber ? `別表第${formatStructuredNumber(node.articleNumber)} 構造` : "別表 構造");
     case "table":
@@ -79,7 +86,6 @@ const expandableTocLevels = new Set([
   "chapter",
   "section",
   "subsection",
-  "appdx_table",
   "supplement_group",
   "suppl_provision",
 ]);

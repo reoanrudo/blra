@@ -34,14 +34,14 @@
 
   .law-running-header__law {
     color: var(--law-muted);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 0;
   }
 
   .law-running-header__section {
     color: var(--law-ink);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -51,7 +51,7 @@
   .law-article-title {
     color: var(--law-ink);
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 800;
     line-height: 1.25;
     margin: 0;
@@ -60,15 +60,34 @@
   .law-article-caption {
     color: var(--law-accent);
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-    font-size: 14px;
-    font-weight: 800;
+    font-size: 15px;
+    font-weight: 400;
     line-height: 1.5;
-    margin: 6px 0 18px;
+    margin: 6px 0 2px;
+  }
+
+  /* 別表キャプションは黒文字（リンク部分のみアクセント色）。 */
+  .law-article-caption--appdx {
+    color: var(--law-ink);
+  }
+
+  /* キャプション内の条番号リンクはアクセント色・下線付き。
+     本文のリンクと同じ色で、リンクであることが分かるようにする。 */
+  .law-article-caption a {
+    color: var(--law-accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
   }
 
   .law-body {
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.92;
+    /* 別表等の広幅テーブルが親レイアウトへ漏出してページ全体が
+       横スクロールするのを防ぐ。テーブル自体は law-table-wrapper
+       の overflow-x:auto でスクロール可能。 */
+    overflow-x: hidden;
+    min-width: 0;
   }
 
   .law-body a {
@@ -80,7 +99,7 @@
 
   .law-heading {
     break-inside: avoid;
-    color: var(--law-accent);
+    color: var(--law-ink);
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
     font-weight: 800;
     line-height: 1.5;
@@ -90,18 +109,25 @@
     border-top: 1px solid #bdb6aa;
     margin: 22px 0 8px;
     padding-top: 10px;
-    font-size: 17px;
+    font-size: 18px;
+    color: var(--law-accent);
+    font-weight: 400;
   }
 
   .law-heading--section {
     margin: 18px 0 6px;
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .law-heading--subsection {
     margin: 14px 0 4px;
-    color: #6d2450;
-    font-size: 13px;
+    font-size: 14px;
+  }
+
+  /* 章・節・款のタイトル部分（「総則」「建築物の用途」等）は
+     ピンク色。番号部分（「第1節」等）は黒。 */
+  .law-heading__title {
+    color: var(--law-accent);
   }
 
   .law-node {
@@ -113,7 +139,7 @@
   .law-node__caption {
     color: var(--law-accent);
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 800;
     line-height: 1.5;
     margin-bottom: 2px;
@@ -121,7 +147,7 @@
 
   .law-node__text {
     display: flex;
-    gap: 0.75em;
+    gap: 0;
     align-items: baseline;
     margin: 0;
   }
@@ -133,21 +159,134 @@
 
   .law-node__label {
     flex: 0 0 auto;
-    min-width: 2.75em;
     color: #302b25;
-    font-weight: 800;
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    font-weight: 600;
+  }
+
+  /* 枝番（イ、ロ、(1)、(i) 等）は通常の太さ。 */
+  .law-node__label--sub {
+    font-weight: 400;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  }
+
+  /* 条番号と第1項本文を1行にした場合のレイアウト。
+     float ベースでぶら下げインデントを実現する。 */
+  .law-node__text--article-inline {
+    display: block;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .law-node__label--article-inline {
+    float: left;
+    color: #302b25;
+    font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    font-weight: 600;
+  }
+
+  /* 本文要素。float の右側に回り込み、
+     2行目以降は margin-left（ラベル幅+全角スペース）の位置から始まる。
+     overflow:hidden でBFCを生成し、float回り込みを有効にする。 */
+  .law-node__article-inline-body {
+    display: block;
+    overflow: hidden;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* 定義ノードの本文。2行目以降を定義語の開始位置に揃える（ぶら下げインデント）。
+     法令集の冊子では、号の本文が定義語の右から始まり、
+     折り返し時も同じ位置に揃う。 */
+  .law-node__definition-body {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    /* flex 内で幅を占有し、折り返しをこの要素内に収める */
+    flex: 1 1 0;
   }
 
   .law-table-wrapper {
     break-inside: avoid;
   }
 
+  /* 分数の縦表示（法令集の冊子スタイル）。
+     分子を上、分母を下に重ねて表示。 */
+  .law-fraction {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    line-height: 1;
+  }
+  .law-fraction__num {
+    font-size: 0.85em;
+    width: 1.5em;
+    text-align: center;
+    overflow: visible;
+  }
+  .law-fraction__bar {
+    display: none;
+  }
+  .law-fraction__denom {
+    font-size: 0.85em;
+    width: 1.5em;
+    text-align: center;
+    overflow: visible;
+    border-top: 1px solid currentColor;
+    padding-top: 1px;
+  }
+
   .law-table {
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+    table-layout: auto;
+    width: 100%;
+    max-width: 100%;
   }
 
   .law-table__cell {
-    font-size: 12px;
+    font-size: 13px;
+    /* 広幅テーブルのセル内で文字を折り返す。 */
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* 短い見出しセル（「（い）」「（ろ）」「（1）」等）は折り返さない。
+     法令集（冊子）と同様に1行で収め、列幅を最小化する。 */
+  .law-table__cell--nowrap {
+    white-space: nowrap;
+    word-break: normal;
+    /* 短い見出しセルは最小幅にする。 */
+    width: 1%;
+    /* padding を削って視覚的にコンパクトにする */
+    padding-left: 4px;
+    padding-right: 4px;
+    text-align: center;
+  }
+
+  /* テキスト内の改行（\n）を保持して表示する。
+     法令集（冊子）と同様に、番号付き項目「1　住宅\n2　住宅で…」を
+     数字ごとに改行して縦に並べる。 */
+  .law-table__cell--preline {
+    white-space: pre-line;
+  }
+
+  /* ヘッダー行のセル（colspanなし、例「割合」）。字間1em。 */
+  .law-table__cell--header {
+    letter-spacing: 1em;
+    text-indent: 1em;
+  }
+
+  /* ヘッダー行のセル（colspanあり、例「居室の種類」）。字間2em。 */
+  .law-table__cell--header-wide {
+    letter-spacing: 2em;
+    text-indent: 2em;
+  }
+
+  /* 分数セル。padding を削って最小幅にする。 */
+  .law-table__cell--fraction {
+    padding-left: 2px;
+    padding-right: 2px;
+    text-align: center;
   }
 
   .law-table__header-row .law-table__cell {
@@ -155,7 +294,14 @@
     color: #302b25;
     font-weight: 800;
     text-align: center;
-    white-space: nowrap;
+  }
+
+  /* 列説明ヘッダー行（2行目）のうち、短い見出しセル
+     （「用途」「距離」「数値」等）のみ上下左右中央に配置する。
+     長い説明文（「（い）欄の用途に供する階」等）は左寄せ・上寄せのまま。 */
+  .law-table__sub-header-row .law-table__cell--nowrap {
+    text-align: center;
+    vertical-align: middle;
   }
 
   .law-note-panel {
@@ -170,7 +316,7 @@
     align-items: center;
     gap: 8px;
     color: #292521;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 800;
     letter-spacing: 0;
     border-bottom: 2px solid #292521;
@@ -187,7 +333,7 @@
     border-radius: 2px;
     background: #2b2b2b;
     color: #fff;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
     line-height: 1;
   }
@@ -229,7 +375,7 @@
     }
 
     .law-body {
-      font-size: 13px;
+      font-size: 14px;
       line-height: 1.85;
     }
   }

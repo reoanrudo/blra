@@ -45,10 +45,8 @@ export async function GET(request: NextRequest) {
         AND (
           a.level IN (
             'chapter', 'section', 'subsection', 'article',
-            'appdx_table', 'table_struct', 'table',
-            'suppl_provision'
+            'appdx_table'
           )
-          OR (a.level = 'paragraph' AND t.level = 'suppl_provision')
         )
     )
     SELECT toc_tree.id, toc_tree."parentId", toc_tree.level, toc_tree.title,

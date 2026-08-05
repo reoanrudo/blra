@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useLayoutEffect, useMemo } from "react";
+import { memo, useLayoutEffect, useMemo, useEffect } from "react";
 import ChapterArticleBlock from "@/components/article/ChapterArticleBlock";
 import { articleDisplayTitle } from "@/lib/article/article";
 import { levelHeadingClass } from "@/lib/article/article-renderer";
@@ -10,6 +10,8 @@ import {
   fullLawTargetSelector,
   type FullLawDocument,
 } from "@/lib/article/full-law-document";
+import { useScrollContainer } from "@/contexts/ScrollContainerContext";
+import { useScrollActiveArticle } from "@/contexts/ScrollActiveArticleContext";
 import type { ConfirmedRelation } from "@/lib/relations/confirmed-relation";
 
 function FullLawViewerImpl({
@@ -37,6 +39,18 @@ function FullLawViewerImpl({
     (block) => block.kind === "article",
   )?.article.root.id;
 
+  const mainRef = useScrollContainer();
+  const { registerScrollContainer } = useScrollActiveArticle() ?? {};
+
+  // スクロールコンテナ（<main>）を登録し、scroll ベースのハイライト追従を有効化。
+  // FullLawViewer は全文を一度に描画するため、章スクロールとは異なり
+  // ここで登録しないと scroll-spy が発火しない。
+  useEffect(() => {
+    const container = mainRef?.current;
+    if (!container || !registerScrollContainer) return;
+    return registerScrollContainer(container);
+  }, [mainRef, registerScrollContainer]);
+
   useLayoutEffect(() => {
     window.document
       .querySelector<HTMLElement>(fullLawTargetSelector(targetArticleId))
@@ -53,7 +67,24 @@ function FullLawViewerImpl({
             data-article-id={block.node.id}
             className={`${levelHeadingClass(block.node.level)} scroll-mt-20`}
           >
-            {articleDisplayTitle(block.node)}
+            {(() => {
+              // タイトルを番号部分（「第1節」等）と名前部分（「総則」等）に分割。
+              // 節・款の名前部分はピンク色（law-accent）で表示。
+              const title = articleDisplayTitle(block.node);
+              const m = title.match(/^(第[^\s　]+[節款章編部])(?:[\s　]+(.+))?$/);
+              if (m) {
+                return (
+                  <>
+                    <span>{m[1]}</span>
+                    {m[2] && <>
+                      {"　"}
+                      <span className="law-heading__title">{m[2]}</span>
+                    </>}
+                  </>
+                );
+              }
+              return title;
+            })()}
           </header>
         ) : (
           <ChapterArticleBlock

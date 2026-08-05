@@ -40,9 +40,6 @@ const tocLevels = new Set([
   "subsection",
   "article",
   "appdx_table",
-  "table_struct",
-  "table",
-  "suppl_provision",
 ]);
 
 export function fullLawAnchorId(articleId: string): string {

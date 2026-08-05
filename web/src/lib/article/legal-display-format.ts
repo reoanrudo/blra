@@ -173,8 +173,21 @@ export function formatLegalText(text: string): LegalDisplayToken[] {
     });
   }
 
-  // 隣接する plain トークンを結合（最適化）
-  return mergeAdjacentPlainTokens(tokens);
+  // 隣接する plain トークンを結合（最確化）
+  const merged = mergeAdjacentPlainTokens(tokens);
+
+  // 全角括弧・全角英数字を半角に変換。
+  // 法令本文中の「（い）」「（１）」「（ｉｉ）」等を読みやすくするため。
+  // 全角→半角は1文字→1文字の置換なので sourceStart/sourceEnd の座標はずれない。
+  for (const token of merged) {
+    token.displayText = token.displayText
+      .replace(/（/g, "(")
+      .replace(/）/g, ")")
+      // 全角英数字を半角に変換（1文字→1文字）
+      .replace(/[０-９Ａ-Ｚａ-ｚ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  }
+
+  return merged;
 }
 
 /**
