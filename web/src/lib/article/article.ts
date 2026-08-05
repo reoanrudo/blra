@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 
 export interface ArticleRow {
@@ -27,11 +27,13 @@ export interface ArticleRow {
   stableNodeKey: string | null;
   /** Articleが属するLawRevisionのID */
   lawRevisionId: string;
+  /** table_column のセルスタイルJSON（TableCellStyle）。それ以外は null */
+  tableMetadata: string | null;
 }
 
 /** Fetch article with full descendant tree via recursive CTE (single query, no N+1) */
 export async function getArticleWithTree(articleId: string): Promise<ArticleRow[]> {
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const lawBookScope = currentLawBookArticleScopeSql("a", "e", "l");
   const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
     `
     WITH RECURSIVE article_tree AS (
@@ -40,10 +42,10 @@ export async function getArticleWithTree(articleId: string): Promise<ArticleRow[
       FROM "Article" a
       JOIN "Law" l ON a."lawId" = l.id
       JOIN "LawBookEntry" e
-        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+        ON e."lawId" = l.id
+       AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
       JOIN "LawBookEdition" edition ON edition.id = e."editionId"
       WHERE a.id = $1
-        AND a."deletedAt" IS NULL
         AND edition."editionKey" = $2
         AND ${lawBookScope}
 
@@ -54,6 +56,7 @@ export async function getArticleWithTree(articleId: string): Promise<ArticleRow[
       FROM "Article" a
       INNER JOIN article_tree at ON a."parentId" = at.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = at."lawRevisionId"
     )
     SELECT * FROM article_tree ORDER BY path
     `,
@@ -65,7 +68,7 @@ export async function getArticleWithTree(articleId: string): Promise<ArticleRow[
 
 /** Fetch ancestor chain for breadcrumbs (root-to-leaf order) */
 export async function getArticleBreadcrumb(articleId: string): Promise<ArticleRow[]> {
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const lawBookScope = currentLawBookArticleScopeSql("a", "e", "l");
   const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
     `
     WITH RECURSIVE ancestor_chain AS (
@@ -73,10 +76,10 @@ export async function getArticleBreadcrumb(articleId: string): Promise<ArticleRo
       FROM "Article" a
       JOIN "Law" l ON a."lawId" = l.id
       JOIN "LawBookEntry" e
-        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+        ON e."lawId" = l.id
+       AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
       JOIN "LawBookEdition" edition ON edition.id = e."editionId"
       WHERE a.id = $1
-        AND a."deletedAt" IS NULL
         AND edition."editionKey" = $2
         AND ${lawBookScope}
 
@@ -86,6 +89,7 @@ export async function getArticleBreadcrumb(articleId: string): Promise<ArticleRo
       FROM "Article" a
       INNER JOIN ancestor_chain ac ON a.id = ac."parentId"
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = ac."lawRevisionId"
     )
     SELECT * FROM ancestor_chain ORDER BY depth DESC
     `,
@@ -244,7 +248,7 @@ export async function getChapterArticlesWithTrees(
   articles: ChapterArticle[];
   scopeAncestor: ArticleRow | null;
 }> {
-  const articleScope = lawBookArticleScopeSql("a", "e");
+  const articleScope = currentLawBookArticleScopeSql("a", "e", "l");
   // Step 1: Find scope ancestor by walking up.
   // ADR-024: 章スクロールのスコープは chapter を最優先。
   // 子→親へ遡る再帰CTEで全祖先を集め、CASE で優先順（chapter > section > subsection）を与えて最初の1件を採用する。
@@ -252,20 +256,22 @@ export async function getChapterArticlesWithTrees(
   const ancestors = await prisma.$queryRawUnsafe<Array<{ id: string; level: string }>>(
     `
     WITH RECURSIVE up AS (
-      SELECT a.id, a."parentId", a.level
+      SELECT a.id, a."parentId", a.level, a."lawRevisionId"
       FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
       JOIN "LawBookEntry" e
-        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+        ON e."lawId" = l.id
+       AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
       JOIN "LawBookEdition" edition ON edition.id = e."editionId"
       WHERE a.id = $1
-        AND a."deletedAt" IS NULL
         AND edition."editionKey" = $2
         AND ${articleScope}
       UNION ALL
-      SELECT a.id, a."parentId", a.level
+      SELECT a.id, a."parentId", a.level, a."lawRevisionId"
       FROM "Article" a
       INNER JOIN up ON a.id = up."parentId"
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = up."lawRevisionId"
     )
     SELECT id, level FROM up
     WHERE level IN ('chapter', 'section', 'subsection')
@@ -292,20 +298,22 @@ export async function getChapterArticlesWithTrees(
     const rootRow = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `
       WITH RECURSIVE up AS (
-        SELECT a.id, a."parentId"
+        SELECT a.id, a."parentId", a."lawRevisionId"
         FROM "Article" a
+        JOIN "Law" l ON a."lawId" = l.id
         JOIN "LawBookEntry" e
-          ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+          ON e."lawId" = l.id
+         AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
         JOIN "LawBookEdition" edition ON edition.id = e."editionId"
         WHERE a.id = $1
-          AND a."deletedAt" IS NULL
           AND edition."editionKey" = $2
           AND ${articleScope}
         UNION ALL
-        SELECT a.id, a."parentId"
+        SELECT a.id, a."parentId", a."lawRevisionId"
         FROM "Article" a
         INNER JOIN up ON a.id = up."parentId"
         WHERE a."deletedAt" IS NULL
+          AND a."lawRevisionId" = up."lawRevisionId"
       )
       SELECT id FROM up WHERE "parentId" IS NULL LIMIT 1
       `,
@@ -328,7 +336,7 @@ export async function getChapterArticlesWithTrees(
   scopeAncestor = scopeRows[0] ?? null;
 
   // Step 3: Fetch all descendants of scope ancestor
-  const treeScope = lawBookArticleScopeSql("tree", "e");
+  const treeScope = currentLawBookArticleScopeSql("tree", "e", "tree_law");
   const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
     `
     WITH RECURSIVE tree AS (
@@ -345,11 +353,14 @@ export async function getChapterArticlesWithTrees(
       FROM "Article" a
       INNER JOIN tree ON a."parentId" = tree.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = tree."lawRevisionId"
     )
     SELECT tree.*
     FROM tree
+    JOIN "Law" tree_law ON tree_law.id = tree."lawId"
     JOIN "LawBookEntry" e
-      ON e."lawId" = tree."lawId" AND e."lawRevisionId" = tree."lawRevisionId"
+      ON e."lawId" = tree_law.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE edition."editionKey" = $2
       AND ${treeScope}
@@ -387,4 +398,87 @@ export async function getChapterArticlesWithTrees(
   }
 
   return { articles, scopeAncestor };
+}
+
+// ─── 旧 Revision 履歴表示（Task 13） ───
+
+/**
+ * 旧 Revision 所属 Article の履歴表示用ドキュメント。
+ *
+ * removed / historical のいずれかで表示する際、現行スコープを迂回して旧本文を
+ * 読み出すために使う。編集・ハイライト作成操作は出さない読み取り専用データ。
+ */
+export interface HistoricalArticleDocument {
+  /** 旧 Article の subtree（root + 子孫）。ArticleRow と同じ形状。 */
+  tree: ArticleRow[];
+  /** 法令名（Law.name）。 */
+  lawName: string;
+  /** 旧 Article が属する LawRevision の公式版キー（LawRevision.officialVersionKey）。 */
+  officialVersionKey: string;
+  /** 旧 Article が属する LawRevision の施行日（LawRevision.effectiveFrom、ISO 文字列）。 */
+  effectiveFrom: string | null;
+}
+
+/**
+ * 現行スコープを迂回して、旧 Revision 所属 Article の subtree を読み出す。
+ *
+ * 計画書 Task 13 Step 4 の要件:
+ * - deletedAt に関係なく旧 Revision の Article を取得する（改正で削除された条も表示）。
+ * - LawBookEntry / Law.currentRevisionId のフィルタを適用しない（現行スコープ外）。
+ * - 法令名、公式版番号、施行日を併せて返す。
+ *
+ * getArticleWithTree と同じ再帰 CTE を使うが、LawBookEntry 結合と現行 Revision
+ * フィルタを除去している点が異なる。
+ *
+ * Article が存在しない、または Revision メタデータが取得できない場合は null。
+ */
+export async function getHistoricalArticleWithTree(
+  articleId: string,
+): Promise<HistoricalArticleDocument | null> {
+  const tree = await prisma.$queryRawUnsafe<ArticleRow[]>(
+    `
+    WITH RECURSIVE article_tree AS (
+      SELECT a.*, l.name AS "lawName", 0 AS depth,
+             ARRAY[a."sortOrder"] AS path
+      FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
+      WHERE a.id = $1
+
+      UNION ALL
+
+      SELECT a.*, at."lawName", at.depth + 1,
+             at.path || a."sortOrder"
+      FROM "Article" a
+      INNER JOIN article_tree at ON a."parentId" = at.id
+      WHERE a."lawRevisionId" = at."lawRevisionId"
+        AND a."deletedAt" IS NULL
+    )
+    SELECT * FROM article_tree ORDER BY path
+    `,
+    articleId,
+  );
+
+  if (tree.length === 0) return null;
+
+  const rootArticle = tree[0]!;
+  const revisionRows = await prisma.$queryRawUnsafe<
+    Array<{ officialVersionKey: string; effectiveFrom: Date | null }>
+  >(
+    `SELECT revision."officialVersionKey", revision."effectiveFrom"
+     FROM "LawRevision" revision
+     WHERE revision.id = $1
+     LIMIT 1`,
+    rootArticle.lawRevisionId,
+  );
+  const revision = revisionRows[0];
+  if (!revision) return null;
+
+  return {
+    tree,
+    lawName: rootArticle.lawName,
+    officialVersionKey: revision.officialVersionKey,
+    effectiveFrom: revision.effectiveFrom
+      ? revision.effectiveFrom.toISOString()
+      : null,
+  };
 }

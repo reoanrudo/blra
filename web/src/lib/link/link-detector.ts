@@ -10,7 +10,7 @@ import { normalizeArticleNumber } from "@/lib/article/normalize-article";
 import { prisma } from "@/lib/db";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 
 // ─── Constants ───
 
@@ -181,7 +181,7 @@ export async function resolveReferences(
   });
   const editionKeyParam = idx;
   params.push(CURRENT_LAW_BOOK_EDITION_KEY);
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const currentScope = currentLawBookArticleScopeSql("a", "e", "l");
 
   const rows = await prisma.$queryRawUnsafe<
     {
@@ -195,11 +195,11 @@ export async function resolveReferences(
      FROM "Article" a
      JOIN "Law" l ON a."lawId" = l.id
      JOIN "LawBookEntry" e
-       ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+       ON e."lawId" = l."id"
      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
      WHERE a."deletedAt" IS NULL
        AND edition."editionKey" = $${editionKeyParam}
-       AND ${lawBookScope}
+       AND ${currentScope}
        AND (${conditions.join(" OR ")})`,
     ...params,
   );

@@ -14,9 +14,10 @@ interface LawResponse {
   firstArticleId: string;
 }
 
-/** 法令一覧API応答（設計書§4.1: editionKey + laws） */
+/** 法令一覧API応答（設計書§4.1: editionKey + laws。Task 14: corpusVersion 追加） */
 interface LawListApiResponse {
   editionKey: string;
+  corpusVersion: string;
   laws: LawResponse[];
 }
 
@@ -82,6 +83,10 @@ async function main(): Promise<void> {
     const lawsBody = (await lawsResponse.json()) as LawListApiResponse;
     const laws = lawsBody.laws;
     assert(laws.length === 120, `法令一覧が120件ではありません: ${laws.length}`);
+    assert(
+      typeof lawsBody.corpusVersion === "string" && lawsBody.corpusVersion.length > 0,
+      `corpusVersion が空です: ${String(lawsBody.corpusVersion)}`,
+    );
     assert(laws[0].displayOrder === 1 && laws[119].displayOrder === 120, "掲載順が不正です");
 
     const last = laws[119];

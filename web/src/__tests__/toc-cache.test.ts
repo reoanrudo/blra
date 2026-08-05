@@ -108,16 +108,13 @@ describe("toc-cache（目次キャッシュ）", () => {
     // メモリキャッシュが空であることを確認した上で、
     // 不正なJSONをsessionStorageへ直接書き込み
     invalidateCachedToc(EDITION, REV_2026, LAW_ID);
-    sessionStorage.setItem(
-      `toc-session:${EDITION}:${REV_2026}:${LAW_ID}`,
-      "this-is-not-json",
-    );
+    // buildKey が v2 プレフィックスを含むため、実際のキー形式へ合わせる
+    const sessionKey = `toc-session:v2:${EDITION}:${REV_2026}:${LAW_ID}`;
+    sessionStorage.setItem(sessionKey, "this-is-not-json");
     const cached = getCachedToc(EDITION, REV_2026, LAW_ID);
     expect(cached).toBeNull();
     // 破損データは削除される
-    expect(
-      sessionStorage.getItem(`toc-session:${EDITION}:${REV_2026}:${LAW_ID}`),
-    ).toBeNull();
+    expect(sessionStorage.getItem(sessionKey)).toBeNull();
   });
 
   it("Schema不一致のキャッシュは破棄する", () => {

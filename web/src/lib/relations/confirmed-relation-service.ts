@@ -6,7 +6,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import { normalizeRelationRationale } from "@/lib/relations/confirmed-relation";
 
 export interface SaveCandidateInput {
@@ -58,7 +58,14 @@ export class ConfirmedRelationConflictError extends Error {
   }
 }
 
-const relationScopeSql = lawBookArticleScopeSql("article", "entry");
+/**
+ * 確認済み関係の入力検証で使う current Article スコープ。
+ *
+ * 確認済み関係は current Revision を既定とし、旧 Revision の Article を受け付けない。
+ * Task 12 で catalog scope（LawBookEntry.lawRevisionId 固定）から current scope
+ * （Law.currentRevisionId）へ切替えた。
+ */
+const relationScopeSql = currentLawBookArticleScopeSql("article", "entry", "law");
 
 const SERIALIZABLE = {
   isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -102,9 +109,9 @@ async function assertCurrentArticle(
   const rows = await tx.$queryRawUnsafe<{ id: string }[]>(
     `SELECT article.id
        FROM "Article" article
+       JOIN "Law" law ON law."id" = article."lawId"
        JOIN "LawBookEntry" entry
-         ON entry."lawId" = article."lawId"
-        AND entry."lawRevisionId" = article."lawRevisionId"
+         ON entry."lawId" = law."id"
        JOIN "LawBookEdition" edition ON edition.id = entry."editionId"
       WHERE article.id = $1
         AND article.level = 'article'

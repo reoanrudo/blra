@@ -22,13 +22,19 @@ interface ArchivedLawRow {
 }
 
 /**
- * 指定Editionに収録されていないRevisionを公開コーパスから外す。
- * Article自体はハイライト等の参照維持のため削除せず、soft deleteする。
+ * 指定 Edition に収録されていない law を公開コーパスから外す。
+ *
+ * 不変要件（Task 10）:
+ *   - 収録 120 法令の `Law.currentRevisionId` と current Article を Entry Revision の
+ *     不一致を理由に変更しない。収録 law の現行 Revision は刷新プロセス（Tasks 4-8）の管理下。
+ *   - 非公開化の対象は「当該 law が Edition に1件も Entry を持たない」場合だけ（収録外 law）。
+ *   - Article 自体はハイライト等の参照維持のため削除せず、soft delete する。
  */
 export async function enforceLawBookScope(
   prisma: PrismaClient,
   editionKey: string,
 ): Promise<ScopeEnforcementResult> {
+  // 収録外 law = 当該 Edition に1件も Entry を持たない law。
   const archivedRows = await prisma.$queryRawUnsafe<ArchivedLawRow[]>(
     `SELECT
        l."egovLawId",
@@ -42,8 +48,7 @@ export async function enforceLawBookScope(
          FROM "LawBookEntry" e
          JOIN "LawBookEdition" edition ON edition.id = e."editionId"
          WHERE edition."editionKey" = $1
-           AND e."lawId" = a."lawId"
-           AND e."lawRevisionId" = a."lawRevisionId"
+           AND e."lawId" = l.id
        )
      GROUP BY l.id
      ORDER BY l."egovLawId"`,
@@ -51,7 +56,22 @@ export async function enforceLawBookScope(
   );
 
   const result = await prisma.$transaction(async (tx) => {
-    // source側が収録外のLinkは派生データなので除去する。
+    // 収録外 law の Article を soft delete する（Revision 一致にかかわらず収録 law は保持）。
+    const softDeletedArticles = await tx.$executeRawUnsafe(
+      `UPDATE "Article" a
+       SET "deletedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
+       WHERE a."deletedAt" IS NULL
+         AND NOT EXISTS (
+           SELECT 1
+           FROM "LawBookEntry" e
+           JOIN "LawBookEdition" edition ON edition.id = e."editionId"
+           WHERE edition."editionKey" = $1
+             AND e."lawId" = a."lawId"
+         )`,
+      editionKey,
+    );
+
+    // source側が収録外lawのLinkは派生データなので除去する。
     const deletedSourceLinks = await tx.$executeRawUnsafe(
       `DELETE FROM "Link" link
        USING "Article" source
@@ -62,12 +82,11 @@ export async function enforceLawBookScope(
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = $1
              AND e."lawId" = source."lawId"
-             AND e."lawRevisionId" = source."lawRevisionId"
          )`,
       editionKey,
     );
 
-    // 収録文書から収録外文書へ向くLinkは、引用文字列を残して未解決化する。
+    // 収録lawから収録外lawへ向くLinkは、引用文字列を残して未解決化する。
     const unresolvedTargetLinks = await tx.$executeRawUnsafe(
       `UPDATE "Link" link
        SET "targetId" = NULL, "isResolved" = false
@@ -79,26 +98,12 @@ export async function enforceLawBookScope(
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = $1
              AND e."lawId" = target."lawId"
-             AND e."lawRevisionId" = target."lawRevisionId"
          )`,
       editionKey,
     );
 
-    const softDeletedArticles = await tx.$executeRawUnsafe(
-      `UPDATE "Article" a
-       SET "deletedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
-       WHERE a."deletedAt" IS NULL
-         AND NOT EXISTS (
-           SELECT 1
-           FROM "LawBookEntry" e
-           JOIN "LawBookEdition" edition ON edition.id = e."editionId"
-           WHERE edition."editionKey" = $1
-             AND e."lawId" = a."lawId"
-             AND e."lawRevisionId" = a."lawRevisionId"
-         )`,
-      editionKey,
-    );
-
+    // 収録外lawの現行 Revision を superseded にする。
+    // 収録120法令の現行 Revision は Entry Revision と一致しなくても維持する。
     const supersededRevisions = await tx.$executeRawUnsafe(
       `UPDATE "LawRevision" revision
        SET status = 'superseded'::"LawRevisionStatus"
@@ -110,11 +115,12 @@ export async function enforceLawBookScope(
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = $1
              AND e."lawId" = law.id
-             AND e."lawRevisionId" = revision.id
          )`,
       editionKey,
     );
 
+    // 収録外lawの currentRevisionId を解除する。
+    // 収録120法令の currentRevisionId は Entry Revision 不一致でも解除しない。
     const clearedCurrentRevisions = await tx.$executeRawUnsafe(
       `UPDATE "Law" law
        SET "currentRevisionId" = NULL, "updatedAt" = CURRENT_TIMESTAMP
@@ -125,7 +131,6 @@ export async function enforceLawBookScope(
            JOIN "LawBookEdition" edition ON edition.id = e."editionId"
            WHERE edition."editionKey" = $1
              AND e."lawId" = law.id
-             AND e."lawRevisionId" = law."currentRevisionId"
          )`,
       editionKey,
     );

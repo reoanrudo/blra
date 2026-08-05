@@ -34,6 +34,7 @@ function makeRoot(id: string, sortOrder: number): ArticleRow {
     regulationType: "individual",
     stableNodeKey: `key-${id}`,
     lawRevisionId: "rev-1",
+    tableMetadata: null,
   };
 }
 

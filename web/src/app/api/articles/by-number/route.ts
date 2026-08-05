@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim();
@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
   }
 
   const conditions: string[] = [
-    `a."deletedAt" IS NULL`,
     `a."level" = 'article'`,
     `(a."articleNumber" = $1 OR a."articleNumberNormalized" = $1)`,
   ];
@@ -34,7 +33,7 @@ export async function GET(request: NextRequest) {
   }
 
   const whereClause = conditions.join(" AND ");
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const lawBookScope = currentLawBookArticleScopeSql("a", "e", "l");
 
   const articles = await prisma.$queryRawUnsafe<
     {
@@ -50,13 +49,14 @@ export async function GET(request: NextRequest) {
       a.id,
       a."lawId",
       a."articleNumber",
-      a."caption",
+      a.caption,
       l."name" AS "lawName",
       l."shortName" AS "lawShortName"
     FROM "Article" a
     JOIN "Law" l ON a."lawId" = l.id
     JOIN "LawBookEntry" e
-      ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+      ON e."lawId" = l.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE ${whereClause}
       AND edition."editionKey" = $${paramIdx}

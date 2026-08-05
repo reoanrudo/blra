@@ -13,6 +13,7 @@ import type {
   ParsedLawDocument,
   ParsedLawNode,
   ParseLawContext,
+  TableCellStyle,
 } from "./types";
 
 const TAG_TO_LEVEL: Record<string, ArticleLevel> = {
@@ -118,29 +119,6 @@ const BODY_NUMBER_AND_TITLE_TAGS = new Set([
   "SupplProvisionLabel",
 ]);
 
-function extractSemanticBodyText(node: unknown): string {
-  if (typeof node === "string") return node.trim();
-  if (!isRecord(node)) return "";
-  if (typeof node["#text"] === "string") return node["#text"].trim();
-
-  const texts: string[] = [];
-  for (const [key, value] of Object.entries(node)) {
-    if (
-      key === "#text" ||
-      key.startsWith("@_") ||
-      BODY_NUMBER_AND_TITLE_TAGS.has(key)
-    ) {
-      continue;
-    }
-    const values = Array.isArray(value) ? value : [value];
-    for (const item of values) {
-      const text = extractSemanticBodyText(item);
-      if (text) texts.push(text);
-    }
-  }
-  return texts.join("").trim();
-}
-
 function extractTextFromNode(node: unknown): string {
   if (typeof node === "string") return node;
   if (!isRecord(node)) return "";
@@ -149,6 +127,30 @@ function extractTextFromNode(node: unknown): string {
   for (const [key, value] of Object.entries(node)) {
     if (key === "#text" || key.startsWith("@_")) continue;
     if (SKIP_LEVEL_TAGS.has(key) || TAG_TO_LEVEL[key] !== undefined) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const item of values) {
+      const text = extractTextRecursive(item);
+      if (text) texts.push(text);
+    }
+  }
+  return texts.join("\n").trim();
+}
+
+function extractBodyTextFromNode(node: unknown): string {
+  if (typeof node === "string") return node;
+  if (!isRecord(node)) return "";
+
+  const texts: string[] = [];
+  for (const [key, value] of Object.entries(node)) {
+    if (
+      key === "#text" ||
+      key.startsWith("@_") ||
+      BODY_NUMBER_AND_TITLE_TAGS.has(key) ||
+      SKIP_LEVEL_TAGS.has(key) ||
+      TAG_TO_LEVEL[key] !== undefined
+    ) {
+      continue;
+    }
     const values = Array.isArray(value) ? value : [value];
     for (const item of values) {
       const text = extractTextRecursive(item);
@@ -172,6 +174,56 @@ function normalizeSemanticNumber(value: string | null): string | null {
 
 function normalizeFingerprintTitle(value: string | null): string {
   return (value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim();
+}
+
+function normalizeScalarText(value: unknown): string {
+  return String(value).normalize("NFKC").replace(/\s+/g, " ").trim();
+}
+
+interface CanonicalXmlSubtree {
+  officialAttributes: Record<string, string>;
+  text: string | null;
+  children: Array<{
+    tag: string;
+    values: CanonicalXmlSubtree[];
+  }>;
+}
+
+function canonicalXmlSubtree(value: unknown): CanonicalXmlSubtree {
+  if (!isRecord(value)) {
+    return {
+      officialAttributes: {},
+      text: value === undefined || value === null
+        ? null
+        : normalizeScalarText(value),
+      children: [],
+    };
+  }
+
+  const officialAttributes = Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key.startsWith("@_"))
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, attributeValue]) => [key, normalizeScalarText(attributeValue)]),
+  );
+  const rawText = value["#text"];
+  const text = rawText === undefined || rawText === null
+    ? null
+    : normalizeScalarText(rawText);
+  const children = Object.entries(value)
+    .filter(([key]) => key !== "#text" && !key.startsWith("@_"))
+    .map(([tag, childValue]) => ({
+      tag,
+      values: (Array.isArray(childValue) ? childValue : [childValue]).map(
+        canonicalXmlSubtree,
+      ),
+    }));
+
+  return { officialAttributes, text, children };
+}
+
+function canonicalSubtreeFingerprint(value: unknown): string {
+  return sha256(JSON.stringify(canonicalXmlSubtree(value)));
 }
 
 function officialAttributes(node: Record<string, unknown>): Record<string, unknown> {
@@ -228,20 +280,21 @@ function fallbackSegment(
   node: ParsedLawNode,
 ): string {
   const semanticTitle = textValue(item[`${tag}Title`]) ?? node.title;
-  const semanticText = node.level === "table_row"
-    ? extractSemanticBodyText(item) || null
-    : node.text;
+  const isTableElement =
+    node.level === "table_row" || node.level === "table_column";
+  const fingerprintInput: Record<string, unknown> = {
+    tag,
+    officialAttributes: officialAttributes(item),
+    title: normalizeFingerprintTitle(semanticTitle),
+    caption: normalizeFingerprintTitle(node.caption),
+    text: normalizeFingerprintTitle(node.text),
+    bodyChecksum: node.bodyChecksum,
+  };
+  if (isTableElement) {
+    fingerprintInput.subtreeFingerprint = canonicalSubtreeFingerprint(item);
+  }
   const fingerprint = sha256(
-    JSON.stringify(
-      canonicalize({
-        tag,
-        officialAttributes: officialAttributes(item),
-        title: normalizeFingerprintTitle(semanticTitle),
-        caption: normalizeFingerprintTitle(node.caption),
-        text: normalizeFingerprintTitle(semanticText),
-        bodyChecksum: node.bodyChecksum,
-      }),
-    ),
+    JSON.stringify(canonicalize(fingerprintInput)),
   );
   return `${node.level}:fingerprint:${fingerprint}`;
 }
@@ -252,6 +305,33 @@ function promulgationKey(law: Record<string, unknown>): string {
   const month = String(law["@_PromulgateMonth"] ?? "unknown");
   const day = String(law["@_PromulgateDay"] ?? "unknown");
   return `${era}-${year}-${month}-${day}`;
+}
+
+/**
+ * e-Gov XML の TableColumn 要素から罫線・結合属性を抽出する。
+ *
+ * 罫線は4辺それぞれ BorderTop/BorderRight/BorderBottom/BorderLeft 属性で
+ * "solid"/"none" が指定される。省略時は "none"。
+ * colspan/rowspan は小文字属性名（e-Gov実データ）で数値文字列が指定される。
+ * 省略時は 1。
+ */
+function extractTableCellStyle(value: Record<string, unknown>): TableCellStyle {
+  const borderAttr = (key: string): "solid" | "none" =>
+    value[`@_${key}`] === "solid" ? "solid" : "none";
+  const spanAttr = (key: string): number => {
+    const raw = value[`@_${key}`];
+    if (typeof raw !== "string") return 1;
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+  };
+  return {
+    borderTop: borderAttr("BorderTop"),
+    borderRight: borderAttr("BorderRight"),
+    borderBottom: borderAttr("BorderBottom"),
+    borderLeft: borderAttr("BorderLeft"),
+    colspan: spanAttr("colspan"),
+    rowspan: spanAttr("rowspan"),
+  };
 }
 
 export function parseLawXml(
@@ -339,14 +419,14 @@ export function parseLawXml(
                 : effectiveArticleNumber ?? undefined,
             ) ?? null
           : null;
-        const paragraphNumber = tag === "Paragraph"
-          ? textValue(value.ParagraphNum) ?? rawNumber
+        const paragraphNumber = tag === "Paragraph" && value.ParagraphNum !== undefined
+          ? textValue(value.ParagraphNum)
           : null;
-        const itemNumber = tag === "Item"
-          ? textValue(value.ItemTitle) ?? rawNumber
+        const itemNumber = tag === "Item" && value.ItemTitle !== undefined
+          ? textValue(value.ItemTitle)
           : null;
-        const subitemNumber = tag.startsWith("Subitem")
-          ? textValue(value[`${tag}Title`]) ?? rawNumber
+        const subitemNumber = tag.startsWith("Subitem") && value[`${tag}Title`] !== undefined
+          ? textValue(value[`${tag}Title`])
           : null;
         const title = titleFor(tag, value);
         const caption = tag === "Article"
@@ -362,7 +442,7 @@ export function parseLawXml(
           level,
           title,
           caption,
-          text,
+          text: extractBodyTextFromNode(value) || null,
           systemTags,
         };
         const parsedNode: ParsedLawNode = {
@@ -393,15 +473,25 @@ export function parseLawXml(
           text,
           sortOrder,
           systemTags,
+          tableCellMeta: tag === "TableColumn" ? extractTableCellStyle(value) : null,
         };
 
         const durableArticleNumber = tag === "Article"
           ? normalizeSemanticNumber(effectiveArticleNumber)
           : null;
+        const durableChildNumber = tag === "Paragraph"
+          ? paragraphNumber ?? normalizeSemanticNumber(rawNumber)
+          : tag === "Item"
+            ? itemNumber ?? normalizeSemanticNumber(rawNumber)
+            : tag.startsWith("Subitem")
+              ? subitemNumber ?? normalizeSemanticNumber(rawNumber)
+              : null;
         const segment = tag === "SupplProvision"
           ? supplementSegment(value, promulgationKey(law))
           : durableArticleNumber
             ? `article:${normalizeKeyValue(durableArticleNumber)}`
+            : durableChildNumber
+              ? `${level}:${normalizeKeyValue(durableChildNumber)}`
             : numberedSegment(parsedNode) ?? fallbackSegment(tag, value, parsedNode);
         const siblingKey = parentSourceIndex === null
           ? parentDurableKey
@@ -536,6 +626,7 @@ export function materializeArticleRows(
     durableNodeKey: node.durableNodeKey,
     contentChecksum: node.contentChecksum,
     bodyChecksum: node.bodyChecksum,
+    tableMetadata: node.tableCellMeta ? JSON.stringify(node.tableCellMeta) : null,
   }));
 }
 
@@ -544,4 +635,5 @@ export type {
   ParsedLawDocument,
   ParsedLawNode,
   ParseLawContext,
+  TableCellStyle,
 } from "./types";

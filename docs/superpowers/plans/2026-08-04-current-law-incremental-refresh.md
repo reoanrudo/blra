@@ -1003,7 +1003,7 @@ git commit -m "feat(refresh): activate verified revisions atomically"
 - Produces: `refreshCurrentLaws(request, deps): Promise<RefreshRunReport>`
 - CLI: `lawbook:current:check`、`lawbook:current:refresh`
 
-- [ ] **Step 1: 無変更法令ではXMLを取得しない失敗テストを書く**
+- [x] **Step 1: 無変更法令ではXMLを取得しない失敗テストを書く**
 
 ```typescript
 it("公式版番号が一致する法令はmetadata確認だけで終了する", async () => {
@@ -1021,7 +1021,7 @@ it("公式版番号が一致する法令はmetadata確認だけで終了する",
 });
 ```
 
-- [ ] **Step 2: 1法令失敗でも他法令を更新する失敗テストを書く**
+- [x] **Step 2: 1法令失敗でも他法令を更新する失敗テストを書く**
 
 ```typescript
 it("検証保留を法令内に閉じ込める", async () => {
@@ -1057,13 +1057,13 @@ it("廃止状態でも既存Revisionを削除せず同期状態へ廃止日を�
 });
 ```
 
-- [ ] **Step 3: service未作成で失敗することを確認する**
+- [x] **Step 3: service未作成で失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/law-refresh-service.test.ts`
 
 Expected: import error。
 
-- [ ] **Step 4: serviceを依存注入可能な形で実装する**
+- [x] **Step 4: serviceを依存注入可能な形で実装する**
 
 ```typescript
 export interface RefreshCurrentLawsRequest {
@@ -1089,7 +1089,7 @@ export interface RefreshRunReport {
 
 対象はrequest指定がなければ `LAW_BOOK_2026` の120件。run全体を `withRefreshLock` で囲む。e-Gov照会は8並列、429/5xxだけ最大3回指数backoffする。`check` はmetadata比較と同期状態の記録だけ、`dry-run` は取得・parse・diff・verifyまででDB候補/Article/pointerを書かない、`refresh` だけ署名・stage・activateする。unchangedは `recordUnchangedCheck`、取得失敗は `recordFailedCheck` を呼ぶ。廃止状態は `LawSyncState.repealStatus/repealDate` へ保存し、Article、Revision、current pointerを物理削除しない。法令ごとの例外を公開error codeへ変換して次法令へ進む。
 
-- [ ] **Step 5: CLI引数と終了コードを実装する**
+- [x] **Step 5: CLI引数と終了コードを実装する**
 
 ```text
 npm run lawbook:current:check -- --asof 2026-08-04
@@ -1100,7 +1100,7 @@ npm run lawbook:current:refresh -- --asof 2026-08-04 --review-dir config/law-ref
 
 `--asof` 省略時はAsia/Tokyoの当日。`--review-dir` は存在するRevision pairのJSONだけをTask 5の厳格schemaで読む。`--json` はstdoutを `RefreshRunReport` 1個のJSONに限定し、進捗はstderrへ出す。未知law ID、未来日、同時実行lock取得失敗、全法令check失敗は非0終了。部分保留はreportを出してexit code 2、全成功/無変更は0とする。
 
-- [ ] **Step 6: serviceテストとCLI helpを通す**
+- [x] **Step 6: serviceテストとCLI helpを通す**
 
 Run:
 
@@ -1113,7 +1113,7 @@ npx tsc --noEmit
 
 Expected: 全PASS、helpに `--asof --law --dry-run --review-dir --json` が表示される。
 
-- [ ] **Step 7: service/CLIをコミットする**
+- [x] **Step 7: service/CLIをコミットする**
 
 ```bash
 git add web/src/lib/law-refresh/refresh-service.ts web/scripts/refresh-current-laws.ts web/src/__tests__/law-refresh-service.test.ts web/package.json
@@ -1228,7 +1228,7 @@ git commit -m "feat(refresh): backfill durable current-law identities"
 - Produces: `shouldInitializeCurrentRevision(currentRevisionId): boolean`
 - Invariant: catalog seed/verify/scopeは非収録lawを除き `Law.currentRevisionId` を変更しない
 
-- [ ] **Step 1: catalog再実行でcurrentを旧版へ戻さない失敗テストを書く**
+- [x] **Step 1: catalog再実行でcurrentを旧版へ戻さない失敗テストを書く**
 
 ```typescript
 it("currentが既にあれば書籍baselineで初期化し直さない", () => {
@@ -1241,21 +1241,21 @@ it("catalog ingestはcurrentではなくEntryの固定Revisionを対象にする
 });
 ```
 
-- [ ] **Step 2: 現行seed/ingestのcurrent依存を示すテストまたはsource assertionが失敗することを確認する**
+- [x] **Step 2: 現行seed/ingestのcurrent依存を示すテストまたはsource assertionが失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/law-book-current-compatibility.test.ts`
 
 Expected: module未作成でFAIL。
 
-- [ ] **Step 3: seed/ingest/scopeをcatalog責務へ限定する**
+- [x] **Step 3: seed/ingest/scopeをcatalog責務へ限定する**
 
 `seed-law-book.ts` は `LawBookEntry.lawRevisionId` のbaseline作成・検証だけを行い、`Law.currentRevisionId` がnullの初期導入時だけ設定する。`ingest.ts` は `ksk-2026` EntryのRevisionへArticleを投入し、law全体のcurrent Article存在数ではなく対象Revisionの存在数で冪等判定する。`enforceLawBookScope` は収録外lawだけを非公開化し、収録120法令のcurrent pointerとcurrent ArticleをEntry Revision不一致の理由で変更しない。
 
-- [ ] **Step 4: 固定版verifierを新しい責務へ更新する**
+- [x] **Step 4: 固定版verifierを新しい責務へ更新する**
 
 `verify-law-book.ts` はEntry baselineの120件、原本checksum、baseline Article、民法61範囲を検査し、`Entry.lawRevisionId === Law.currentRevisionId` を要求しない。公開currentの検査はTask 9のverifierへ委譲する。
 
-- [ ] **Step 5: catalog/current互換テストと固定版verifyを通す**
+- [x] **Step 5: catalog/current互換テストと固定版verifyを通す**
 
 Run:
 
@@ -1268,7 +1268,7 @@ npx tsc --noEmit
 
 Expected: 全PASS、catalog verifierとcurrent verifierの責務が重複しない。
 
-- [ ] **Step 6: catalog保護をコミットする**
+- [x] **Step 6: catalog保護をコミットする**
 
 ```bash
 git add web/src/lib/law-book/catalog-maintenance.ts web/src/__tests__/law-book-current-compatibility.test.ts web/scripts/seed-law-book.ts web/scripts/ingest.ts web/scripts/verify-law-book.ts web/scripts/lib/enforce-law-book-scope.ts
@@ -1301,7 +1301,7 @@ git commit -m "fix(refresh): keep catalog maintenance revision-safe"
 - Keeps: `lawBookCatalogArticleScopeSql(articleAlias, entryAlias): string` for fixed `ksk-2026` verification
 - Public invariant: `Article.lawRevisionId = Law.currentRevisionId`
 
-- [ ] **Step 1: Entryが旧版を指していても公開本文はcurrentだけを返す失敗テストを書く**
+- [x] **Step 1: Entryが旧版を指していても公開本文はcurrentだけを返す失敗テストを書く**
 
 ```typescript
 it("書籍Entryの固定RevisionではなくLaw.currentRevisionを公開する", async () => {
@@ -1321,13 +1321,13 @@ it("書籍Entryの固定RevisionではなくLaw.currentRevisionを公開する",
 
 同じfixtureで `/api/laws` 相当repositoryの `firstArticleId` がcandidate Article、検索結果に旧Articleが0件であることもassertする。
 
-- [ ] **Step 2: 現行実装が旧Entry Revisionを返して失敗することを確認する**
+- [x] **Step 2: 現行実装が旧Entry Revisionを返して失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/integration/current-law-read-scope.test.ts`
 
 Expected: current documentがnull、またはfirstArticleIdが旧ArticleとなりFAIL。
 
-- [ ] **Step 3: catalog scopeとcurrent scopeを分離する**
+- [x] **Step 3: catalog scopeとcurrent scopeを分離する**
 
 ```typescript
 export function currentLawBookArticleScopeSql(
@@ -1366,13 +1366,13 @@ export function currentLawBookArticleScopeSql(
 
 既存 `lawBookArticleScopeSql` は `lawBookCatalogArticleScopeSql` へ改名して固定書籍版検証だけに残す。Task 12で全consumerを分類し終えるまでは、型検査を壊さないdeprecated aliasとして旧名をexportする。
 
-- [ ] **Step 4: reader/list/search系SQLの結合条件を更新する**
+- [x] **Step 4: reader/list/search系SQLの結合条件を更新する**
 
 全対象で `LawBookEntry` は `(editionId, lawId)` のカタログ所属だけを表し、`e.lawRevisionId = a.lawRevisionId` を削除する。Article選択には必ず `a.lawRevisionId = l.currentRevisionId` と `currentLawBookArticleScopeSql(...)` を入れる。`getFullLawDocument(id)` は指定RevisionがそのLawのcurrentでない場合nullを返す。
 
 `bench-search.ts` も同じcurrent scope helperを使い、固定Entry Revisionではなく公開currentを測定する。
 
-- [ ] **Step 5: read scope統合テストと既存reader/searchテストを通す**
+- [x] **Step 5: read scope統合テストと既存reader/searchテストを通す**
 
 Run:
 
@@ -1385,7 +1385,7 @@ npx tsc --noEmit
 
 Expected: 全PASS。
 
-- [ ] **Step 6: 公開read scopeをコミットする**
+- [x] **Step 6: 公開read scopeをコミットする**
 
 ```bash
 git add web/src/lib/law-book/current-scope.ts web/src/lib/law-book/sql-scope.ts web/src/app/page.tsx web/src/app/api/laws/route.ts web/src/app/api/law-toc/route.ts web/src/app/api/articles/by-number/route.ts web/src/app/api/articles/preview/route.ts web/src/app/api/articles/chapter-window/route.ts web/src/app/api/search/route.ts web/src/app/api/search/suggest/route.ts web/src/lib/article/article.ts web/src/lib/article/chapter-window.ts web/src/lib/article/full-law-repository.ts web/scripts/bench-search.ts web/src/__tests__/integration/current-law-read-scope.test.ts
@@ -1416,7 +1416,7 @@ git commit -m "refactor(reader): read verified current law revisions"
 - Public invariant: current sourceからcurrent targetへのLinkだけを解決済みとして返す
 - Snapshot invariant: `snapshotLawRevisionId` 指定時だけ過去Revisionを明示的に解決する
 
-- [ ] **Step 1: 旧RevisionのLinkと確認済み関係が現行版へ漏れない失敗テストを書く**
+- [x] **Step 1: 旧RevisionのLinkと確認済み関係が現行版へ漏れない失敗テストを書く**
 
 ```typescript
 it("旧Revisionだけにある関係をcurrent文書へ返さない", async () => {
@@ -1435,23 +1435,23 @@ it("current exportに旧Revision Articleを含めない", async () => {
 });
 ```
 
-- [ ] **Step 2: 現行実装が旧Entry境界を使って失敗することを確認する**
+- [x] **Step 2: 現行実装が旧Entry境界を使って失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/integration/current-law-dependent-scope.test.ts`
 
 Expected: 旧Articleまたは旧関係が結果へ含まれてFAIL。
 
-- [ ] **Step 3: 派生データのsource/target条件をcurrentへ変更する**
+- [x] **Step 3: 派生データのsource/target条件をcurrentへ変更する**
 
 Link SQLはsourceとtargetのそれぞれについて、カタログ所属する `LawBookEntry` と `Law.currentRevisionId` を結合する。targetがcurrentでないLinkは `isResolved=true` でも公開しない。変更法令の再構築時は、その法令をsourceに持つLinkとtarget候補に持つincoming Linkを削除・再抽出し、他法令同士のLinkには触れない。
 
-- [ ] **Step 4: snapshot明示とcurrent既定を分離する**
+- [x] **Step 4: snapshot明示とcurrent既定を分離する**
 
 `resolveApplicableArticle` は `snapshotLawRevisionId` がある場合だけそのRevisionを使い、ない場合は `Law.currentRevisionId` を使う。エクスポート、入力検証、確認済み関係はcurrentを既定とし、旧Revisionの関係を新Revisionへコピーしない。checksum変更を検知した確認済み関係は既存の失効理由 `REVISION_CONTENT_CHANGED` で無効化する。
 
 `verify-law-book.ts` は `lawBookCatalogArticleScopeSql` を明示して固定baselineだけを検査する。全consumerの移行後に `lawBookArticleScopeSql` のdeprecated aliasを削除する。
 
-- [ ] **Step 5: dependent scopeと既存関係テストを通す**
+- [x] **Step 5: dependent scopeと既存関係テストを通す**
 
 Run:
 
@@ -1463,7 +1463,7 @@ npx tsc --noEmit
 
 Expected: 全PASS。
 
-- [ ] **Step 6: 固定Entry Revisionを公開条件にしている残存箇所を監査する**
+- [x] **Step 6: 固定Entry Revisionを公開条件にしている残存箇所を監査する**
 
 Run:
 
@@ -1474,7 +1474,7 @@ rg -n '"lawRevisionId" = .*entry|entry\."lawRevisionId"|e\."lawRevisionId"' src
 
 Expected: 固定書籍版検証、履歴表示、migration用コード以外は0件。公開API/reader/search/link/exportから検出された場合は同じtask内でcurrent helperへ置換して再テストする。
 
-- [ ] **Step 7: dependent scopeをコミットする**
+- [x] **Step 7: dependent scopeをコミットする**
 
 ```bash
 git add web/src/lib/link/link.ts web/src/lib/link/link-detector.ts web/src/app/api/export/route.ts web/src/lib/practice/export-validator.ts web/src/lib/applicability/resolve-applicable-article.ts web/src/lib/relations/confirmed-relations-repository.ts web/src/lib/relations/confirmed-relation-service.ts web/src/lib/law-book/sql-scope.ts web/scripts/verify-law-book.ts web/src/__tests__/integration/current-law-dependent-scope.test.ts web/src/__tests__/integration/law-book-scope.test.ts web/src/__tests__/integration/export-import-smoke.test.ts web/src/__tests__/integration/confirmed-relation-service.test.ts
@@ -1498,7 +1498,7 @@ git commit -m "fix(refresh): isolate current revision derived data"
 - Produces: `resolveArticleRoute(articleId: string, repository?: ArticleSuccessorRepository): Promise<ArticleRouteResolution>`
 - Produces: `getHistoricalArticleWithTree(articleId: string): Promise<HistoricalArticleDocument | null>`
 
-- [ ] **Step 1: 複数Revisionをまたぐ後継解決と循環拒否の失敗テストを書く**
+- [x] **Step 1: 複数Revisionをまたぐ後継解決と循環拒否の失敗テストを書く**
 
 ```typescript
 it("rev1からrev3の現行Articleまで対応表をたどる", async () => {
@@ -1520,13 +1520,13 @@ it("mapping循環を内部エラーとして拒否する", async () => {
 });
 ```
 
-- [ ] **Step 2: module未作成で失敗することを確認する**
+- [x] **Step 2: module未作成で失敗することを確認する**
 
 Run: `cd web && npx vitest run src/__tests__/article-successor.test.ts`
 
 Expected: import error。
 
-- [ ] **Step 3: route resolutionを実装する**
+- [x] **Step 3: route resolutionを実装する**
 
 ```typescript
 export type ArticleRouteResolution =
@@ -1539,15 +1539,15 @@ export type ArticleRouteResolution =
 
 Articleが `Law.currentRevisionId` 所属ならcurrent。確定mappingを最大120hopまでたどり、current所属のtoArticleへ着けばredirect。`removed` またはtoArticleId nullならremoved。mapping未確定ならhistorical。visited setで循環を拒否する。
 
-- [ ] **Step 4: 記事pageへ転送と履歴表示を組み込む**
+- [x] **Step 4: 記事pageへ転送と履歴表示を組み込む**
 
 `page.tsx` は本文取得前にresolutionを求める。redirectは `permanentRedirect(readerArticleHref(articleId))`。removed/historicalは現行scopeを迂回する読み取り専用repositoryから旧Article subtree、法令名、公式版番号、施行日を取得し、`HistoricalArticleNotice` で「削除済み」または「現行条文との対応未確認」を表示する。編集・ハイライト作成操作は出さない。
 
-- [ ] **Step 5: 保存済み利用者データが旧Articleのままである統合テストを書く**
+- [x] **Step 5: 保存済み利用者データが旧Articleのままである統合テストを書く**
 
 旧ArticleへUserHighlightとArticleAnnotationを作り、後継mapping作成後も両recordの `articleId` と `snapshotLawRevisionId` が変わらないことをassertする。
 
-- [ ] **Step 6: URL/履歴テストを通す**
+- [x] **Step 6: URL/履歴テストを通す**
 
 Run:
 
@@ -1559,7 +1559,7 @@ npx tsc --noEmit
 
 Expected: 全PASS。
 
-- [ ] **Step 7: 旧URL対応をコミットする**
+- [x] **Step 7: 旧URL対応をコミットする**
 
 ```bash
 git add web/src/lib/law-refresh/article-successor.ts web/src/components/article/HistoricalArticleNotice.tsx web/src/app/articles/'[id]'/page.tsx web/src/lib/article/article.ts web/src/__tests__/article-successor.test.ts web/src/__tests__/integration/current-law-old-url.test.ts web/e2e/current-law-refresh.spec.ts
@@ -1825,6 +1825,33 @@ git commit -m "docs(refresh): record initial current-law rollout"
 ```
 
 mappingファイルが0件なら存在しないdirectoryをstageせず、結果文書だけをコミットする。最後に `git status --short` で既存 `AGENTS.md` 以外がcleanであることを確認する。
+
+- [ ] **Step 10: Task 9 backfill 完了後に legacy range fallback を除去する**
+
+Task 9 の DB backfill（durableNodeKey/bodyChecksum/RangeResolution 生成）が完了し、
+durable key ベースの RangeResolution が全ての検証済み抄録法令をカバーした時点で、
+`web/src/lib/law-book/current-scope.ts` の legacy fallback ブロック
+（`LawBookEntryRange` を使った `stableNodeKey` ベースの `OR EXISTS (...)` 節、
+および上部の JSDoc にある legacy fallback 説明）を削除する。
+
+手順:
+
+1. `npm run lawbook:current:verify -- --online` を実行し、検証済み Range の
+   resolution が全て `resolved` であることを確認する（legacy fallback に依存
+   する法令が 0 件であることを保証）。
+2. `web/src/lib/law-book/current-scope.ts` の legacy fallback ブロックと、
+   該当箇所の `TODO(Task 9 backfill完了後)` コメントを削除する。
+3. 既存テストが全件通過することを確認する:
+
+```bash
+cd web
+npx vitest run src/__tests__/integration/current-law-read-scope.test.ts
+npx tsc --noEmit
+npm test
+```
+
+Expected: 全 PASS。legacy fallback 削除後も公開 Article の範囲は durable key
+ベースの RangeResolution だけでカバーされるため、テスト結果が変わらないこと。
 
 ---
 

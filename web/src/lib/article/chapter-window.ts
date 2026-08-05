@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 import {
   articleDisplayTitle,
   type ArticleRow,
@@ -47,24 +47,26 @@ async function resolveChapterScopeId(articleId: string): Promise<{
   scopeId: string;
   scopeRow: ArticleRow | null;
 }> {
-  const articleScope = lawBookArticleScopeSql("a", "e");
+  const articleScope = currentLawBookArticleScopeSql("a", "e", "l");
   const ancestors = await prisma.$queryRawUnsafe<Array<{ id: string; level: string }>>(
     `
     WITH RECURSIVE up AS (
-      SELECT a.id, a."parentId", a.level
+      SELECT a.id, a."parentId", a.level, a."lawRevisionId"
       FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
       JOIN "LawBookEntry" e
-        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+        ON e."lawId" = l.id
+       AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
       JOIN "LawBookEdition" edition ON edition.id = e."editionId"
       WHERE a.id = $1
-        AND a."deletedAt" IS NULL
         AND edition."editionKey" = $2
         AND ${articleScope}
       UNION ALL
-      SELECT a.id, a."parentId", a.level
+      SELECT a.id, a."parentId", a.level, a."lawRevisionId"
       FROM "Article" a
       INNER JOIN up ON a.id = up."parentId"
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = up."lawRevisionId"
     )
     SELECT id, level FROM up
     WHERE level IN ('chapter', 'section', 'subsection')
@@ -98,20 +100,22 @@ async function resolveChapterScopeId(articleId: string): Promise<{
   const rootRow = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `
     WITH RECURSIVE up AS (
-      SELECT a.id, a."parentId"
+      SELECT a.id, a."parentId", a."lawRevisionId"
       FROM "Article" a
+      JOIN "Law" l ON a."lawId" = l.id
       JOIN "LawBookEntry" e
-        ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+        ON e."lawId" = l.id
+       AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
       JOIN "LawBookEdition" edition ON edition.id = e."editionId"
       WHERE a.id = $1
-        AND a."deletedAt" IS NULL
         AND edition."editionKey" = $2
         AND ${articleScope}
       UNION ALL
-      SELECT a.id, a."parentId"
+      SELECT a.id, a."parentId", a."lawRevisionId"
       FROM "Article" a
       INNER JOIN up ON a.id = up."parentId"
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = up."lawRevisionId"
     )
     SELECT id FROM up WHERE "parentId" IS NULL LIMIT 1
     `,
@@ -144,18 +148,21 @@ export async function getNextScrollScope(
   >(
     `SELECT a."lawId", a."lawRevisionId"
      FROM "Article" a
+     JOIN "Law" l ON l.id = a."lawId"
      WHERE a.id = $1 AND a."deletedAt" IS NULL
+       AND l."currentRevisionId" = a."lawRevisionId"
      LIMIT 1`,
     scopeId,
   );
   const current = currentRows[0];
   if (!current) return null;
 
-  const treeScope = lawBookArticleScopeSql("tree", "e");
+  const treeScope = currentLawBookArticleScopeSql("tree", "e", "tree_law");
   const nextRoots = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `WITH RECURSIVE document_tree AS (
        SELECT a.id, a."parentId", a.level, a."lawId", a."lawRevisionId",
-              a."stableNodeKey", ARRAY[a."sortOrder"] AS path,
+              a."stableNodeKey", a."durableNodeKey", a."deletedAt",
+              ARRAY[a."sortOrder"] AS path,
               ARRAY[a.id]::text[] AS ancestors
        FROM "Article" a
        WHERE a."lawId" = $1
@@ -166,20 +173,24 @@ export async function getNextScrollScope(
        UNION ALL
 
        SELECT a.id, a."parentId", a.level, a."lawId", a."lawRevisionId",
-              a."stableNodeKey", tree.path || a."sortOrder",
+              a."stableNodeKey", a."durableNodeKey", a."deletedAt",
+              tree.path || a."sortOrder",
               tree.ancestors || a.id
        FROM "Article" a
        INNER JOIN document_tree tree ON a."parentId" = tree.id
        WHERE a."deletedAt" IS NULL
+         AND a."lawRevisionId" = tree."lawRevisionId"
      ),
-     current_scope AS (
+     current_scope as (
        SELECT path FROM document_tree WHERE id = $3 LIMIT 1
      )
      SELECT tree.id
      FROM document_tree tree
      CROSS JOIN current_scope current_scope
+     JOIN "Law" tree_law ON tree_law.id = tree."lawId"
      JOIN "LawBookEntry" e
-       ON e."lawId" = tree."lawId" AND e."lawRevisionId" = tree."lawRevisionId"
+       ON e."lawId" = tree_law.id
+      AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $4)
      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
      WHERE tree.level IN ('article', 'suppl_provision')
        AND tree.path > current_scope.path
@@ -214,7 +225,7 @@ function isRootLevel(level: string): boolean {
 
 /** 指定スコープ自身の直下の子孫を取得する（スコープ自身は含まない）。 */
 async function fetchScopeDescendants(scopeId: string): Promise<ArticleRow[]> {
-  const treeScope = lawBookArticleScopeSql("tree", "e");
+  const treeScope = currentLawBookArticleScopeSql("tree", "e", "tree_law");
   const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
     `
     WITH RECURSIVE tree AS (
@@ -231,11 +242,14 @@ async function fetchScopeDescendants(scopeId: string): Promise<ArticleRow[]> {
       FROM "Article" a
       INNER JOIN tree ON a."parentId" = tree.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = tree."lawRevisionId"
     )
     SELECT tree.*
     FROM tree
+    JOIN "Law" tree_law ON tree_law.id = tree."lawId"
     JOIN "LawBookEntry" e
-      ON e."lawId" = tree."lawId" AND e."lawRevisionId" = tree."lawRevisionId"
+      ON e."lawId" = tree_law.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE edition."editionKey" = $2
       AND ${treeScope}
@@ -252,7 +266,7 @@ async function fetchScopeDescendants(scopeId: string): Promise<ArticleRow[]> {
  * getChapterArticlesWithTrees と同等のグループ化ロジックだが、附則もルートとして扱う。
  */
 async function fetchGroupedArticlesInScope(scopeId: string): Promise<ChapterArticle[]> {
-  const treeScope = lawBookArticleScopeSql("tree", "e");
+  const treeScope = currentLawBookArticleScopeSql("tree", "e", "tree_law");
   const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
     `
     WITH RECURSIVE tree AS (
@@ -269,11 +283,14 @@ async function fetchGroupedArticlesInScope(scopeId: string): Promise<ChapterArti
       FROM "Article" a
       INNER JOIN tree ON a."parentId" = tree.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = tree."lawRevisionId"
     )
     SELECT tree.*
     FROM tree
+    JOIN "Law" tree_law ON tree_law.id = tree."lawId"
     JOIN "LawBookEntry" e
-      ON e."lawId" = tree."lawId" AND e."lawRevisionId" = tree."lawRevisionId"
+      ON e."lawId" = tree_law.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE edition."editionKey" = $2
       AND ${treeScope}
@@ -326,7 +343,7 @@ async function fetchGroupedArticlesInScopePaged(
   endSeq: number,
 ): Promise<ChapterArticle[]> {
   if (startSeq >= endSeq) return [];
-  const treeScope = lawBookArticleScopeSql("bt", "e");
+  const treeScope = currentLawBookArticleScopeSql("bt", "e", "bt_law");
   const rows = await prisma.$queryRawUnsafe<ArticleRow[]>(
     `
     WITH RECURSIVE
@@ -335,7 +352,8 @@ async function fetchGroupedArticlesInScopePaged(
              a."articleNumberNormalized", a."paragraphNumber", a."itemNumber",
              a."subitemNumber", a."columnNumber", a."tableCoords",
              a.title, a.caption, a.text, a."articleCaptionNormalized",
-             a."sortOrder", a."stableNodeKey", a."lawRevisionId", a."lawId",
+             a."sortOrder", a."stableNodeKey", a."durableNodeKey", a."deletedAt",
+             a."lawRevisionId", a."lawId",
              l.name AS "lawName", 0 AS depth,
              ARRAY[a."sortOrder"] AS path
       FROM "Article" a
@@ -346,29 +364,38 @@ async function fetchGroupedArticlesInScopePaged(
              a."articleNumberNormalized", a."paragraphNumber", a."itemNumber",
              a."subitemNumber", a."columnNumber", a."tableCoords",
              a.title, a.caption, a.text, a."articleCaptionNormalized",
-             a."sortOrder", a."stableNodeKey", a."lawRevisionId", a."lawId",
+             a."sortOrder", a."stableNodeKey", a."durableNodeKey", a."deletedAt",
+             a."lawRevisionId", a."lawId",
              bt."lawName", bt.depth + 1,
              bt.path || a."sortOrder"
       FROM "Article" a
       INNER JOIN base_tree bt ON a."parentId" = bt.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = bt."lawRevisionId"
     ),
-    numbered_roots AS (
+    numbered_roots as (
       SELECT id, path,
              ROW_NUMBER() OVER (ORDER BY path) AS root_seq
       FROM base_tree
       WHERE level IN ('article', 'suppl_provision')
     ),
-    target_root_ids AS (
+    target_root_ids as (
       SELECT id FROM numbered_roots WHERE root_seq >= $2 AND root_seq < $3
     ),
-    subtree AS (
+    target_revision as (
+      SELECT bt."lawRevisionId" AS "lawRevisionId"
+      FROM target_root_ids tri
+      JOIN base_tree bt ON bt.id = tri.id
+      LIMIT 1
+    ),
+    subtree as (
       SELECT id FROM target_root_ids
       UNION ALL
       SELECT a.id
       FROM "Article" a
       INNER JOIN subtree ON a."parentId" = subtree.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = (SELECT "lawRevisionId" FROM target_revision)
     )
     SELECT bt.id, bt."parentId", bt.level, bt."articleNumber",
            bt."articleNumberNormalized", bt."paragraphNumber", bt."itemNumber",
@@ -378,8 +405,10 @@ async function fetchGroupedArticlesInScopePaged(
            bt."lawName", bt.depth
     FROM base_tree bt
     JOIN subtree ON bt.id = subtree.id
+    JOIN "Law" bt_law ON bt_law.id = bt."lawId"
     JOIN "LawBookEntry" e
-      ON e."lawId" = bt."lawId" AND e."lawRevisionId" = bt."lawRevisionId"
+      ON e."lawId" = bt_law.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $4)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE edition."editionKey" = $4
       AND ${treeScope}
@@ -419,7 +448,7 @@ function groupRowsIntoArticles(rows: ArticleRow[]): ChapterArticle[] {
 
 /** スコープ内のルート総数（cursor計算用） */
 async function countRootArticlesInScope(scopeId: string): Promise<number> {
-  const treeScope = lawBookArticleScopeSql("bt", "e");
+  const treeScope = currentLawBookArticleScopeSql("bt", "e", "bt_law");
   const rows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
     `
     WITH RECURSIVE base_tree AS (
@@ -431,11 +460,14 @@ async function countRootArticlesInScope(scopeId: string): Promise<number> {
       FROM "Article" a
       INNER JOIN base_tree ON a."parentId" = base_tree.id
       WHERE a."deletedAt" IS NULL
+        AND a."lawRevisionId" = base_tree."lawRevisionId"
     )
     SELECT COUNT(*)::bigint AS count
     FROM base_tree bt
+    JOIN "Law" bt_law ON bt_law.id = bt."lawId"
     JOIN "LawBookEntry" e
-      ON e."lawId" = bt."lawId" AND e."lawRevisionId" = bt."lawRevisionId"
+      ON e."lawId" = bt_law.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE edition."editionKey" = $2
       AND ${treeScope}

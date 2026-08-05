@@ -7,7 +7,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { LAW_BOOK_EDITION_2026 } from "./law-book-2026";
-import { lawBookArticleScopeSql } from "../src/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "../src/lib/law-book/current-scope";
 
 const prisma = new PrismaClient();
 
@@ -33,7 +33,7 @@ function percentile(sorted: number[], p: number): number {
 
 async function runQuery(query: string): Promise<number> {
   const start = performance.now();
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const lawBookScope = currentLawBookArticleScopeSql("a", "e", "l");
   await prisma.$queryRawUnsafe<unknown[]>(
     `
     SELECT a.id, a."articleNumber", a."caption", a."text",
@@ -41,10 +41,10 @@ async function runQuery(query: string): Promise<number> {
     FROM "Article" a
     JOIN "Law" l ON a."lawId" = l.id
     JOIN "LawBookEntry" e
-      ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+      ON e."lawId" = l.id
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
-    WHERE a."deletedAt" IS NULL
-      AND edition."editionKey" = $2
+    WHERE edition."editionKey" = $2
       AND ${lawBookScope}
       AND a.level = 'article'
       AND (a.text LIKE $1 OR a.caption LIKE $1)

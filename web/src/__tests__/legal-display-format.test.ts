@@ -57,6 +57,22 @@ describe("legal-display-format（設計書§3, §4）", () => {
       const displayText = tokens.map((t) => t.displayText).join("");
       expect(displayText).toBe("割合は7/10以上");
     });
+
+    it("fraction トークンに分子・分母の構造情報を設定する", () => {
+      const tokens = formatLegalText("十分の七");
+      const fractionToken = tokens.find((t) => t.kind === "fraction");
+      expect(fractionToken).toBeDefined();
+      expect(fractionToken!.fractionNumerator).toBe("7");
+      expect(fractionToken!.fractionDenominator).toBe("10");
+    });
+
+    it("文脈内の分数も構造情報を保持する", () => {
+      const tokens = formatLegalText("割合は十分の七以上");
+      const fractionToken = tokens.find((t) => t.kind === "fraction");
+      expect(fractionToken).toBeDefined();
+      expect(fractionToken!.fractionNumerator).toBe("7");
+      expect(fractionToken!.fractionDenominator).toBe("10");
+    });
   });
 
   describe("formatLegalText: 単位変換（設計書§4.4）", () => {

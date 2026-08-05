@@ -30,6 +30,7 @@ function makeRow(overrides: Partial<ArticleRow> = {}): ArticleRow {
     regulationType: "individual",
     stableNodeKey: null,
     lawRevisionId: "rev-1",
+    tableMetadata: null,
     ...overrides,
   };
 }
@@ -40,7 +41,7 @@ describe("articleLabel", () => {
   });
 
   it("returns paragraphNumber for paragraph level", () => {
-    expect(articleLabel(makeRow({ level: "paragraph", paragraphNumber: "２" }))).toBe("２");
+    expect(articleLabel(makeRow({ level: "paragraph", paragraphNumber: "２" }))).toBe("2");
   });
 
   it("returns empty string for empty paragraphNumber (第1項, unnumbered)", () => {

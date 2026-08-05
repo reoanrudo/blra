@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { CURRENT_LAW_BOOK_EDITION_KEY } from "@/lib/law-book/current-edition";
-import { lawBookArticleScopeSql } from "@/lib/law-book/sql-scope";
+import { currentLawBookArticleScopeSql } from "@/lib/law-book/current-scope";
 
 /**
  * Integration test: pg_bigm search performance with EXPLAIN ANALYZE.
@@ -30,18 +30,18 @@ const SEARCH_QUERIES = ["耐火", "採光", "防火", "内装", "容積", "建�
 
 async function searchArticles(query: string): Promise<{ ms: number; rows: unknown[] }> {
   const start = performance.now();
-  const lawBookScope = lawBookArticleScopeSql("a", "e");
+  const currentScope = currentLawBookArticleScopeSql("a", "e", "l");
   const rows = await prisma.$queryRawUnsafe<unknown[]>(
     `SELECT a.id, a."articleNumber", a."caption", a."text",
             l.name AS "lawName"
      FROM "Article" a
      JOIN "Law" l ON a."lawId" = l.id
      JOIN "LawBookEntry" e
-       ON e."lawId" = a."lawId" AND e."lawRevisionId" = a."lawRevisionId"
+       ON e."lawId" = l."id"
      JOIN "LawBookEdition" edition ON edition.id = e."editionId"
      WHERE a."deletedAt" IS NULL
        AND edition."editionKey" = $2
-       AND ${lawBookScope}
+       AND ${currentScope}
        AND a.level = 'article'
        AND (a.text LIKE $1 OR a.caption LIKE $1)
      ORDER BY
