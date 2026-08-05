@@ -150,14 +150,6 @@
     font-size: 12px;
   }
 
-  .law-table__header-row .law-table__cell {
-    background: #f5f3ef;
-    color: #302b25;
-    font-weight: 800;
-    text-align: center;
-    white-space: nowrap;
-  }
-
   .law-note-panel {
     --law-accent: #d92f7e;
 

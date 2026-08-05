@@ -32,6 +32,7 @@ function node(overrides: Partial<FullLawNode>): FullLawNode {
     stableNodeKey: "stable-node",
     lawRevisionId: "revision-1",
     path: [1],
+    tableMetadata: null,
     ...overrides,
   };
 }

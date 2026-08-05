@@ -267,6 +267,7 @@ export async function createCurrentLawRefreshFixture(
       durableNodeKey: row.durableNodeKey,
       contentChecksum: row.contentChecksum,
       bodyChecksum: row.bodyChecksum,
+      tableMetadata: row.tableMetadata as never,
     })),
   });
   const oldArticleId = oldRows[0]!.id;

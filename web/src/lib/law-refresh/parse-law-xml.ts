@@ -13,6 +13,7 @@ import type {
   ParsedLawDocument,
   ParsedLawNode,
   ParseLawContext,
+  TableCellStyle,
 } from "./types";
 
 const TAG_TO_LEVEL: Record<string, ArticleLevel> = {
@@ -306,6 +307,33 @@ function promulgationKey(law: Record<string, unknown>): string {
   return `${era}-${year}-${month}-${day}`;
 }
 
+/**
+ * e-Gov XML の TableColumn 要素から罫線・結合属性を抽出する。
+ *
+ * 罫線は4辺それぞれ BorderTop/BorderRight/BorderBottom/BorderLeft 属性で
+ * "solid"/"none" が指定される。省略時は "none"。
+ * colspan/rowspan は小文字属性名（e-Gov実データ）で数値文字列が指定される。
+ * 省略時は 1。
+ */
+function extractTableCellStyle(value: Record<string, unknown>): TableCellStyle {
+  const borderAttr = (key: string): "solid" | "none" =>
+    value[`@_${key}`] === "solid" ? "solid" : "none";
+  const spanAttr = (key: string): number => {
+    const raw = value[`@_${key}`];
+    if (typeof raw !== "string") return 1;
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+  };
+  return {
+    borderTop: borderAttr("BorderTop"),
+    borderRight: borderAttr("BorderRight"),
+    borderBottom: borderAttr("BorderBottom"),
+    borderLeft: borderAttr("BorderLeft"),
+    colspan: spanAttr("colspan"),
+    rowspan: spanAttr("rowspan"),
+  };
+}
+
 export function parseLawXml(
   xml: string,
   context: ParseLawContext,
@@ -445,6 +473,7 @@ export function parseLawXml(
           text,
           sortOrder,
           systemTags,
+          tableCellMeta: tag === "TableColumn" ? extractTableCellStyle(value) : null,
         };
 
         const durableArticleNumber = tag === "Article"
@@ -597,6 +626,7 @@ export function materializeArticleRows(
     durableNodeKey: node.durableNodeKey,
     contentChecksum: node.contentChecksum,
     bodyChecksum: node.bodyChecksum,
+    tableMetadata: node.tableCellMeta ? JSON.stringify(node.tableCellMeta) : null,
   }));
 }
 
@@ -605,4 +635,5 @@ export type {
   ParsedLawDocument,
   ParsedLawNode,
   ParseLawContext,
+  TableCellStyle,
 } from "./types";

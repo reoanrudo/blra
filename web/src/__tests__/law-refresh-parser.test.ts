@@ -319,4 +319,102 @@ describe("parseLawXml durable keys", () => {
       document.nodes.map((node) => node.legacyStableNodeKey),
     );
   });
+
+  it("TableColumnの罫線・結合属性をtableCellMetaへ抽出する", () => {
+    const xml = `
+      <Law><LawBody><AppdxTable><TableStruct><Table>
+        <TableRow>
+          <TableColumn BorderTop="solid" BorderBottom="none" BorderLeft="solid" BorderRight="none" colspan="2" rowspan="3">
+            <Sentence>結合セル</Sentence>
+          </TableColumn>
+        </TableRow>
+      </Table></TableStruct></AppdxTable></LawBody></Law>`;
+
+    const columns = parseLawXml(xml, context).nodes.filter(
+      (node) => node.level === "table_column",
+    );
+
+    expect(columns).toHaveLength(1);
+    expect(columns[0].tableCellMeta).toEqual({
+      borderTop: "solid",
+      borderRight: "none",
+      borderBottom: "none",
+      borderLeft: "solid",
+      colspan: 2,
+      rowspan: 3,
+    });
+  });
+
+  it("TableColumnの属性省略時は罫線none・結合1がデフォルト", () => {
+    const xml = `
+      <Law><LawBody><AppdxTable><TableStruct><Table>
+        <TableRow>
+          <TableColumn><Sentence>プレーン</Sentence></TableColumn>
+        </TableRow>
+      </Table></TableStruct></AppdxTable></LawBody></Law>`;
+
+    const columns = parseLawXml(xml, context).nodes.filter(
+      (node) => node.level === "table_column",
+    );
+
+    expect(columns).toHaveLength(1);
+    expect(columns[0].tableCellMeta).toEqual({
+      borderTop: "none",
+      borderRight: "none",
+      borderBottom: "none",
+      borderLeft: "none",
+      colspan: 1,
+      rowspan: 1,
+    });
+  });
+
+  it("table_column以外のレベルのtableCellMetaはnull", () => {
+    const xml = `
+      <Law><LawBody><AppdxTable><TableStruct><Table>
+        <TableRow><TableColumn><Sentence>セル</Sentence></TableColumn></TableRow>
+      </Table></TableStruct></AppdxTable></LawBody></Law>`;
+
+    const nonColumnNodes = parseLawXml(xml, context).nodes.filter(
+      (node) => node.level !== "table_column",
+    );
+
+    expect(nonColumnNodes.length).toBeGreaterThan(0);
+    expect(nonColumnNodes.every((node) => node.tableCellMeta === null)).toBe(true);
+  });
+
+  it("materializeArticleRowsはtableCellMetaをtableMetadata JSON文字列へ格納する", () => {
+    const xml = `
+      <Law><LawBody><AppdxTable><TableStruct><Table>
+        <TableRow>
+          <TableColumn BorderTop="solid" colspan="2"><Sentence>結合</Sentence></TableColumn>
+        </TableRow>
+      </Table></TableStruct></AppdxTable></LawBody></Law>`;
+
+    const document = parseLawXml(xml, context);
+    const rows = materializeArticleRows(document, "row_");
+    const column = rows.find((row) => row.level === "table_column")!;
+
+    expect(column.tableMetadata).not.toBeNull();
+    expect(JSON.parse(column.tableMetadata!)).toEqual({
+      borderTop: "solid",
+      borderRight: "none",
+      borderBottom: "none",
+      borderLeft: "none",
+      colspan: 2,
+      rowspan: 1,
+    });
+  });
+
+  it("table_column以外の行のtableMetadataはnull", () => {
+    const xml = `
+      <Law><LawBody><AppdxTable><TableStruct><Table>
+        <TableRow><TableColumn><Sentence>セル</Sentence></TableColumn></TableRow>
+      </Table></TableStruct></AppdxTable></LawBody></Law>`;
+
+    const rows = materializeArticleRows(parseLawXml(xml, context), "row_");
+    const nonColumnRows = rows.filter((row) => row.level !== "table_column");
+
+    expect(nonColumnRows.length).toBeGreaterThan(0);
+    expect(nonColumnRows.every((row) => row.tableMetadata === null)).toBe(true);
+  });
 });

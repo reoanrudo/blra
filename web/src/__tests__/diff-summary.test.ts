@@ -24,6 +24,7 @@ function makeNode(
     text: "本文",
     sortOrder: 0,
     systemTags: null,
+    tableCellMeta: null,
     ...overrides,
   };
 }

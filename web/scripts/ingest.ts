@@ -537,6 +537,7 @@ async function main() {
       durableNodeKey: "",
       contentChecksum: "",
       bodyChecksum: "",
+      tableMetadata: null,
     }));
 
     const linkIdGen = makeIdGen("lnk_");
