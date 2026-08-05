@@ -209,6 +209,7 @@ async function getRevisionNodes(
          article."durableNodeKey",
          article."deletedAt",
          article."lawRevisionId",
+         article."tableMetadata",
          ARRAY[article."sortOrder"] AS path
        FROM "Article" article
        WHERE article."lawRevisionId" = $1
@@ -240,6 +241,7 @@ async function getRevisionNodes(
          article."durableNodeKey",
          article."deletedAt",
          article."lawRevisionId",
+         article."tableMetadata",
          tree.path || article."sortOrder"
        FROM "Article" article
        INNER JOIN tree ON article."parentId" = tree.id

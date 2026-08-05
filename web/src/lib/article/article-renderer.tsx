@@ -13,7 +13,49 @@ import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
 export { buildSegments } from "@/lib/article/article-segments";
+import type { TableCellStyle } from "@/lib/law-refresh/types";
 import type { ReactNode } from "react";
+
+/**
+ * tableMetadata JSON 文字列を TableCellStyle へパースする。
+ * 不正な JSON や想定外の形式の場合は null（従来の均一罫線へフォールバック）。
+ */
+function parseTableCellStyle(raw: string | null): TableCellStyle | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<TableCellStyle>;
+    if (
+      typeof parsed.borderTop !== "string" ||
+      typeof parsed.borderBottom !== "string" ||
+      typeof parsed.borderLeft !== "string" ||
+      typeof parsed.borderRight !== "string"
+    ) {
+      return null;
+    }
+    return {
+      borderTop: parsed.borderTop,
+      borderRight: parsed.borderRight,
+      borderBottom: parsed.borderBottom,
+      borderLeft: parsed.borderLeft,
+      colspan: typeof parsed.colspan === "number" ? parsed.colspan : 1,
+      rowspan: typeof parsed.rowspan === "number" ? parsed.rowspan : 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * TableCellStyle から各辺の罫線クラスを生成する。
+ */
+function borderClasses(style: TableCellStyle): string {
+  return [
+    style.borderTop === "solid" ? "border-t border-neutral-400" : "border-t-0",
+    style.borderRight === "solid" ? "border-r border-neutral-400" : "border-r-0",
+    style.borderBottom === "solid" ? "border-b border-neutral-400" : "border-b-0",
+    style.borderLeft === "solid" ? "border-l border-neutral-400" : "border-l-0",
+  ].join(" ");
+}
 
 /**
  * リンクのない本文テキストを表示トークン化して描画する（設計書§3）。
@@ -164,23 +206,30 @@ export function TableBlock({
       ))}
       <table className="law-table w-full border-collapse text-xs">
         <tbody>
-          {rows.map((tr, ri) => (
+          {rows.map((tr) => (
             <tr
               id={fullLawAnchorId(tr.row.id)}
               key={tr.row.id}
               data-article-id={tr.row.id}
-              className={ri === 0 ? "law-table__header-row" : ""}
             >
-              {tr.cells.map((td) => (
-                <td
-                  key={td.id}
-                  id={fullLawAnchorId(td.id)}
-                  data-article-id={td.id}
-                  className="law-table__cell border border-neutral-400 px-2 py-1.5 align-top leading-relaxed"
-                >
-                  {td.text && renderDisplayTokens(td.text)}
-                </td>
-              ))}
+              {tr.cells.map((td) => {
+                const style = parseTableCellStyle(td.tableMetadata);
+                const cellClassName = style
+                  ? `law-table__cell ${borderClasses(style)} px-2 py-1.5 align-top leading-relaxed`
+                  : "law-table__cell border border-neutral-400 px-2 py-1.5 align-top leading-relaxed";
+                return (
+                  <td
+                    key={td.id}
+                    id={fullLawAnchorId(td.id)}
+                    data-article-id={td.id}
+                    className={cellClassName}
+                    colSpan={style?.colspan && style.colspan > 1 ? style.colspan : undefined}
+                    rowSpan={style?.rowspan && style.rowspan > 1 ? style.rowspan : undefined}
+                  >
+                    {td.text && renderDisplayTokens(td.text)}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

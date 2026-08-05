@@ -41,6 +41,7 @@ function makeArticle(id: string, sortOrder: number): ChapterArticle {
     regulationType: null,
     stableNodeKey: `root/article:${sortOrder}`,
     lawRevisionId: "revision-1",
+    tableMetadata: null,
   };
   return { root, children: [] };
 }

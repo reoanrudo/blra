@@ -55,6 +55,7 @@ function parsedDoc(revisionId: string, count = 1): ParsedLawDocument {
       text: `本文${i + 1}`,
       sortOrder: i + 1,
       systemTags: null,
+      tableCellMeta: null,
     })),
   };
 }

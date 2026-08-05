@@ -6,6 +6,20 @@ export interface ParseLawContext {
   revisionId: string;
 }
 
+/**
+ * e-Gov XML の TableColumn 要素のセルスタイル（罫線・結合）。
+ * 罫線は4辺それぞれ solid/none で個別制御される。
+ * colspan/rowspan は省略時 1。
+ */
+export interface TableCellStyle {
+  borderTop: "solid" | "none";
+  borderRight: "solid" | "none";
+  borderBottom: "solid" | "none";
+  borderLeft: "solid" | "none";
+  colspan: number;
+  rowspan: number;
+}
+
 export interface ParsedLawNode {
   sourceIndex: number;
   parentSourceIndex: number | null;
@@ -24,6 +38,8 @@ export interface ParsedLawNode {
   text: string | null;
   sortOrder: number;
   systemTags: Record<string, unknown> | null;
+  /** table_column レベルのとき、罫線・結合属性の抽出結果（それ以外は null） */
+  tableCellMeta: TableCellStyle | null;
 }
 
 export interface ParsedLawDocument {
@@ -57,4 +73,6 @@ export interface ArticleRow {
   durableNodeKey: string;
   contentChecksum: string;
   bodyChecksum: string;
+  /** table_column レベルのとき TableCellStyle の JSON 文字列、それ以外は null */
+  tableMetadata: string | null;
 }

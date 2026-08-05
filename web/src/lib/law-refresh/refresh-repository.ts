@@ -351,6 +351,7 @@ export class RefreshRepository {
           durableNodeKey: row.durableNodeKey,
           contentChecksum: row.contentChecksum,
           bodyChecksum: row.bodyChecksum,
+          tableMetadata: row.tableMetadata as never,
         })),
       });
 

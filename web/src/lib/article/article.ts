@@ -27,6 +27,8 @@ export interface ArticleRow {
   stableNodeKey: string | null;
   /** Articleが属するLawRevisionのID */
   lawRevisionId: string;
+  /** table_column のセルスタイルJSON（TableCellStyle）。それ以外は null */
+  tableMetadata: string | null;
 }
 
 /** Fetch article with full descendant tree via recursive CTE (single query, no N+1) */

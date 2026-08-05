@@ -41,6 +41,7 @@ function articleNode(seed: ArticleSeed, index: number): ParsedLawNode {
     text: null,
     sortOrder: index + 1,
     systemTags: null,
+    tableCellMeta: null,
   };
 }
 

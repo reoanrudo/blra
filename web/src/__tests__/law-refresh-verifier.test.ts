@@ -65,6 +65,7 @@ function node(seed: NodeSeed, index: number): ParsedLawNode {
     text: seed.body ?? null,
     sortOrder: index + 1,
     systemTags: null,
+    tableCellMeta: null,
   };
 }
 

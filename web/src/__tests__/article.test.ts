@@ -30,6 +30,7 @@ function makeRow(overrides: Partial<ArticleRow> = {}): ArticleRow {
     regulationType: "individual",
     stableNodeKey: null,
     lawRevisionId: "rev-1",
+    tableMetadata: null,
     ...overrides,
   };
 }
