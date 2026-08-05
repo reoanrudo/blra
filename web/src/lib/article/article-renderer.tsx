@@ -70,16 +70,38 @@ function renderDisplayTokens(text: string): ReactNode {
   // 全トークンを span で囲む（plainトークンも含む）
   // data-source-kind は選択座標計算で使用: plain は表示テキスト=原文のため offset 直接計算、
   // number/unit/fraction は変換トークンのため一部選択でも全体へ拡張する。
-  return tokens.map((token, i) => (
-    <span
-      key={`tok-${i}`}
-      data-source-start={token.sourceStart}
-      data-source-end={token.sourceEnd}
-      data-source-kind={token.kind}
-    >
-      {token.displayText}
-    </span>
-  ));
+  return tokens.map((token, i) => {
+    // 分数は分子・分母を上下に積み上げた縦表示（本家・書籍版に準拠）
+    if (
+      token.kind === "fraction" &&
+      token.fractionNumerator &&
+      token.fractionDenominator
+    ) {
+      return (
+        <span
+          key={`tok-${i}`}
+          data-source-start={token.sourceStart}
+          data-source-end={token.sourceEnd}
+          data-source-kind={token.kind}
+          className="law-fraction"
+        >
+          <span className="law-fraction__numerator">{token.fractionNumerator}</span>
+          <span className="law-fraction__denominator">{token.fractionDenominator}</span>
+        </span>
+      );
+    }
+
+    return (
+      <span
+        key={`tok-${i}`}
+        data-source-start={token.sourceStart}
+        data-source-end={token.sourceEnd}
+        data-source-kind={token.kind}
+      >
+        {token.displayText}
+      </span>
+    );
+  });
 }
 
 export function levelIndent(level: string): string {

@@ -150,6 +150,27 @@
     font-size: 12px;
   }
 
+  /* 分数の縦表示（分子・分母を上下に積み上げ、分子の下に罫線を引く） */
+  .law-fraction {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    text-align: center;
+    line-height: 1.1;
+    margin: 0 0.15em;
+    font-size: 0.85em;
+  }
+
+  .law-fraction__numerator {
+    padding: 0 0.25em;
+  }
+
+  .law-fraction__denominator {
+    padding: 0 0.25em;
+    border-top: 1px solid currentColor;
+  }
+
   .law-note-panel {
     --law-accent: #d92f7e;
 
