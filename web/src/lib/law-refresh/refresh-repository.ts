@@ -108,6 +108,12 @@ export interface ActivateCandidateRevisionInput {
     observedVersionKey: string;
     egovUpdatedAt: Date;
   };
+  /**
+   * 変更通知バナー用の差分サマリー（設計書 §13.2）。
+   * activate 成功時に LawRefreshLawResult.diffSummary へ保存される。
+   * null の場合は diffSummary を更新しない（従来互換）。
+   */
+  diffSummary: unknown | null;
 }
 
 export interface RecordHeldCandidateInput {
@@ -414,6 +420,11 @@ export class RefreshRepository {
           status: "updated",
           phase: "completed",
           completedAt: new Date(),
+          ...(input.diffSummary != null
+            ? {
+                diffSummary: input.diffSummary as Prisma.InputJsonValue,
+              }
+            : {}),
         },
       });
 

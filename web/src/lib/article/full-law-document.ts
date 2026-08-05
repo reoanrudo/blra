@@ -51,6 +51,22 @@ export interface FullLawRevisionMetadata {
   repealStatus: string | null;
   /** 廃止日（LawSyncState.repealDate）。 */
   repealDate: string | null;
+  /**
+   * 変更通知バナー用データ（設計書 §13.2）。
+   * 直近の更新で変更があった場合のみ非 null。
+   * null の場合はバナーを表示しない（unchanged, 初回導入, 未施行等）。
+   */
+  changeNotice: LawChangeNotice | null;
+}
+
+/**
+ * 変更通知バナーの表示データ（設計書 §13.2）。
+ */
+export interface LawChangeNotice {
+  /** 変更された条番号のリスト（例: ["第6条", "第12条", "第48条"]）。 */
+  changedArticleNumbers: string[];
+  /** 変更件数（modified + added + removed の合計）。 */
+  changeCount: number;
 }
 
 export interface FullLawDocument {
