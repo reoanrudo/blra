@@ -43,6 +43,29 @@ function parseKanjiNum(s: string): number {
     const n = parseInt(s, 10);
     return Number.isFinite(n) ? n : 0;
   }
+  // 単位（十百千万）を含まない純粋な桁並び（「二五」「一二五」等）は
+  // 桁接続として処理: 二五→25、一二五→125
+  if (!/[十百千万]/.test(s)) {
+    const digitMap: Record<string, number> = {
+      "零": 0, "〇": 0, "一": 1, "二": 2, "三": 3, "四": 4,
+      "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+    };
+    let digits = "";
+    let allDigits = true;
+    for (const ch of s) {
+      if (digitMap[ch] !== undefined) {
+        digits += digitMap[ch];
+      } else if (/[0-9]/.test(ch)) {
+        digits += ch;
+      } else {
+        allDigits = false;
+        break;
+      }
+    }
+    if (allDigits && digits.length > 0) {
+      return parseInt(digits, 10);
+    }
+  }
   let result = 0;
   let current = 0;
   for (const ch of s) {
