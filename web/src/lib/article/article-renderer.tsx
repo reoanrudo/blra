@@ -17,6 +17,21 @@ import type { TableCellStyle } from "@/lib/law-refresh/types";
 import type { ReactNode } from "react";
 
 /**
+/** tableMetadataからcolspan/rowspanのみを取り出す軽量パーサー */
+function safeParseCellStyle(raw: string | null): { colspan: number; rowspan: number } | null {
+  if (!raw) return null;
+  try {
+    const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>;
+    return {
+      colspan: typeof parsed.colspan === "number" ? parsed.colspan : 1,
+      rowspan: typeof parsed.rowspan === "number" ? parsed.rowspan : 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * tableMetadata JSON 文字列を TableCellStyle へパースする。
  * 不正な JSON や想定外の形式の場合は null（従来の均一罫線へフォールバック）。
  */
@@ -471,7 +486,11 @@ export function TableBlock({
         <colgroup>
           {(() => {
             if (!rows[0]) return null;
-            const numCols = rows[0].cells.length;
+            // colspanを展開した実際のグリッド列数を計算
+            const numCols = rows[0].cells.reduce((sum, cell) => {
+              const meta = cell.tableMetadata ? safeParseCellStyle(cell.tableMetadata) : null;
+              return sum + (meta?.colspan ?? 1);
+            }, 0);
             // 各列のデータ行（3行目以降）の最長テキスト長を計算。
             // データ行がない場合は全行から計算。
             const colDataLens: number[] = [];
@@ -497,6 +516,7 @@ export function TableBlock({
             const isTable1 = appdxNum === 128;
             const isTable2 = appdxNum === 129;
             const isTable3 = appdxNum === 130;
+            const isTable4 = appdxNum === 131;
             // 別表第一: 列0=4%、列2=14%、列1=36%、列3=23%、列4=23%
             // スマホ(640px以下)は列0・列2を広めに設定
             // それ以外: 列0=4%、残りはテキスト長で比率配分
@@ -523,7 +543,23 @@ export function TableBlock({
             return colPcts.map((pct, i) => {
               // 列0（欄記号）は全表共通で35px固定
               // 別表第三はrowspanで長文が列0に入るため強制的に35px
-              if (i === 0 && (colDataLens[0] <= 4 || isTable3)) {
+              if (i === 0 && (colDataLens[0] <= 4 || isTable3 || isTable4)) {
+                return <col key={i} style={{ width: "35px" }} />;
+              }
+              // 別表第四: PCのみ列幅固定、スマホは比率配分
+              if (isTable4 && !isMobile && i === 1) {
+                return <col key={i} style={{ width: "100px" }} />;
+              }
+              if (isTable4 && !isMobile && i === 2) {
+                return <col key={i} style={{ width: "40px" }} />;
+              }
+              if (isTable4 && !isMobile && i === 3) {
+                return <col key={i} style={{ width: "95px" }} />;
+              }
+              if (isTable4 && !isMobile && i === 4) {
+                return <col key={i} style={{ width: "70px" }} />;
+              }
+              if (isTable4 && i === 5) {
                 return <col key={i} style={{ width: "35px" }} />;
               }
               // 別表第一の列2（中程度テキスト）はPCのみ120px固定
@@ -539,12 +575,16 @@ export function TableBlock({
                 return <col key={i} style={{ width: "120px" }} />;
               }
               // 残り列はテーブル幅から固定列を引いて比率配分
-              const fixedTotal = ((colDataLens[0] <= 4 || isTable3) ? 35 : 0)
+              const fixedTotal = ((colDataLens[0] <= 4 || isTable3 || isTable4) ? 35 : 0)
                 + (isTable1 && !isMobile && numCols > 2 ? 120 : 0)
                 + (isTable2 && !isMobile && numCols > 1 ? 270 : 0)
-                + (isTable3 && !isMobile && numCols > 4 ? 240 : 0);
+                + (isTable3 && !isMobile && numCols > 4 ? 240 : 0)
+                + (isTable4 && !isMobile ? 305 : 0)
+                + (isTable4 ? 35 : 0);
               const widePcts = colPcts.map((p, j) => {
-                if (j === 0 && (colDataLens[0] <= 4 || isTable3)) return 0;
+                if (j === 0 && (colDataLens[0] <= 4 || isTable3 || isTable4)) return 0;
+                if (isTable4 && j === 5) return 0;
+                if (isTable4 && !isMobile && (j === 1 || j === 2 || j === 3 || j === 4)) return 0;
                 if (isTable1 && !isMobile && j === 2) return 0;
                 if (isTable2 && !isMobile && j === 1) return 0;
                 if (isTable3 && !isMobile && (j === 3 || j === 4)) return 0;
@@ -592,6 +632,7 @@ export function TableBlock({
                 // 改行なし・10文字以内のテキスト（「（い）」「三階以上の階」等）は
                 // 折り返さず1行で収める。
                 const isNoWrap =
+                  isDataCell &&
                   trimmedText !== "" &&
                   trimmedText.length <= 10 &&
                   !trimmedText.includes("\n");
@@ -607,9 +648,10 @@ export function TableBlock({
                 const cellAlign = isNumeric ? "text-right" : shouldCenter ? "text-center" : "text-left";
                 // 別表第二の列1は左揃え・上下中央
                 const isTable2Col1 = (tableNode.stableNodeKey ?? "").includes("appdx_table:129") && cellIdx === 1;
-                // 別表第三は全セル上下中央（rowspan構造のためcellIdxが信頼できない）
+                // 別表第三・別表第四は全セル上下中央（rowspan構造のためcellIdxが信頼できない）
                 const isTable3Cell = (tableNode.stableNodeKey ?? "").includes("appdx_table:130");
-                const cellVAlign = (isNoWrap || shouldCenter || isNumeric || isHeaderRow || isTable2Col1 || isTable3Cell) ? "align-middle" : "align-top";
+                const isTable4Cell = (tableNode.stableNodeKey ?? "").includes("appdx_table:131");
+                const cellVAlign = (isNoWrap || shouldCenter || isNumeric || isHeaderRow || isTable2Col1 || isTable3Cell || isTable4Cell) ? "align-middle" : "align-top";
                 const cellNoWrap = isNoWrap;
                 // 別表第二の列2で番号ごとの改行「\n」を含む場合のみインデント
                 const hasManualLineBreaks = (td.text ?? "").includes("\n");
