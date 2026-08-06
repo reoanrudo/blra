@@ -214,13 +214,13 @@
   .law-fraction {
     display: inline-flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
+    width: fit-content;
     vertical-align: middle;
     line-height: 1;
   }
   .law-fraction__num {
     font-size: 0.85em;
-    width: 1.5em;
     text-align: center;
     overflow: visible;
   }
@@ -229,7 +229,6 @@
   }
   .law-fraction__denom {
     font-size: 0.85em;
-    width: 1.5em;
     text-align: center;
     overflow: visible;
     border-top: 1px solid currentColor;
@@ -238,9 +237,8 @@
 
   .law-table {
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-    table-layout: auto;
+    table-layout: fixed;
     width: 100%;
-    max-width: 100%;
   }
 
   .law-table__cell {
@@ -250,17 +248,31 @@
     overflow-wrap: break-word;
   }
 
-  /* 短い見出しセル（「（い）」「（ろ）」「（1）」等）は折り返さない。
-     法令集（冊子）と同様に1行で収め、列幅を最小化する。 */
+  /* スマホは文字サイズ・列幅ともに比率で縮小 */
+  @media (max-width: 640px) {
+    .law-table__cell {
+      font-size: 11px;
+    }
+  }
+  @media (max-width: 480px) {
+    .law-table__cell {
+      font-size: 9px;
+    }
+  }
+
+  /* 短い見出しセル（「（い）」「三階以上の階」等）は折り返さない。
+     列幅はcolgroupで制御するため、ここでは幅指定しない。 */
   .law-table__cell--nowrap {
     white-space: nowrap;
-    word-break: normal;
-    /* 短い見出しセルは最小幅にする。 */
-    width: 1%;
-    /* padding を削って視覚的にコンパクトにする */
-    padding-left: 4px;
-    padding-right: 4px;
     text-align: center;
+    vertical-align: middle;
+  }
+
+  /* 空セルは幅を最小限に圧縮する（表の余白をなくす）。 */
+  .law-table__cell--empty {
+    width: 1%;
+    padding-left: 2px;
+    padding-right: 2px;
   }
 
   /* テキスト内の改行（\n）を保持して表示する。
@@ -268,6 +280,13 @@
      数字ごとに改行して縦に並べる。 */
   .law-table__cell--preline {
     white-space: pre-line;
+  }
+
+  /* 別表第二の列2: 最初の行は左端、折り返し行は全角1字インデント */
+  .law-table__cell--indent {
+    text-align: left;
+    padding-left: 1em;
+    text-indent: -1em;
   }
 
   /* ヘッダー行のセル（colspanなし、例「割合」）。字間1em。 */
@@ -286,15 +305,6 @@
   .law-table__cell--fraction {
     padding-left: 2px;
     padding-right: 2px;
-    text-align: center;
-  }
-
-  /* 分数の縦表示（分子・分母を上下に積み上げ、分子の下に罫線を引く） */
-  .law-fraction {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    vertical-align: middle;
     text-align: center;
   }
 

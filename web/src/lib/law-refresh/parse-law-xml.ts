@@ -41,8 +41,10 @@ const SKIP_LEVEL_TAGS = new Set([
   "ArithFormula",
   "Sub",
   "Sup",
-  "Ruby",
+  // Ruby は parseLawXml の前処理（stripRuby）で親字に展開済み。
+  // Rt は万が一残った場合の安全網として読み仮名を除外する。
   "Rt",
+  "Rp",
 ]);
 
 const ARRAY_TAGS = new Set([
@@ -334,6 +336,23 @@ function extractTableCellStyle(value: Record<string, unknown>): TableCellStyle {
   };
 }
 
+/**
+ * e-Gov XML のルビ要素（<Ruby>親字<Rt>読み</Rt></Ruby>）を親字のみに展開する。
+ *
+ * fast-xml-parser は preserveOrder: false のため、
+ * <Sentence>前文<Ruby>跨<Rt>こ</Rt></Ruby>後文</Sentence> を
+ * { "#text": "前文後文", "Ruby": { "#text": "跨", "Rt": "こ" } }
+ * と前後テキストを結合してしまい、親字の挿入位置が失われる。
+ * XML パース前に正規表現で親字を本文へ埋め込むことで、
+ * 正しい順序「前文跨後文」を保持したままルビの読み仮名を除外する。
+ */
+const RUBY_PATTERN =
+  /<Ruby>\s*([^<]+?)\s*(?:<Rp>[^<]*<\/Rp>\s*)?<Rt>[^<]*<\/Rt>\s*(?:<Rp>[^<]*<\/Rp>\s*)?<\/Ruby>/g;
+
+function stripRuby(xml: string): string {
+  return xml.replace(RUBY_PATTERN, "$1");
+}
+
 export function parseLawXml(
   xml: string,
   context: ParseLawContext,
@@ -346,7 +365,7 @@ export function parseLawXml(
     textNodeName: "#text",
     preserveOrder: false,
   });
-  const parsed = parser.parse(xml) as unknown;
+  const parsed = parser.parse(stripRuby(xml)) as unknown;
   if (!isRecord(parsed)) throw new Error("XML root must be an object");
 
   const dataRoot = isRecord(parsed.DataRoot) ? parsed.DataRoot : null;
