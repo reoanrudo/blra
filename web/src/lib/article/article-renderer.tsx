@@ -471,6 +471,8 @@ export function TableBlock({
             const colPcts: number[] = [];
             if (isTable1 && numCols === 5) {
               colPcts.push(...(isMobile ? [8, 32, 18, 21, 21] : [4, 36, 14, 23, 23]));
+            } else if (isTable2 && numCols === 3) {
+              colPcts.push(...(isMobile ? [8, 35, 57] : [4, 28, 68]));
             } else {
               // 汎用: 列0=4%、残りをテキスト長で配分
               const narrowPct = 4;
@@ -494,11 +496,18 @@ export function TableBlock({
               if (isTable1 && i === 2 && !isMobile) {
                 return <col key={i} style={{ width: "120px" }} />;
               }
+              // 別表第二の列1（地域名）はPCのみ270px固定
+              if (isTable2 && i === 1 && !isMobile) {
+                return <col key={i} style={{ width: "270px" }} />;
+              }
               // 残り列はテーブル幅から固定列を引いて比率配分
-              const fixedTotal = (colDataLens[0] <= 4 ? 35 : 0) + (isTable1 && !isMobile && numCols > 2 ? 120 : 0);
+              const fixedTotal = (colDataLens[0] <= 4 ? 35 : 0)
+                + (isTable1 && !isMobile && numCols > 2 ? 120 : 0)
+                + (isTable2 && !isMobile && numCols > 1 ? 270 : 0);
               const widePcts = colPcts.map((p, j) => {
                 if (j === 0 && colDataLens[0] <= 4) return 0;
                 if (isTable1 && !isMobile && j === 2) return 0;
+                if (isTable2 && !isMobile && j === 1) return 0;
                 return p;
               });
               const wideSum = widePcts.reduce((a, b) => a + b, 0);
