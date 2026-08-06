@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
 
   const whereClause = conditions.join(" AND ");
   const lawBookScope = currentLawBookArticleScopeSql("a", "e", "l");
+  const editionParamIdx = paramIdx;
 
   const articles = await prisma.$queryRawUnsafe<
     {
@@ -56,10 +57,10 @@ export async function GET(request: NextRequest) {
     JOIN "Law" l ON a."lawId" = l.id
     JOIN "LawBookEntry" e
       ON e."lawId" = l.id
-     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $2)
+     AND e."editionId" = (SELECT edition_inner.id FROM "LawBookEdition" edition_inner WHERE edition_inner."editionKey" = $${editionParamIdx})
     JOIN "LawBookEdition" edition ON edition.id = e."editionId"
     WHERE ${whereClause}
-      AND edition."editionKey" = $${paramIdx}
+      AND edition."editionKey" = $${editionParamIdx}
       AND ${lawBookScope}
     ORDER BY a."sortOrder"
     LIMIT 20`,

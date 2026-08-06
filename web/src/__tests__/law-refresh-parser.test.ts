@@ -418,3 +418,73 @@ describe("parseLawXml durable keys", () => {
     expect(nonColumnRows.every((row) => row.tableMetadata === null)).toBe(true);
   });
 });
+
+describe("parseLawXml ルビ（Ruby）処理", () => {
+  it("ルビの親字を本文に残し、読み仮名を除外する", () => {
+    const xml = `
+      <Law><LawBody><MainProvision>
+        <Article Num="1"><ArticleTitle>第一条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphSentence>
+              <Sentence>施設並びに<Ruby>跨<Rt>こ</Rt></Ruby>線橋を設ける。</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+        </Article>
+      </MainProvision></LawBody></Law>`;
+    const nodes = parseLawXml(xml, context).nodes;
+    const paragraph = nodes.find((n) => n.level === "paragraph")!;
+
+    // 親字「跨」が本文に含まれる
+    expect(paragraph.text).toContain("跨線橋");
+    // 読み仮名「こ」が本文に含まれない
+    expect(paragraph.text).not.toMatch(/こ/);
+    // 前後の文脈が正しい順序で結合される
+    expect(paragraph.text).toContain("施設並びに跨線橋を設ける。");
+  });
+
+  it("1つのSentence内に複数のルビがあっても全て正しく処理する", () => {
+    const xml = `
+      <Law><LawBody><MainProvision>
+        <Article Num="1"><ArticleTitle>第一条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphSentence>
+              <Sentence>消火<Ruby>栓<Rt>せん</Rt></Ruby>、スプリンクラー、貯水<Ruby>槽<Rt>そう</Rt></Ruby>その他</Sentence>
+            </ParagraphSentence>
+          </Paragraph>
+        </Article>
+      </MainProvision></LawBody></Law>`;
+    const nodes = parseLawXml(xml, context).nodes;
+    const paragraph = nodes.find((n) => n.level === "paragraph")!;
+
+    expect(paragraph.text).toContain("消火栓");
+    expect(paragraph.text).toContain("貯水槽");
+    expect(paragraph.text).not.toMatch(/せん|そう/);
+  });
+
+  it("Column内のSentenceにあるルビも正しく処理する（第2条定義書き構造）", () => {
+    const xml = `
+      <Law><LawBody><MainProvision>
+        <Article Num="2"><ArticleTitle>第二条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphSentence><Sentence>定義は次のとおり。</Sentence></ParagraphSentence>
+            <Item Num="1">
+              <ItemTitle>一</ItemTitle>
+              <ItemSentence>
+                <Column Num="1"><Sentence>建築物</Sentence></Column>
+                <Column Num="2"><Sentence>施設並びに<Ruby>跨<Rt>こ</Rt></Ruby>線橋を含む。</Sentence></Column>
+              </ItemSentence>
+            </Item>
+          </Paragraph>
+        </Article>
+      </MainProvision></LawBody></Law>`;
+    const nodes = parseLawXml(xml, context).nodes;
+    // Column レベルのノードから確認
+    const columns = nodes.filter((n) => n.level === "column");
+    const col2 = columns[1];
+
+    expect(col2).toBeDefined();
+    expect(col2.text).toContain("跨線橋");
+    expect(col2.text).not.toMatch(/こ/);
+    expect(col2.text).toContain("施設並びに跨線橋を含む。");
+  });
+});
