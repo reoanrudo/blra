@@ -1,5 +1,24 @@
 import type { ArticleRow } from "@/lib/article/article";
 
+interface TableSpanMeta {
+  colspan: number;
+  rowspan: number;
+}
+
+function safeParseMeta(raw: string): TableSpanMeta | null {
+  try {
+    // raw が文字列の場合は JSON.parse、オブジェクトの場合はそのまま
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (typeof parsed !== "object" || parsed === null) return null;
+    return {
+      colspan: typeof parsed.colspan === "number" ? parsed.colspan : 1,
+      rowspan: typeof parsed.rowspan === "number" ? parsed.rowspan : 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export type RenderSegment =
   | { type: "node"; row: ArticleRow }
   | { type: "anchor"; row: ArticleRow }
@@ -56,12 +75,53 @@ export function buildSegments(children: ArticleRow[]): RenderSegment[] {
       const tableRows = (byParent.get(row.id) ?? []).filter(
         (candidate) => candidate.level === "table_row",
       );
-      const structuredRows = tableRows.map((tableRow) => ({
-        row: tableRow,
-        cells: (byParent.get(tableRow.id) ?? []).filter(
+      // rowspan/colspanを考慮して仮想グリッドを構築し、
+      // 各セルの正しい列位置を計算する。
+      // HTMLの<table>にそのまま渡すと、rowspanで欠落した列に
+      // セルが左詰めで誤配置されるため、プレースホルダーで補完する。
+      const grid: (ArticleRow | null)[][] = [];
+      const occupied: Set<string>[] = []; // [row][col] = occupied
+      const structuredRows = tableRows.map((tableRow, rowIdx) => {
+        const rawCells = (byParent.get(tableRow.id) ?? []).filter(
           (candidate) => candidate.level === "table_column",
-        ),
-      }));
+        );
+        // グリッド行を確保
+        while (grid.length <= rowIdx) {
+          grid.push([]);
+          occupied.push(new Set());
+        }
+        const placedCells: (ArticleRow | null)[] = [];
+        let colIdx = 0;
+        for (const cell of rawCells) {
+          // rowspanで占有されている列をスキップ
+          while (occupied[rowIdx]?.has(String(colIdx))) colIdx++;
+          const meta = cell.tableMetadata ? safeParseMeta(cell.tableMetadata) : null;
+          const rs = meta?.rowspan ?? 1;
+          const cs = meta?.colspan ?? 1;
+          // グリッドを拡張
+          while (grid[rowIdx].length < colIdx + cs) {
+            grid[rowIdx].push(null);
+            occupied[rowIdx].add(String(grid[rowIdx].length - 1));
+          }
+          // セルを配置
+          placedCells[colIdx] = cell;
+          // rowspan分の占有を記録
+          for (let r = 0; r < rs; r++) {
+            for (let c = 0; c < cs; c++) {
+              const rr = rowIdx + r;
+              while (occupied.length <= rr) { grid.push([]); occupied.push(new Set()); }
+              occupied[rr].add(String(colIdx + c));
+            }
+          }
+          colIdx += cs;
+        }
+        // placedCellsのnullを詰めずにそのまま返す（HTMLがcolSpan/rowSpanで処理する）
+        // ただしnullの位置にはダミーセルは不要（rowspanで覆われているため）
+        return {
+          row: tableRow,
+          cells: placedCells.filter((c): c is ArticleRow => c !== null),
+        };
+      });
       const visibleIds = new Set(
         structuredRows.flatMap((structured) => [
           structured.row.id,

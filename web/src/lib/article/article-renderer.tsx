@@ -23,7 +23,7 @@ import type { ReactNode } from "react";
 function parseTableCellStyle(raw: string | null): TableCellStyle | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<TableCellStyle>;
+    const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as Partial<TableCellStyle>;
     if (
       typeof parsed.borderTop !== "string" ||
       typeof parsed.borderBottom !== "string" ||
@@ -154,6 +154,18 @@ function convertLawNumber(text: string): string {
     },
   );
 
+  // 単独の小数表記: 一・五→1.5、一・二五→1.25、〇・七五→0.75
+  const decMap: Record<string, string> = {
+    "〇": "0", "零": "0", "一": "1", "二": "2", "三": "3",
+    "四": "4", "五": "5", "六": "6", "七": "7", "八": "8", "九": "9",
+  };
+  result = result.replace(
+    /([〇零一二三四五六七八九])[・.]([〇零一二三四五六七八九]+)/g,
+    (_m, intPart: string, decPart: string) => {
+      return (decMap[intPart] ?? "0") + "." + decPart.split("").map((ch: string) => decMap[ch] ?? ch).join("");
+    },
+  );
+
   // 階数: 漢数字+階 → 数字+階
   result = result.replace(
     /([一二三四五六七八九十百零〇]+)階/g,
@@ -255,7 +267,27 @@ function renderTableCellContent(text: string, raw?: boolean): ReactNode {
   if (tokens.length === 0) return null;
 
   return tokens.map((token, i) => {
-    const parts = token.displayText.split(/(政令)/g);
+    // 分数（"数字/数字" パターン）は縦表示
+    const isFraction = token.kind === "fraction" || /^\d+\/\d+$/.test(token.displayText);
+    if (isFraction) {
+      const [num, denom] = token.displayText.split("/");
+      return (
+        <span
+          key={`tok-${i}`}
+          data-source-start={token.sourceStart}
+          data-source-end={token.sourceEnd}
+          data-source-kind={token.kind}
+          className="law-fraction"
+        >
+          <span className="law-fraction__num">{num}</span>
+          <span className="law-fraction__bar">/</span>
+          <span className="law-fraction__denom">{denom}</span>
+        </span>
+      );
+    }
+    // 数字トークン間の「・」を小数点「.」に置換
+    const displayText = token.displayText === "・" ? "." : token.displayText;
+    const parts = displayText.split(/(政令)/g);
     return (
       <span
         key={`tok-${i}`}
@@ -464,6 +496,7 @@ export function TableBlock({
             // すべてパーセンテージ指定（画面サイズが変わっても列幅比率を維持）
             const isTable1 = appdxNum === 128;
             const isTable2 = appdxNum === 129;
+            const isTable3 = appdxNum === 130;
             // 別表第一: 列0=4%、列2=14%、列1=36%、列3=23%、列4=23%
             // スマホ(640px以下)は列0・列2を広めに設定
             // それ以外: 列0=4%、残りはテキスト長で比率配分
@@ -489,7 +522,8 @@ export function TableBlock({
             }
             return colPcts.map((pct, i) => {
               // 列0（欄記号）は全表共通で35px固定
-              if (i === 0 && colDataLens[0] <= 4) {
+              // 別表第三はrowspanで長文が列0に入るため強制的に35px
+              if (i === 0 && (colDataLens[0] <= 4 || isTable3)) {
                 return <col key={i} style={{ width: "35px" }} />;
               }
               // 別表第一の列2（中程度テキスト）はPCのみ120px固定
@@ -500,14 +534,20 @@ export function TableBlock({
               if (isTable2 && i === 1 && !isMobile) {
                 return <col key={i} style={{ width: "270px" }} />;
               }
+              // 別表第三の列3・4（距離・数値）はPCのみ120px固定
+              if (isTable3 && (i === 3 || i === 4) && !isMobile) {
+                return <col key={i} style={{ width: "120px" }} />;
+              }
               // 残り列はテーブル幅から固定列を引いて比率配分
-              const fixedTotal = (colDataLens[0] <= 4 ? 35 : 0)
+              const fixedTotal = ((colDataLens[0] <= 4 || isTable3) ? 35 : 0)
                 + (isTable1 && !isMobile && numCols > 2 ? 120 : 0)
-                + (isTable2 && !isMobile && numCols > 1 ? 270 : 0);
+                + (isTable2 && !isMobile && numCols > 1 ? 270 : 0)
+                + (isTable3 && !isMobile && numCols > 4 ? 240 : 0);
               const widePcts = colPcts.map((p, j) => {
-                if (j === 0 && colDataLens[0] <= 4) return 0;
+                if (j === 0 && (colDataLens[0] <= 4 || isTable3)) return 0;
                 if (isTable1 && !isMobile && j === 2) return 0;
                 if (isTable2 && !isMobile && j === 1) return 0;
+                if (isTable3 && !isMobile && (j === 3 || j === 4)) return 0;
                 return p;
               });
               const wideSum = widePcts.reduce((a, b) => a + b, 0);
@@ -542,7 +582,9 @@ export function TableBlock({
                   trimmedText.includes("平方メートル") ||
                   trimmedText.includes("立方メートル") ||
                   trimmedText.includes("キロワット") ||
-                  trimmedText.includes("時間")
+                  trimmedText.includes("時間") ||
+                  /^[一二三四五六七八九十百千万・]+メートル$/.test(trimmedText) ||
+                  /^[一二三四五六七八九十百千万・]+メートル以上$/.test(trimmedText)
                 );
                 // テキスト内に改行（\n）を含むセルは pre-line で改行を保持。
                 const hasLineBreaks = (td.text ?? "").includes("\n") || (isNumeric && cellIsMobile);
@@ -561,13 +603,13 @@ export function TableBlock({
                 const firstLine = trimmedText.split("\n")[0] ?? "";
                 const isFloorText = isDataCell && firstLine.includes("階") && !isNumeric && firstLine.length <= 10;
                 const shouldCenter = isSymbol || isFloorText;
-                // 数値セル・欄記号は上下中央、本文は上寄せ
-                // 別表第一の数値セルは右揃え、それ以外の本文は左揃え
-                const isTable1Numeric = isNumeric && (tableNode.stableNodeKey ?? "").includes("appdx_table:128");
-                const cellAlign = isTable1Numeric ? "text-right" : shouldCenter ? "text-center" : "text-left";
+                // 数値セルは右揃え、欄記号は中央、本文は左揃え
+                const cellAlign = isNumeric ? "text-right" : shouldCenter ? "text-center" : "text-left";
                 // 別表第二の列1は左揃え・上下中央
                 const isTable2Col1 = (tableNode.stableNodeKey ?? "").includes("appdx_table:129") && cellIdx === 1;
-                const cellVAlign = (isNoWrap || shouldCenter || isNumeric || isHeaderRow || isTable2Col1) ? "align-middle" : "align-top";
+                // 別表第三は全セル上下中央（rowspan構造のためcellIdxが信頼できない）
+                const isTable3Cell = (tableNode.stableNodeKey ?? "").includes("appdx_table:130");
+                const cellVAlign = (isNoWrap || shouldCenter || isNumeric || isHeaderRow || isTable2Col1 || isTable3Cell) ? "align-middle" : "align-top";
                 const cellNoWrap = isNoWrap;
                 // 別表第二の列2で番号ごとの改行「\n」を含む場合のみインデント
                 const hasManualLineBreaks = (td.text ?? "").includes("\n");
