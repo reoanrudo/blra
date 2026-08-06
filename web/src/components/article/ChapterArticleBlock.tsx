@@ -18,27 +18,65 @@ import type { ConfirmedRelation } from "@/lib/relations/confirmed-relation";
 import ConfirmedRelationList from "@/components/article/ConfirmedRelationList";
 
 /**
- * キャプション内の条番号（「第六条」「第二十一条の二」等）を検出する正規表現。
- * 法令の条番号パターンにマッチする。
+ * キャプション内の条番号（「第六条」「第三十五条の三」等）を検出する正規表現。
+ * 「条のX」まで含めて完全にマッチする。
  */
-const ARTICLE_REF_PATTERN = /(?:法?)(第[一二三四五六七八九十百千０-９0-9]+(?:の[一二三四五六七八九十百千０-９0-9]+)*条)/g;
+const ARTICLE_REF_PATTERN = /(?:法?)(第[一二三四五六七八九十百千０-９0-9]+条(?:の[一二三四五六七八九十百千０-９0-9]+)?)/g;
 
 /**
- * 別表キャプション内の条番号をリンク化して描画する。
- * リンク先は by-number API で解決した記事ID（別タブで開く）。
- * 解決中はプレーンテキストとして表示し、解決完了後にリンクに切り替わる。
+ * 漢数字を算用数字に変換する（簡易版）。
  */
+function kanjiToArabicSimple(s: string): string {
+  const map: Record<string, string> = {
+    "一": "1", "二": "2", "三": "3", "四": "4", "五": "5",
+    "六": "6", "七": "7", "八": "8", "九": "9", "十": "10",
+    "十一": "11", "十二": "12", "十三": "13", "十四": "14", "十五": "15",
+    "十六": "16", "十七": "17", "十八": "18", "十九": "19", "二十": "20",
+    "二十一": "21", "二十二": "22", "二十三": "23", "二十四": "24", "二十五": "25",
+    "二十六": "26", "二十七": "27", "二十八": "28", "二十九": "29", "三十": "30",
+    "三十一": "31", "三十二": "32", "三十三": "33", "三十四": "34", "三十五": "35",
+    "三十六": "36", "三十七": "37", "三十八": "38", "三十九": "39", "四十": "40",
+    "四十一": "41", "四十二": "42", "四十三": "43", "四十四": "44", "四十五": "45",
+    "四十六": "46", "四十七": "47", "四十八": "48", "四十九": "49", "五十": "50",
+    "五十一": "51", "五十二": "52", "五十三": "53", "五十四": "54", "五十五": "55",
+    "五十六": "56", "五十七": "57", "五十八": "58", "五十九": "59", "六十": "60",
+    "六十一": "61", "六十二": "62", "六十三": "63", "六十四": "64", "六十五": "65",
+    "六十六": "66", "六十七": "67", "六十八": "68", "六十九": "69", "七十": "70",
+    "七十一": "71", "七十二": "72", "七十三": "73", "七十四": "74", "七十五": "75",
+    "七十六": "76", "七十七": "77", "七十八": "78", "七十九": "79", "八十": "80",
+    "八十一": "81", "八十二": "82", "八十三": "83", "八十四": "84", "八十五": "85",
+    "八十六": "86", "八十七": "87", "八十八": "88", "八十九": "89", "九十": "90",
+    "九十一": "91", "九十二": "92", "九十三": "93", "九十四": "94", "九十五": "95",
+    "九十六": "96", "九十七": "97", "九十八": "98", "九十九": "99", "百": "100",
+  };
+  return map[s] ?? s;
+}
+
 /**
- * マッチした条参照（「第六条」「第二十一条の二」等）から、
- * DB検索用の articleNumber（「六」「二十一の二」等）を抽出する。
- * 「第」と「条」を取り除き、末尾の「の二」等は保持する。
+ * 条参照（「第三十五条の三」等）を算用数字（「第35条の3」）に変換。
+ */
+function formatArticleRef(refText: string): string {
+  return refText.replace(
+    /第([一二三四五六七八九十百]+)条(の([一二三四五六七八九十百]+))?/,
+    (_match, num: string, _suffix?: string, subNum?: string) => {
+      const arabic = kanjiToArabicSimple(num);
+      const subArabic = subNum ? `の${kanjiToArabicSimple(subNum)}` : "";
+      return `第${arabic}条${subArabic}`;
+    },
+  );
+}
+
+/**
+ * マッチした条参照から、DB検索用の articleNumber を抽出。
+ * 「第三十五条の三」→「三十五の三」（DBは漢数字で格納されている）
+ * 「第九十条の三」→「九十の三」
  */
 function extractArticleNumberForSearch(refText: string): string {
-  // 「第」を削除
   let s = refText.replace(/^第/, "");
-  // 末尾の「条」または「条のX」を処理
-  // 「第六条」→「六」、「第二十一条の二」→「二十一の二」
-  s = s.replace(/条$/, "");
+  // 「条」または「条のX」を処理
+  // 「三十五条の三」→「三十五の三」
+  // 「六条」→「六」
+  s = s.replace(/条(の.+)?$/, "$1");
   return s;
 }
 
@@ -55,8 +93,8 @@ function CaptionWithArticleLinks({
     let m: RegExpExecArray | null;
     const re = new RegExp(ARTICLE_REF_PATTERN);
     while ((m = re.exec(text)) !== null) {
-      const display = m[1]!;
-      const searchNum = extractArticleNumberForSearch(display);
+      const display = formatArticleRef(m[1]!);
+      const searchNum = extractArticleNumberForSearch(m[1]!);
       if (!results.some((r) => r.display === display)) {
         results.push({ display, searchNum });
       }
@@ -109,12 +147,13 @@ function CaptionWithArticleLinks({
     let m: RegExpExecArray | null;
     const re = new RegExp(ARTICLE_REF_PATTERN);
     while ((m = re.exec(text)) !== null) {
-      const num = m[1];
+      const originalNum = m[1]!;
+      const displayNum = formatArticleRef(originalNum);
       if (m.index > lastEnd) {
         result.push({ text: text.slice(lastEnd, m.index) });
       }
-      result.push({ text: num, articleNumber: num });
-      lastEnd = m.index + num.length;
+      result.push({ text: displayNum, articleNumber: displayNum });
+      lastEnd = m.index + originalNum.length;
     }
     if (lastEnd < text.length) {
       result.push({ text: text.slice(lastEnd) });
@@ -244,24 +283,35 @@ export default function ChapterArticleBlock({
 
       {/* Article heading */}
       <div className="mb-2 law-body">
-        {appdxCaptionText && (
-          <p className={`law-article-caption text-sm${isAppdxCaption ? " law-article-caption--appdx" : ""}`}>
-            {isAppdxCaption ? (
-              <CaptionWithArticleLinks text={appdxCaptionText} lawId={articleRoot.lawId} />
-            ) : (
-              appdxCaptionText
+        {isAppdxCaption ? (
+          /* 別表の場合: 見出し「別表第1」とキャプションを1行に並べる */
+          <div className="law-node">
+            <p className="law-node__text--article-inline">
+              <span className="law-node__label--article-inline">{label}</span>
+              <span className="law-node__article-inline-body">
+                <span>{"　"}</span>
+                <CaptionWithArticleLinks text={appdxCaptionText ?? ""} lawId={articleRoot.lawId} />
+              </span>
+            </p>
+          </div>
+        ) : (
+          <>
+            {appdxCaptionText && (
+              <p className="law-article-caption text-sm">
+                {appdxCaptionText}
+              </p>
             )}
-          </p>
+            <div className="law-node">
+              <p className="law-node__text--article-inline">
+                <span className="law-node__label--article-inline">{label}</span>
+                <span className="law-node__article-inline-body">
+                  <span>{"　"}</span>
+                  {emphasizeCabinetOrder(inlineFirstParaText ?? "")}
+                </span>
+              </p>
+            </div>
+          </>
         )}
-        <div className="law-node">
-          <p className="law-node__text--article-inline">
-            <span className="law-node__label--article-inline">{label}</span>
-            <span className="law-node__article-inline-body">
-              <span>{"　"}</span>
-              {emphasizeCabinetOrder(inlineFirstParaText ?? "")}
-            </span>
-          </p>
-        </div>
       </div>
 
       {/* Article body */}
