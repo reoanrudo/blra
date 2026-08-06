@@ -550,8 +550,8 @@ export function TableBlock({
               if (isTable4 && !isMobile && i === 1) {
                 return <col key={i} style={{ width: "100px" }} />;
               }
-              if (isTable4 && !isMobile && i === 2) {
-                return <col key={i} style={{ width: "40px" }} />;
+              if (isTable4 && i === 2) {
+                return <col key={i} style={{ width: "35px" }} />;
               }
               if (isTable4 && !isMobile && i === 3) {
                 return <col key={i} style={{ width: "95px" }} />;
@@ -579,11 +579,11 @@ export function TableBlock({
                 + (isTable1 && !isMobile && numCols > 2 ? 120 : 0)
                 + (isTable2 && !isMobile && numCols > 1 ? 270 : 0)
                 + (isTable3 && !isMobile && numCols > 4 ? 240 : 0)
-                + (isTable4 && !isMobile ? 305 : 0)
-                + (isTable4 ? 35 : 0);
+                + (isTable4 && !isMobile ? 265 : 0)
+                + (isTable4 ? 70 : 0);
               const widePcts = colPcts.map((p, j) => {
                 if (j === 0 && (colDataLens[0] <= 4 || isTable3 || isTable4)) return 0;
-                if (isTable4 && j === 5) return 0;
+                if (isTable4 && (j === 2 || j === 5)) return 0;
                 if (isTable4 && !isMobile && (j === 1 || j === 2 || j === 3 || j === 4)) return 0;
                 if (isTable1 && !isMobile && j === 2) return 0;
                 if (isTable2 && !isMobile && j === 1) return 0;
