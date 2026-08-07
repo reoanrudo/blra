@@ -173,10 +173,21 @@ export default function TocTree({
         return;
       }
 
-      // ターゲットがDOMにない（未描画の条文）→ルーター遷移
+      // ターゲットがDOMにない場合:
+      // 見出しレベル（章・節等）は本文ジャンプ不要、ハイライトのみ適用
+      const node = nodes.find((n) => n.id === articleId);
+      if (node && isExpandableTocLevel(node.level)) {
+        applyHighlightDirect(containerRef.current, articleId);
+        requestAnimationFrame(() => {
+          scrollState?.activateArticle(articleId);
+        });
+        return;
+      }
+
+      // 未描画の条文 →ルーター遷移
       router.push(readerArticleHref(articleId));
     },
-    [router, scrollState, scrollContainerRef],
+    [router, scrollState, scrollContainerRef, nodes],
   );
 
   const handleKeyDown = useCallback(
