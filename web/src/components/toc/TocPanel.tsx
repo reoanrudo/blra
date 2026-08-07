@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useCurrentLawId } from "@/contexts/CurrentLawContext";
 import {
   getAncestorIdsWithMap,
-  shouldExpandTocNodeByDefault,
   type TocNode,
 } from "@/lib/article/toc-tree";
 import {
@@ -88,12 +87,8 @@ export default function TocPanel({
       setExpandedIds(restored);
       return;
     }
-    const defaults = new Set(
-      nodes
-        .filter(shouldExpandTocNodeByDefault)
-        .map((node) => node.id),
-    );
-    setExpandedIds(defaults);
+    // デフォルトはすべて畳んだ状態
+    setExpandedIds(new Set());
   }, [currentLawId, nodes]);
 
   useEffect(() => {
@@ -137,6 +132,11 @@ export default function TocPanel({
     [currentLawId],
   );
 
+  const collapseAll = useCallback(() => {
+    setExpandedIds(new Set());
+    saveExpanded(currentLawId, new Set());
+  }, [currentLawId]);
+
   return (
     <div className="flex h-full flex-col">
       {lawsLoading && (
@@ -168,6 +168,18 @@ export default function TocPanel({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {!loading && nodes.length > 0 && (
+        <div className="shrink-0 border-b border-neutral-200 px-3 py-1.5">
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="text-[11px] text-neutral-500 hover:text-neutral-800 hover:underline"
+          >
+            すべて畳む
+          </button>
         </div>
       )}
 

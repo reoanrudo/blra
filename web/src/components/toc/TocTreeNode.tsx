@@ -32,6 +32,7 @@ function TocTreeNodeImpl({
   function handleClick() {
     if (isHeading) {
       onToggle(node.id);
+      onClick(node.id);
     } else {
       onClick(node.id);
     }
@@ -66,7 +67,7 @@ function TocTreeNodeImpl({
         {node.level === "appdx_table" && <span className="flex-shrink-0">📎</span>}
         {["supplement_group", "suppl_provision"].includes(node.level) && <span className="flex-shrink-0">📌</span>}
 
-        <span className="truncate">{nodeLabel(node)}</span>
+        <span className="truncate" title={nodeLabel(node)}>{nodeLabel(node)}</span>
       </button>
     </>
   );
