@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 import { formatLegalText, type LegalDisplayToken } from "@/lib/article/legal-display-format";
+import { renderTokenNode } from "@/lib/article/legal-token-renderer";
 
 type RenderSegment =
   | { kind: "text"; text: string; textOffset: number }
@@ -85,26 +86,16 @@ export function renderLinkSegments(
  *
  * 絶対位置は セグメントの textOffset + トークンの相対 sourceStart/sourceEnd で計算する。
  * これによりハイライト・選択が原文座標で動作する（設計書§6.1, §6.2）。
+ * 分数トークンは縦分数表示（.law-fraction）として描画される（共通ヘルパーを使用）。
  */
 function renderTokensWithSourceAttrs(
   tokens: LegalDisplayToken[],
   textOffset: number,
   keyPrefix: string,
 ): ReactNode[] {
-  return tokens.map((token, i) => {
-    const absStart = textOffset + token.sourceStart;
-    const absEnd = textOffset + token.sourceEnd;
-    return (
-      <span
-        key={`${keyPrefix}-${i}`}
-        data-source-start={absStart}
-        data-source-end={absEnd}
-        data-source-kind={token.kind}
-      >
-        {token.displayText}
-      </span>
-    );
-  });
+  return tokens.map((token, i) =>
+    renderTokenNode(token, `${keyPrefix}-${i}`, textOffset),
+  );
 }
 
 /** Render segments as ReactElements for use in server components.

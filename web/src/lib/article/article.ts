@@ -121,7 +121,8 @@ export function articleLabel(row: ArticleRow): string {
     case "item":
       // 号番号は法令の号構造のため原文のまま（設計書§4.3）
       // 全角括弧・英数字は半角に統一
-      return toHalfWidth(row.itemNumber || row.articleNumber || "");
+      // ※itemNumber に後続スペースが含まれる場合があるため trim
+      return toHalfWidth((row.itemNumber || row.articleNumber || "").trim());
     case "subitem1":
     case "subitem2":
     case "subitem3":

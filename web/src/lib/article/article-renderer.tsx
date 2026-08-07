@@ -12,6 +12,7 @@ import { renderLinkSegments, renderToElements } from "@/lib/link/link-renderer";
 import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
+import { renderTokenNode, renderTokenNodes } from "@/lib/article/legal-token-renderer";
 export { buildSegments } from "@/lib/article/article-segments";
 import type { TableCellStyle } from "@/lib/law-refresh/types";
 import type { ReactNode } from "react";
@@ -77,60 +78,25 @@ function borderClasses(style: TableCellStyle): string {
  *
  * 全トークン（plain含む）に data-source-start/data-source-end 属性を付与した span で囲む。
  * これにより任意の文字列選択が原文座標へ逆変換でき、ハイライトが機能する（設計書§6.2, §6.3）。
+ * 分数トークンは縦分数表示（.law-fraction）として描画される。
  */
 function renderDisplayTokens(text: string): ReactNode {
   const tokens = formatLegalText(text);
   if (tokens.length === 0) return null;
 
-  return tokens.map((token, i) => (
-    <span
-      key={`tok-${i}`}
-      data-source-start={token.sourceStart}
-      data-source-end={token.sourceEnd}
-      data-source-kind={token.kind}
-    >
-      {token.displayText}
-    </span>
-  ));
+  return renderTokenNodes(tokens, "tok");
 }
 
 /**
  * テーブルセル用の表示トークン描画。
  * 分数（"数字/数字" パターン）を縦表示にする。
+ * renderTokenNodes と同じロジックを使用（共通化）。
  */
 function renderDisplayTokensForTable(text: string): ReactNode {
   const tokens = formatLegalText(text);
   if (tokens.length === 0) return null;
 
-  return tokens.map((token, i) => {
-    const isFraction = token.kind === "fraction" || /^\d+\/\d+$/.test(token.displayText);
-    if (isFraction) {
-      const [num, denom] = token.displayText.split("/");
-      return (
-        <span
-          key={`tok-${i}`}
-          data-source-start={token.sourceStart}
-          data-source-end={token.sourceEnd}
-          data-source-kind={token.kind}
-          className="law-fraction"
-        >
-          <span className="law-fraction__num">{num}</span>
-          <span className="law-fraction__bar">/</span>
-          <span className="law-fraction__denom">{denom}</span>
-        </span>
-      );
-    }
-    return (
-      <span
-        key={`tok-${i}`}
-        data-source-start={token.sourceStart}
-        data-source-end={token.sourceEnd}
-        data-source-kind={token.kind}
-      >
-        {token.displayText}
-      </span>
-    );
-  });
+  return renderTokenNodes(tokens, "ttok");
 }
 
 /**
@@ -159,9 +125,10 @@ function convertLawNumber(text: string): string {
     (_m, num, unit) => `第${kanjiToNumber(num)}${unit}`,
   );
 
-  // 括弧付き番号: （一）（二）（四の二）… → (1)(2)(4-2)…
+  // 括弧付き番号: (一)(二)(四の二)… → (1)(2)(4の2)…
+  // ※全角括弧は前段（114行目）で半角に変換済み
   result = result.replace(
-    /（([一二三四五六七八九十百零〇]+(?:の[一二三四五六七八九十百零〇]+)?)）/g,
+    /\(([一二三四五六七八九十百零〇]+(?:の[一二三四五六七八九十百零〇]+)?)\)/g,
     (_m, num) => {
       const parts = num.split("の");
       const converted = parts.map((p: string) => String(kanjiToNumber(p))).join("の");
@@ -267,38 +234,57 @@ function renderTableCellContent(text: string, raw?: boolean): ReactNode {
   // ただし法令番号（「昭和二十三年法律第百二十二号」等）の漢数字は
   // アラビア数字（「昭和23年法律第122号」）に変換する。
   if (raw) {
-    // 法令番号パターン: 「（元号XX年法律第YY号）」→「（元号XX年法律第YY号）」
     const converted = convertLawNumber(text);
-    const parts = converted.split(/(政令)/g);
-    return parts.map((part, j) =>
-      part === "政令" ? (
-        <strong key={`b-${j}`} style={{ fontWeight: 700 }}>政令</strong>
-      ) : (
-        <span key={`p-${j}`}>{part}</span>
-      ),
-    );
+    // 行ごとに分割して、号番号（一　二　三　…）で始まる行をインデント付きで改行表示
+    const lines = converted.split("\n").filter((l) => l.trim().length > 0);
+    if (lines.length <= 1) {
+      // 単一行の場合は従来通り（左寄せ）
+      const parts = converted.split(/(政令)/g);
+      return (
+        <span style={{ textAlign: "left" }}>
+          {parts.map((part, j) =>
+            part === "政令" ? (
+              <strong key={`b-${j}`} style={{ fontWeight: 700 }}>政令</strong>
+            ) : (
+              <span key={`p-${j}`}>{part}</span>
+            ),
+          )}
+        </span>
+      );
+    }
+    // 複数行: 各行をブロックとして描画し、2行目以降にインデント
+    return lines.map((line, idx) => {
+      const parts = line.split(/(政令)/g);
+      const isFirst = idx === 0;
+      return (
+        <span
+          key={`line-${idx}`}
+          style={{
+            display: "block",
+            textAlign: "left",
+            paddingLeft: isFirst ? 0 : "1.5em",
+            textIndent: isFirst ? 0 : "-1.5em",
+          }}
+        >
+          {parts.map((part, j) =>
+            part === "政令" ? (
+              <strong key={`b-${idx}-${j}`} style={{ fontWeight: 700 }}>政令</strong>
+            ) : (
+              <span key={`p-${idx}-${j}`}>{part}</span>
+            ),
+          )}
+        </span>
+      );
+    });
   }
   const tokens = formatLegalText(text);
   if (tokens.length === 0) return null;
 
   return tokens.map((token, i) => {
-    // 分数（"数字/数字" パターン）は縦表示
+    // 分数（"数字/数字" パターン）は縦表示（共通ヘルパーを使用）
     const isFraction = token.kind === "fraction" || /^\d+\/\d+$/.test(token.displayText);
     if (isFraction) {
-      const [num, denom] = token.displayText.split("/");
-      return (
-        <span
-          key={`tok-${i}`}
-          data-source-start={token.sourceStart}
-          data-source-end={token.sourceEnd}
-          data-source-kind={token.kind}
-          className="law-fraction"
-        >
-          <span className="law-fraction__num">{num}</span>
-          <span className="law-fraction__bar">/</span>
-          <span className="law-fraction__denom">{denom}</span>
-        </span>
-      );
+      return renderTokenNode(token, `tok-${i}`);
     }
     // 数字トークン間の「・」を小数点「.」に置換
     const displayText = token.displayText === "・" ? "." : token.displayText;
@@ -617,7 +603,9 @@ export function TableBlock({
                 const isEmptyCell = trimmedText === "";
                 // 数値セル判定（括弧前改行の適用条件でも使用）
                 const hasRefText = trimmedText.includes("項") || trimmedText.includes("号");
-                const isNumeric = !hasRefText && (
+                // 別表第二（appdx_table:129）のセルは本文テキストを含むため数値判定から除外
+                const isTable2 = (tableNode.stableNodeKey ?? "").includes("appdx_table:129");
+                const isNumeric = !hasRefText && !isTable2 && (
                   /[０-９0-9㎡²%]/.test(trimmedText) ||
                   trimmedText.includes("平方メートル") ||
                   trimmedText.includes("立方メートル") ||
@@ -718,19 +706,26 @@ export function DefinitionNode({
   const label = articleLabel(row);
 
   // body も半角変換してから描画（articleLabel と同じ変換）。
+  // ラベル重複を削除（ArticleNode と同じ処理）。
+  // さらに body 先頭の keyword（定義語）も削除（keyword は別途太字表示されるため）。
   const halfWidthBody = body
     .replace(/（/g, "(")
     .replace(/）/g, ")")
     .replace(/[０-９Ａ-Ｚａ-ｚ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  const labelStripped = stripDuplicatedLeadingLabel(halfWidthBody, label) ?? halfWidthBody;
+  // 先頭の keyword を削除（「建築物土地に…」→「土地に…」）
+  const strippedBody = keyword && labelStripped.startsWith(keyword)
+    ? labelStripped.slice(keyword.length)
+    : labelStripped;
 
   const renderedBody =
     outgoingLinks.length > 0
       ? renderToElements(
-          renderLinkSegments(halfWidthBody, outgoingLinks),
+          renderLinkSegments(strippedBody, outgoingLinks),
           undefined,
           (articleId) => `/articles/${encodeURIComponent(articleId)}`,
         )
-      : renderDisplayTokens(halfWidthBody);
+      : renderDisplayTokens(strippedBody);
 
   return (
     <div
