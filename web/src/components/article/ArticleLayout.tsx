@@ -28,8 +28,14 @@ export default function ArticleLayout({
 
   return (
     <ScrollContainerProvider containerRef={mainRef}>
-      <div className="flex h-screen flex-col bg-neutral-100 text-neutral-950">
-        <nav className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-300 bg-[#f9f7f2] px-3 py-1.5 sm:px-4 sm:py-2">
+      <div
+        data-article-layout="true"
+        className="flex h-screen flex-col bg-neutral-100 text-neutral-950"
+      >
+        <nav
+          data-print-hidden="true"
+          className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-300 bg-[#f9f7f2] px-3 py-1.5 sm:px-4 sm:py-2"
+        >
           <div className="min-w-0 flex-1">{breadcrumb}</div>
           <button
             type="button"
@@ -45,16 +51,23 @@ export default function ArticleLayout({
           </button>
         </nav>
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div
+          data-article-layout-content="true"
+          className="flex min-h-0 flex-1 overflow-hidden"
+        >
           {showLeft && (
             <>
               <button
                 type="button"
                 aria-label="目次・検索を閉じる"
+                data-print-hidden="true"
                 className="fixed inset-0 top-[42px] z-10 bg-black/30 lg:hidden"
                 onClick={() => setShowLeft(false)}
               />
-              <aside className="fixed bottom-0 left-0 top-[42px] z-20 w-72 overflow-hidden border-r border-neutral-300 bg-[#f9f7f2] lg:hidden">
+              <aside
+                data-print-hidden="true"
+                className="fixed bottom-0 left-0 top-[42px] z-20 w-72 overflow-hidden border-r border-neutral-300 bg-[#f9f7f2] lg:hidden"
+              >
                 <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2">
                   <span className="text-xs font-semibold text-neutral-700">
                     目次・検索
@@ -72,7 +85,10 @@ export default function ArticleLayout({
             </>
           )}
 
-          <aside className="hidden w-72 flex-shrink-0 overflow-hidden border-r border-neutral-300 bg-[#f9f7f2] lg:block">
+          <aside
+            data-print-hidden="true"
+            className="hidden w-72 flex-shrink-0 overflow-hidden border-r border-neutral-300 bg-[#f9f7f2] lg:block"
+          >
             {leftPanel}
           </aside>
 
