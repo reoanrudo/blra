@@ -29,6 +29,35 @@ test.describe("法令全文印刷", () => {
   });
 
   test("印刷時は操作UIを隠し法令の末尾まで出力対象にする", async ({ page }) => {
+    await page.route("**/api/law-revisions/*/confirmed-relations", async (route) => {
+      const revisionId = new URL(route.request().url()).pathname.split("/").at(-2);
+      if (!revisionId) throw new Error("法令改正IDを取得できません");
+
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          revisionId,
+          relationsBySource: {
+            [TEST_ARTICLE_ID]: [
+              {
+                id: "print-confirmed-relation",
+                relationType: "CITES",
+                rationale: "印刷対象外を検証するための確認済み関連です。",
+                confirmedAt: "2026-08-09T00:00:00.000Z",
+                target: {
+                  articleId: "art_print_target",
+                  lawName: "印刷テスト法",
+                  lawShortName: null,
+                  articleNumber: "1",
+                  caption: null,
+                },
+              },
+            ],
+          },
+        }),
+      });
+    });
+
     const documentResponsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return (
@@ -72,6 +101,14 @@ test.describe("法令全文印刷", () => {
     };
 
     await expectDisplayedDocument();
+    const confirmedRelations = page.locator(
+      `[data-confirmed-relations-for="${TEST_ARTICLE_ID}"]`,
+    );
+    const desktopToc = page.locator(
+      'aside[data-print-hidden="true"][class*="lg:block"]',
+    );
+    await expect(confirmedRelations).toBeVisible();
+    await expect(desktopToc).toBeVisible();
 
     const lastArticleId = articleIds.at(-1);
     const lastDocumentRootId = documentRootIds.at(-1);
@@ -82,6 +119,8 @@ test.describe("法令全文印刷", () => {
 
     await expect(page.locator('nav[data-print-hidden="true"]')).toBeHidden();
     await expect(page.locator(".law-running-header__actions")).toBeHidden();
+    await expect(confirmedRelations).toBeHidden();
+    await expect(desktopToc).toBeHidden();
     await expect(page.locator(".law-running-header__law")).toBeVisible();
     await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
     await expectDisplayedDocument();
