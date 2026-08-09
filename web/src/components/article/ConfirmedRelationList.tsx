@@ -17,6 +17,7 @@ export default function ConfirmedRelationList({
   return (
     <details
       data-confirmed-relations-for={sourceArticleId}
+      data-print-hidden="true"
       className="mt-4 rounded border border-neutral-200 bg-neutral-50"
     >
       <summary className="cursor-pointer px-3 py-2 text-sm font-bold text-neutral-800">
