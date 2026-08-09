@@ -5,6 +5,7 @@ import ArticleLayout from "@/components/article/ArticleLayout";
 import FullLawViewer from "@/components/article/FullLawViewer";
 import LawChangeNoticeBanner from "@/components/article/LawChangeNoticeBanner";
 import OfficialTextCopyBoundary from "@/components/article/OfficialTextCopyBoundary";
+import PrintLawButton from "@/components/article/PrintLawButton";
 import ScrollUrlSync from "@/components/article/ScrollUrlSync";
 import LeftPanel from "@/components/layout/LeftPanel";
 import { CurrentLawProvider } from "@/contexts/CurrentLawContext";
@@ -249,14 +250,20 @@ function LawRunningHeader({
           </p>
         )}
       </div>
-      <a
-        href={`https://laws.e-gov.go.jp/law/${encodeURIComponent(egovLawId)}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-[11px] font-bold text-[#9d1f58] hover:underline"
+      <div
+        data-print-hidden="true"
+        className="law-running-header__actions flex items-center gap-3"
       >
-        e-Govで改正・施行情報を確認
-      </a>
+        <PrintLawButton />
+        <a
+          href={`https://laws.e-gov.go.jp/law/${encodeURIComponent(egovLawId)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] font-bold text-[#9d1f58] hover:underline"
+        >
+          e-Govで改正・施行情報を確認
+        </a>
+      </div>
     </header>
   );
 }
