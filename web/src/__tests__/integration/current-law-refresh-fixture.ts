@@ -409,26 +409,36 @@ export async function createCurrentLawRefreshFixture(
 
   const cleanup = async (): Promise<void> => {
     // 外部キー制約の順序に従って削除:
-    // LawSyncState → ArticleRevisionMapping → Article → LawBookEntryRangeResolution
-    // → LawBookEntryRange → LawBookEntry → LawRefreshLawResult → LawRefreshRun
+    // LawSyncState → ArticleRevisionMapping → LawBookEntryRangeResolution
+    // → LawBookEntryRange → LawBookEntry → Link → Article
+    // → LawRefreshLawResult → LawRefreshRun → Law.currentRevisionId解除
     // → LawRevision → LawPackage → Law
     // LawBookEntry / LawBookEntryRange は lawId で一括削除し、テスト中断時の残留を防ぐ。
-    await prisma.lawSyncState.deleteMany({ where: { lawId } }).catch(() => {});
-    await prisma.articleRevisionMapping.deleteMany({ where: { lawId } }).catch(() => {});
-    // 候補 Revision の Article も含めて全削除
-    await prisma.article.deleteMany({ where: { lawId } }).catch(() => {});
+    await prisma.lawSyncState.deleteMany({ where: { lawId } });
+    await prisma.articleRevisionMapping.deleteMany({ where: { lawId } });
     await prisma.lawBookEntryRangeResolution.deleteMany({
       where: { lawRevision: { lawId } },
-    }).catch(() => {});
+    });
     await prisma.lawBookEntryRange.deleteMany({
       where: { lawBookEntry: { lawId } },
-    }).catch(() => {});
-    await prisma.lawBookEntry.deleteMany({ where: { lawId } }).catch(() => {});
-    await prisma.lawRefreshLawResult.deleteMany({ where: { lawId } }).catch(() => {});
-    await prisma.lawRefreshRun.deleteMany({ where: { id: runId } }).catch(() => {});
-    await prisma.lawRevision.deleteMany({ where: { lawId } }).catch(() => {});
-    await prisma.lawPackage.deleteMany({ where: { id: packageId } }).catch(() => {});
-    await prisma.law.deleteMany({ where: { id: lawId } }).catch(() => {});
+    });
+    await prisma.lawBookEntry.deleteMany({ where: { lawId } });
+    await prisma.link.deleteMany({
+      where: {
+        OR: [{ source: { lawId } }, { target: { lawId } }],
+      },
+    });
+    // 候補 Revision の Article も含めて全削除
+    await prisma.article.deleteMany({ where: { lawId } });
+    await prisma.lawRefreshLawResult.deleteMany({ where: { lawId } });
+    await prisma.lawRefreshRun.deleteMany({ where: { id: runId } });
+    await prisma.law.updateMany({
+      where: { id: lawId },
+      data: { currentRevisionId: null },
+    });
+    await prisma.lawRevision.deleteMany({ where: { lawId } });
+    await prisma.lawPackage.deleteMany({ where: { id: packageId } });
+    await prisma.law.deleteMany({ where: { id: lawId } });
   };
 
   return {
