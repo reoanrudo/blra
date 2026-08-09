@@ -115,7 +115,12 @@ function FullLawReadyLayout({
       center={
         <article className="law-page">
           <LawRunningHeader revision={document.revision} lawName={document.law.name} egovLawId={document.law.egovLawId} />
-          <LawChangeNoticeBanner notice={document.revision.changeNotice} egovLawId={document.law.egovLawId} />
+          <div data-print-hidden="true">
+            <LawChangeNoticeBanner
+              notice={document.revision.changeNotice}
+              egovLawId={document.law.egovLawId}
+            />
+          </div>
           {relationsState.status === "error" && (
             <ConfirmedRelationsPartialError onRetry={relationsState.retry} />
           )}
@@ -295,6 +300,7 @@ function resolveCautionText(
 function ConfirmedRelationsPartialError({ onRetry }: { onRetry: () => void }) {
   return (
     <section
+      data-print-hidden="true"
       role="status"
       className="mb-4 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
     >

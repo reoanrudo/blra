@@ -392,3 +392,66 @@
     }
   }
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  [data-print-hidden="true"] {
+    display: none !important;
+  }
+
+  [data-article-layout="true"] {
+    display: block !important;
+    height: auto !important;
+    background: #fff !important;
+  }
+
+  [data-article-layout-content="true"] {
+    display: block !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  main[data-scroll-container="article-main"] {
+    display: block !important;
+    overflow: visible !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  .law-page {
+    max-width: none;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    background: #fff;
+    container-type: normal;
+  }
+
+  .law-running-header {
+    grid-template-columns: 1fr;
+  }
+
+  .law-running-header__law {
+    color: #171717;
+  }
+
+  .law-body {
+    overflow: visible;
+  }
+
+  .law-body a,
+  .law-article-caption a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
