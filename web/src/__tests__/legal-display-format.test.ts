@@ -45,6 +45,65 @@ describe("legal-display-format（設計書§3, §4）", () => {
     });
   });
 
+  describe("formatLegalText: 小数変換（設計書§4.2）", () => {
+    it("「三・〇」を原文座標付きの単一数値トークンへ変換する", () => {
+      expect(formatLegalText("三・〇")).toEqual([
+        {
+          sourceStart: 0,
+          sourceEnd: 3,
+          displayText: "3.0",
+          kind: "number",
+        },
+      ]);
+    });
+
+    it("小数部の先頭と末尾の〇を保持して変換する", () => {
+      const tokens = formatLegalText("〇・〇〇三");
+      expect(tokens.map((token) => token.displayText).join("")).toBe("0.003");
+    });
+
+    it("文中の漢数字小数を変換する", () => {
+      const tokens = formatLegalText("数値に三・〇を乗じる");
+      expect(tokens.map((token) => token.displayText).join("")).toBe(
+        "数値に3.0を乗じる",
+      );
+    });
+
+    it("文中で〇から始まる漢数字小数を変換する", () => {
+      const tokens = formatLegalText("数値に〇・七を乗じる");
+      expect(tokens.map((token) => token.displayText).join("")).toBe(
+        "数値に0.7を乗じる",
+      );
+    });
+
+    it.each([
+      ["二十・五パーセント以上", "20.5%以上"],
+      ["百二十・五", "120.5"],
+      ["三・〇パーセント", "3.0%"],
+      ["〇・〇〇五ミリグラム", "0.005mg"],
+      ["一万二千三百四十五・六七", "1万2,345.67"],
+    ])("複数桁を含む漢数字小数 %s を %s へ変換する", (source, expected) => {
+      expect(formatLegalText(source).map((token) => token.displayText).join(""))
+        .toBe(expected);
+    });
+
+    it("複数桁小数を原文範囲付きの単一数値トークンにする", () => {
+      expect(formatLegalText("二十・五")).toEqual([
+        {
+          sourceStart: 0,
+          sourceEnd: 4,
+          displayText: "20.5",
+          kind: "number",
+        },
+      ]);
+    });
+
+    it("数値でない中点は変換しない", () => {
+      const tokens = formatLegalText("A・B");
+      expect(tokens.map((token) => token.displayText).join("")).toBe("A・B");
+    });
+  });
+
   describe("formatLegalText: 分数変換（設計書§4.2）", () => {
     it("「十分の七」を「7/10」に変換する", () => {
       const tokens = formatLegalText("十分の七");

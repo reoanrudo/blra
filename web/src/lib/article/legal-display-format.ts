@@ -47,7 +47,41 @@ export interface LegalDisplayToken {
 /**
  * 漢数字の文字クラス（判定用）。
  */
-const KANJI_NUMBER_CHARS = /[一二三四五六七八九十百千万億]/;
+const KANJI_NUMBER_CHARS = /[零〇一二三四五六七八九十百千万億]/;
+
+/** 横書き表示で算用数字化する漢数字小数（例: 二十・五、〇・〇〇三）。 */
+const KANJI_DECIMAL_AT_START =
+  /^([零〇一二三四五六七八九十百千万億]+)・([零〇一二三四五六七八九]+)/;
+
+const KANJI_DECIMAL_DIGITS: Readonly<Record<string, string>> = Object.freeze({
+  "零": "0",
+  "〇": "0",
+  "一": "1",
+  "二": "2",
+  "三": "3",
+  "四": "4",
+  "五": "5",
+  "六": "6",
+  "七": "7",
+  "八": "8",
+  "九": "9",
+});
+
+function mapKanjiDecimalDigits(text: string): string {
+  return [...text]
+    .map((char) => KANJI_DECIMAL_DIGITS[char] ?? char)
+    .join("");
+}
+
+function formatKanjiDecimal(
+  integerPart: string,
+  decimalPart: string,
+): string {
+  const integerDisplay = /[十百千万億]/.test(integerPart)
+    ? formatKanjiQuantity(integerPart)
+    : mapKanjiDecimalDigits(integerPart);
+  return `${integerDisplay}.${mapKanjiDecimalDigits(decimalPart)}`;
+}
 
 /**
  * 除外すべき漢数字シーケンスの直前のコンテキスト長。
@@ -83,6 +117,19 @@ export function formatLegalText(text: string): LegalDisplayToken[] {
 
   while (pos < text.length) {
     const ch = text[pos]!;
+
+    const decimalMatch = text.slice(pos).match(KANJI_DECIMAL_AT_START);
+    if (decimalMatch) {
+      const sourceText = decimalMatch[0];
+      tokens.push({
+        sourceStart: pos,
+        sourceEnd: pos + sourceText.length,
+        displayText: formatKanjiDecimal(decimalMatch[1]!, decimalMatch[2]!),
+        kind: "number",
+      });
+      pos += sourceText.length;
+      continue;
+    }
 
     // 漢数字でない場合
     if (!KANJI_NUMBER_CHARS.test(ch)) {

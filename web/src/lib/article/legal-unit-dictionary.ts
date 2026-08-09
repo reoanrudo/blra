@@ -106,7 +106,7 @@ function hasPrecedingQuantity(text: string, position: number): boolean {
   if (position <= 0) return false;
   const prevChar = text[position - 1]!;
   // 算用数字、漢数字、カンマ、小数点
-  return /[0-9,.．，]/.test(prevChar) || /[一二三四五六七八九十百千万億]/.test(prevChar);
+  return /[0-9,.．，]/.test(prevChar) || /[零〇一二三四五六七八九十百千万億]/.test(prevChar);
 }
 
 /**
