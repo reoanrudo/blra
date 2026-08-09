@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import LinkPreview from "@/components/practice/LinkPreview";
-import { getSelectionContext } from "@/lib/highlight/text-selection";
 
 export default function ArticleTextWrapper({
   children,
@@ -31,20 +30,9 @@ export default function ArticleTextWrapper({
       }
     }
 
-    // copy イベント: 選択範囲を公式原文へ置換してクリップボードへ設定する（設計書§7）
-    function onCopy(e: ClipboardEvent) {
-      const ctx = getSelectionContext(new MouseEvent("copy"));
-      if (!ctx || !ctx.selectedText) return;
-      // 選択範囲が article 内の source span に含まれる場合のみ原文へ置換
-      e.preventDefault();
-      e.clipboardData?.setData("text/plain", ctx.selectedText);
-    }
-
     el.addEventListener("mousedown", onMouseDown, true);
-    el.addEventListener("copy", onCopy);
     return () => {
       el.removeEventListener("mousedown", onMouseDown, true);
-      el.removeEventListener("copy", onCopy);
     };
   }, []);
 

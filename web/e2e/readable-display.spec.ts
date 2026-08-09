@@ -21,13 +21,15 @@ test.describe("全文法令の読みやすい表示", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("表示変換した文字をコピーしても公式原文を得る", async ({ page }) => {
+  test("表示変換した文字をコピーすると画面表示を得る", async ({ page }) => {
     await page.goto(`/articles/${TEST_ARTICLE_ID}`);
     await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 
     const token = page.locator('[data-source-kind="number"]').first();
     await expect(token).toBeVisible();
+    const expectedDisplay = await token.textContent();
+    expect(expectedDisplay).toBeTruthy();
     await token.evaluate((element) => {
       const textNode = element.firstChild;
       if (!textNode) throw new Error("copy target has no text node");
@@ -44,11 +46,14 @@ test.describe("全文法令の読みやすい表示", () => {
     const originalText = await lawNode.getAttribute("data-original-text");
     expect(originalText).toBeTruthy();
     const expectedOriginal = originalText!.slice(sourceStart, sourceEnd);
-    expect(await token.textContent()).not.toBe(expectedOriginal);
+    expect(expectedDisplay).not.toBe(expectedOriginal);
 
     await page.keyboard.press("Meta+c");
     const copied = await page.evaluate(() => navigator.clipboard.readText());
-    expect(copied).toBe(expectedOriginal);
+    expect(copied).toBe(expectedDisplay);
+
+    await expect(token).toHaveAttribute("data-source-start");
+    await expect(token).toHaveAttribute("data-source-end");
   });
 
   test("確定済み本文参照は新しいタブ用リンクになる", async ({ page }) => {
