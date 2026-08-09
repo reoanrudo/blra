@@ -14,8 +14,9 @@ export interface UnitEntry {
   /** 表示用の記号化単位 */
   to: string;
   /**
-   * 複合単位（漢数字で始まる、例: 「一立方メートルにつきキログラム」）は
-   * 文章中の任意位置で安全に照合できる。
+   * 複合単位（例: 「一立方メートルにつきキログラム」、
+   * 「立方メートル毎時」）は、固定辞書で安全性を確認した完全一致表現として
+   * 文章中の任意位置で照合できる。
    * 単独単位（例: 「グラム」「メートル」）は、直前に数量がある場合のみ変換する。
    * これにより「プログラム→プロg」「パラメートル→パラm」等の誤変換を防ぐ。
    */
@@ -29,17 +30,25 @@ export interface UnitEntry {
  * 法令集2026年版OCRで確認した表記に基づく。
  */
 const RAW_UNIT_ENTRIES: UnitEntry[] = [
-  // --- 複合単位（漢数字で始まる。長い順に並べることで部分置換誤変換を防止） ---
+  // --- 複合単位（長い順に並べることで部分置換誤変換を防止） ---
   { from: "一キログラムケルビンにつきキロジュール", to: "kJ/kgK", isCompound: true },
+  { from: "マイクロシーベルト毎時", to: "μSv/時間", isCompound: true },
   { from: "一立方メートルにつきキログラム", to: "kg/m³", isCompound: true },
+  { from: "メートル毎秒毎秒", to: "m/秒²", isCompound: true },
+  { from: "マイクログレイ毎時", to: "μGy/時間", isCompound: true },
   { from: "一秒間につき立方メートル", to: "m³/秒", isCompound: true },
   { from: "一時間につき立方メートル", to: "m³/時間", isCompound: true },
+  { from: "立方メートル毎時", to: "m³/時間", isCompound: true },
+  { from: "立方メートル毎分", to: "m³/分", isCompound: true },
   { from: "一平方メートルにつきニュートン", to: "N/m²", isCompound: true },
   { from: "一平方メートルにつきキログラム", to: "kg/m²", isCompound: true },
   { from: "一立方メートルにつきニュートン", to: "N/m³", isCompound: true },
   { from: "一時間につきキロジュール", to: "kJ/時間", isCompound: true },
   { from: "一キログラムにつきジュール", to: "J/kg", isCompound: true },
   { from: "一モルにつきジュール", to: "J/mol", isCompound: true },
+  { from: "ミリグレイ毎時", to: "mGy/時間", isCompound: true },
+  { from: "リットル毎分", to: "L/分", isCompound: true },
+  { from: "メートル毎秒", to: "m/秒", isCompound: true },
 
   // --- 単独単位（直前に数量がある場合のみ変換。長い順） ---
   // 面積
@@ -114,7 +123,7 @@ function hasPrecedingQuantity(text: string, position: number): boolean {
  * 複合単位を先に確認し、部分置換による誤変換を防止する。
  *
  * 単独単位は直前に数量がある場合のみマッチする（設計書§4.4）。
- * 複合単位は漢数字で始まるため、数量制約を暗黙に満たす。
+ * 複合単位は固定辞書で安全性を確認した完全一致表現のため、数量制約を適用しない。
  *
  * @param text 検索対象の全文
  * @param position 検索開始位置（この位置から単位が始まる場合のみマッチ）

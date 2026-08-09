@@ -86,6 +86,28 @@ describe("legal-unit-dictionary（設計書§4.4）", () => {
       expect(result?.to).toBe("m³/時間");
     });
 
+    it.each([
+      ["立方メートル毎時", "m³/時間"],
+      ["立方メートル毎分", "m³/分"],
+      ["リットル毎分", "L/分"],
+      ["メートル毎秒毎秒", "m/秒²"],
+      ["メートル毎秒", "m/秒"],
+      ["ミリグレイ毎時", "mGy/時間"],
+      ["マイクログレイ毎時", "μGy/時間"],
+      ["マイクロシーベルト毎時", "μSv/時間"],
+    ])("時間単位 %s を %s に変換する", (source, expected) => {
+      expect(findUnitMatch(source, 0)).toMatchObject({
+        from: source,
+        to: expected,
+        start: 0,
+        end: source.length,
+      });
+    });
+
+    it("辞書にない毎日単位は推測変換しない", () => {
+      expect(findUnitMatch("立方メートル毎日", 0)).toBeNull();
+    });
+
     it("複合単位「一キログラムケルビンにつきキロジュール」にマッチする", () => {
       const result = findUnitMatch("一キログラムケルビンにつきキロジュール", 0);
       expect(result).not.toBeNull();

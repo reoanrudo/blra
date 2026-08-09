@@ -153,6 +153,21 @@ describe("legal-display-format（設計書§3, §4）", () => {
       const displayText = tokens.map((t) => t.displayText).join("");
       expect(displayText).toBe("kg/m³");
     });
+
+    it("文章中の立方メートル毎時を一つの単位トークンへ変換する", () => {
+      const source = "有効換気量(立方メートル毎時で表した量とする。)";
+      const tokens = formatLegalText(source);
+      expect(tokens.map((token) => token.displayText).join("")).toBe(
+        "有効換気量(m³/時間で表した量とする。)",
+      );
+      expect(tokens.find((token) => token.displayText === "m³/時間"))
+        .toMatchObject({ kind: "unit" });
+    });
+
+    it("時間語が先にある文章は語順を変えない", () => {
+      expect(formatLegalText("毎時十四立方メートル").map((token) => token.displayText).join(""))
+        .toBe("毎時14m³");
+    });
   });
 
   describe("formatLegalText: 除外判定（設計書§4.3）", () => {
