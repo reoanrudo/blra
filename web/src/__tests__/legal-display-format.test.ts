@@ -183,6 +183,12 @@ describe("legal-display-format（設計書§3, §4）", () => {
       expect(displayText).toBe("一級建築士");
     });
 
+    it("「百貨店」は数量として変換しない", () => {
+      const tokens = formatLegalText("百貨店及び百平方メートル");
+      const displayText = tokens.map((t) => t.displayText).join("");
+      expect(displayText).toBe("百貨店及び100m²");
+    });
+
     it("「第二条」の条文参照は算用数字化する", () => {
       const tokens = formatLegalText("第二条の規定により");
       const displayText = tokens.map((t) => t.displayText).join("");
