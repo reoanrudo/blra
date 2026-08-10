@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveTableLayout,
   expandTableRows,
+  getTableHeaderRowCount,
   usesLegacyLawTableLayout,
 } from "@/lib/article/table-layout";
 
@@ -54,6 +55,20 @@ describe("deriveTableLayout", () => {
       ["区分", "区分", "数値"],
       ["本文", "備考", ""],
     ]);
+  });
+
+  it("先頭行の縦結合が占有する行も見出しとしてまとめる", () => {
+    expect(getTableHeaderRowCount([
+      [
+        { text: "区域", colspan: 1, rowspan: 2 },
+        { text: "性能", colspan: 2, rowspan: 1 },
+      ],
+      [
+        { text: "除去率", colspan: 1, rowspan: 1 },
+        { text: "水質", colspan: 1, rowspan: 1 },
+      ],
+      [{ text: "データ", colspan: 3, rowspan: 1 }],
+    ])).toBe(2);
   });
 });
 

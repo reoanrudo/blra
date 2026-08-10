@@ -22,6 +22,7 @@ import {
 import {
   deriveTableLayout,
   expandTableRows,
+  getTableHeaderRowCount,
   usesLegacyLawTableLayout,
 } from "@/lib/article/table-layout";
 export { buildSegments } from "@/lib/article/article-segments";
@@ -334,8 +335,7 @@ export function TableBlock({
   rows: { row: ArticleRow; cells: ArticleRow[] }[];
   anchorRows: ArticleRow[];
 }) {
-  const tableLayoutRows = expandTableRows(
-    rows.map(({ cells }, rowIndex) =>
+  const tableCellLayoutRows = rows.map(({ cells }, rowIndex) =>
       cells.flatMap((cell, cellIndex) => {
         const supplementalLayout = supplementalRoomTypeTableCellLayout({
           lawName: tableNode.lawName,
@@ -352,11 +352,12 @@ export function TableBlock({
           rowspan: supplementalLayout?.rowSpan ?? metadata?.rowspan ?? 1,
         }];
       }),
-    ),
-  );
+    );
+  const tableLayoutRows = expandTableRows(tableCellLayoutRows);
   const tableLayout = deriveTableLayout({
     rows: tableLayoutRows,
   });
+  const headerRowCount = getTableHeaderRowCount(tableCellLayoutRows);
   // 建築基準法・施行令・施行規則の表は既存の法令集レイアウトを維持する。
   // 対象外の法令表だけ、情報量に応じた均等配分を適用する。
   const useLegacyLawTableLayout = usesLegacyLawTableLayout({
@@ -364,7 +365,7 @@ export function TableBlock({
     stableNodeKey: tableNode.stableNodeKey,
   });
   const useBalancedLayout = !useLegacyLawTableLayout;
-  const headerRow = rows[0];
+  const headerRows = rows.slice(0, headerRowCount);
 
   return (
     <div
@@ -531,19 +532,21 @@ export function TableBlock({
             });
             })()}
         </colgroup>
-        {headerRow && (
+        {headerRows.length > 0 && (
           <thead>
-            <tr
-              id={fullLawAnchorId(headerRow.row.id)}
-              data-article-id={headerRow.row.id}
-              className="law-table__header-row"
-            >
+            {headerRows.map((headerRow, rowIdx) => (
+              <tr
+                id={fullLawAnchorId(headerRow.row.id)}
+                key={headerRow.row.id}
+                data-article-id={headerRow.row.id}
+                className="law-table__header-row"
+              >
               {headerRow.cells.map((td, cellIdx) => {
                 const supplementalLayout = supplementalRoomTypeTableCellLayout({
                   lawName: tableNode.lawName,
                   stableNodeKey: tableNode.stableNodeKey,
                   rows,
-                  rowIndex: 0,
+                  rowIndex: rowIdx,
                   cellIndex: cellIdx,
                 });
                 if (supplementalLayout?.hidden) return null;
@@ -596,13 +599,14 @@ export function TableBlock({
                   </td>
                 );
               })}
-            </tr>
+              </tr>
+            ))}
           </thead>
         )}
         <tbody>
-          {rows.slice(1).map((tr, bodyRowIdx) => {
-            const rowIdx = bodyRowIdx + 1;
-            const isHeaderRow = useLegacyLawTableLayout && rowIdx < 2;
+          {rows.slice(headerRowCount).map((tr, bodyRowIdx) => {
+            const rowIdx = bodyRowIdx + headerRowCount;
+            const isHeaderRow = false;
             return (
             <tr
               id={fullLawAnchorId(tr.row.id)}
