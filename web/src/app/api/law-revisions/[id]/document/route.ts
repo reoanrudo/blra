@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
-import { gzipSync } from "node:zlib";
 import { NextRequest, NextResponse } from "next/server";
-import { getFullLawDocument } from "@/lib/article/full-law-repository";
+import { getOrBuildCachedDocument } from "@/lib/article/full-law-document-cache";
 
 export const runtime = "nodejs";
 
@@ -23,20 +21,20 @@ type RouteContext = {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const document = await getFullLawDocument(id);
-    if (!document) {
+    const cached = await getOrBuildCachedDocument(id);
+    if (!cached) {
       return NextResponse.json(
         { error: "law revision not found" },
         { status: 404, headers: { "Cache-Control": "no-store" } },
       );
     }
 
-    const body = JSON.stringify(document);
     const acceptsGzip = /(?:^|,)\s*gzip\s*(?:;|,|$)/i.test(
       request.headers.get("accept-encoding") ?? "",
     );
-    const digest = createHash("sha256").update(body).digest("hex");
-    const etag = acceptsGzip ? `"${digest}-gzip"` : `"${digest}"`;
+    const etag = acceptsGzip
+      ? `"${cached.digest}-gzip"`
+      : `"${cached.digest}"`;
     if (request.headers.get("if-none-match") === etag) {
       return new Response(null, {
         status: 304,
@@ -44,16 +42,20 @@ export async function GET(request: NextRequest, context: RouteContext) {
       });
     }
 
-    const responseBody = acceptsGzip ? gzipSync(body) : body;
-    return new Response(responseBody, {
+    if (acceptsGzip) {
+      return new Response(cached.gzipBody as BodyInit, {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Encoding": "gzip",
+          "Content-Length": String(cached.gzipBody.byteLength),
+          ...cacheHeaders(etag),
+        },
+      });
+    }
+
+    return new Response(cached.body, {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        ...(acceptsGzip
-          ? {
-              "Content-Encoding": "gzip",
-              "Content-Length": String(Buffer.byteLength(responseBody)),
-            }
-          : {}),
         ...cacheHeaders(etag),
       },
     });

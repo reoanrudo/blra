@@ -301,6 +301,61 @@
     padding-top: 1px;
   }
 
+  /* 算術式の縦分数（施行令等の Ａ_ｆ／（２５０√ｈ） など）。
+     数字分数（.law-fraction）とは異なり、分数線（border-top）は引かない。
+     分子と分母を上下に並べ、間の余白で分数を表現する。 */
+  .law-arith-fraction {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    line-height: 1.2;
+    margin: 0 0.15em;
+  }
+  .law-arith-fraction__num {
+    text-align: center;
+    padding-bottom: 0.15em;
+  }
+  .law-arith-fraction__denom {
+    text-align: center;
+    padding-top: 2px;
+    border-top: 1px solid currentColor;
+    margin-top: 2px;
+  }
+
+  /* 算術式の下付き文字（_マーカー → <sub>）・上付き文字（^マーカー → <sup>）。
+     法令集の組版に合わせてやや小さめにする。 */
+  .law-arith-formula__subsup {
+    font-size: 0.75em;
+    line-height: 0;
+  }
+  .law-arith-formula__eq {
+    margin: 0 0.2em;
+  }
+
+  /* 平方根（べき乗根）。Wordのルート記号と同様に、
+     √記号の右上に太めの上線（border-top）を引き、
+     その下に対象文字を配置して覆う。 */
+  .law-arith-formula__sqrt {
+    display: inline-flex;
+    align-items: stretch;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .law-arith-formula__sqrt-sign {
+    font-size: 1.15em;
+    line-height: 1;
+    align-self: flex-end;
+  }
+  .law-arith-formula__sqrt-radical {
+    border-top: 1.5px solid currentColor;
+    padding: 0 0.1em 0 0.05em;
+    line-height: 1;
+    align-self: stretch;
+    display: inline-flex;
+    align-items: center;
+  }
+
   .law-table {
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
     table-layout: fixed;

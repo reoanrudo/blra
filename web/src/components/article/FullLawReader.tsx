@@ -42,45 +42,43 @@ function FullLawReaderContent(props: FullLawReaderProps) {
   const relationsState = useConfirmedRelations(props.lawRevisionId);
   const emptyLinks = useMemo(() => new Map(), []);
 
-  if (state.status === "loading") {
-    return (
-      <ArticleLayout
-        breadcrumb={props.breadcrumb}
-        leftPanel={
-          <LeftPanel
-            toc={[]}
-            documentStatus="loading"
-            currentArticleId={props.initialArticleId}
-          />
-        }
-        center={<ReaderLoadingState />}
-      />
-    );
-  }
-
-  if (state.status === "error" || !state.document) {
-    return (
-      <ArticleLayout
-        breadcrumb={props.breadcrumb}
-        leftPanel={
-          <LeftPanel
-            toc={[]}
-            documentStatus="error"
-            currentArticleId={props.initialArticleId}
-          />
-        }
-        center={<ReaderErrorState onRetry={state.retry} />}
-      />
-    );
-  }
-
+  // loading / error / ready の全状態で ScrollActiveArticleProvider でラップし、
+  // ArticleLayout のツリー位置を一定に保つ。
+  // これにより loading→ready 遷移で <main> DOMノードが再作成されるのを防ぎ、
+  // scrollTop がリセットされないようにする。
   return (
     <ScrollActiveArticleProvider linksByArticle={emptyLinks}>
-      <FullLawReadyLayout
-        {...props}
-        document={state.document}
-        relationsState={relationsState}
-      />
+      {state.status === "loading" ? (
+        <ArticleLayout
+          breadcrumb={props.breadcrumb}
+          leftPanel={
+            <LeftPanel
+              toc={[]}
+              documentStatus="loading"
+              currentArticleId={props.initialArticleId}
+            />
+          }
+          center={<ReaderLoadingState />}
+        />
+      ) : state.status === "error" || !state.document ? (
+        <ArticleLayout
+          breadcrumb={props.breadcrumb}
+          leftPanel={
+            <LeftPanel
+              toc={[]}
+              documentStatus="error"
+              currentArticleId={props.initialArticleId}
+            />
+          }
+          center={<ReaderErrorState onRetry={state.retry} />}
+        />
+      ) : (
+        <FullLawReadyLayout
+          {...props}
+          document={state.document}
+          relationsState={relationsState}
+        />
+      )}
     </ScrollActiveArticleProvider>
   );
 }

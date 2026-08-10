@@ -51,10 +51,34 @@ function FullLawViewerImpl({
     return registerScrollContainer(container);
   }, [mainRef, registerScrollContainer]);
 
+  // リロード時にブラウザのデフォルトscroll restorationが
+  // 「第一条へ戻る」挙動で上書きされるのを防ぐ。
+  useEffect(() => {
+    if ("scrollRestoration" in window.history) {
+      const prev = window.history.scrollRestoration;
+      window.history.scrollRestoration = "manual";
+      return () => {
+        window.history.scrollRestoration = prev;
+      };
+    }
+  }, []);
+
+  // リロード時に targetArticleId（URLのarticleId）に対応する条文へスクロール。
+  // scroll-spy が DOM 描画完了後に最新の activeArticleId を URL に反映しているので、
+  // リロード時は必ず URL の articleId = 最後に見ていた条文になる。
+  // useLayoutEffect → rAF の2段階で、DOM描画完了を待ってから scrollIntoView する。
   useLayoutEffect(() => {
-    window.document
-      .querySelector<HTMLElement>(fullLawTargetSelector(targetArticleId))
-      ?.scrollIntoView({ block: "start" });
+    const scrollToArticle = () => {
+      const el = window.document.querySelector<HTMLElement>(
+        fullLawTargetSelector(targetArticleId),
+      );
+      if (el) {
+        el.scrollIntoView({ block: "start" });
+      }
+    };
+    // 同期的に1回 + rAF で1回（レイアウト確定後）
+    scrollToArticle();
+    requestAnimationFrame(scrollToArticle);
   }, [targetArticleId]);
 
   return (
