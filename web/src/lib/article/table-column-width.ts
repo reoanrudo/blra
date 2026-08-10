@@ -8,6 +8,7 @@ interface PreferredOrderSymbolColumnWidthInput {
   lawName: string;
   stableNodeKey: string | null;
   isSymbolColumn: boolean;
+  hasParenthesizedItem?: boolean;
 }
 
 interface TableTextRow {
@@ -79,11 +80,12 @@ export function preferredOrderSymbolColumnWidthPx({
   lawName,
   stableNodeKey,
   isSymbolColumn,
+  hasParenthesizedItem,
 }: PreferredOrderSymbolColumnWidthInput): number | null {
   if (
     lawName === "建築基準法施行令" &&
     TABLE_NODE_KEY_PATTERN.test(stableNodeKey ?? "") &&
-    isSymbolColumn
+    (isSymbolColumn || hasParenthesizedItem === true)
   ) {
     return 35;
   }

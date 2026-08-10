@@ -93,7 +93,7 @@ const EXCLUSION_LOOKBEHIND = 4;
  * 除外すべき漢数字シーケンスの直後のコンテキスト長。
  * 「種」「級」「条」「項」「号」「年」等の後続語を含めて判定するため、後方を少し参照する。
  */
-const EXCLUSION_LOOKAHEAD = 4;
+const EXCLUSION_LOOKAHEAD = 32;
 
 /**
  * 原文全体を表示トークン列へ変換する（設計書§3）。
@@ -201,12 +201,29 @@ export function formatLegalText(text: string): LegalDisplayToken[] {
       continue;
     }
 
+    // 「零下」は気温を表す熟語のため、「零」だけを原文のまま残す。
+    // 後続する温度（例: 二〇度）は通常の数量として変換する。
+    if (text.slice(seqStart, seqEnd) === "零" && text[seqEnd] === "下") {
+      tokens.push({
+        sourceStart: seqStart,
+        sourceEnd: seqEnd,
+        displayText: "零",
+        kind: "plain",
+      });
+      continue;
+    }
+
     // 除外判定: 前後のコンテキストを含めて判定（設計書§4.3）
     const contextStart = Math.max(0, seqStart - EXCLUSION_LOOKBEHIND);
     const contextEnd = Math.min(text.length, seqEnd + EXCLUSION_LOOKAHEAD);
     const context = text.slice(contextStart, contextEnd);
 
-    if (isKanjiNumberPart(context)) {
+    if (
+      isKanjiNumberPart(context, {
+        before: text.slice(0, seqStart),
+        after: text.slice(seqEnd),
+      })
+    ) {
       // 除外: 原文のまま表示
       tokens.push({
         sourceStart: seqStart,
@@ -260,7 +277,7 @@ function matchFractionAt(
   denominator: string;
 } | null {
   // <漢数字>分の<漢数字> パターン
-  const fractionPattern = /^([一二三四五六七八九十百千万億]+)分の([一二三四五六七八九十百千万億]+)/;
+  const fractionPattern = /^([零〇一二三四五六七八九十百千万億]+)分の([零〇一二三四五六七八九十百千万億]+)/;
   const remaining = text.slice(pos);
   const match = remaining.match(fractionPattern);
   if (!match) return null;

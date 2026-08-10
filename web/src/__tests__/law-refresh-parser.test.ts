@@ -12,6 +12,27 @@ const context = {
 } as const;
 
 describe("parseLawXml durable keys", () => {
+  it("算式を含む号では、次の式に続く数式本文を保持する", () => {
+    const xml = `
+      <Law><LawBody><MainProvision><Article Num="20_2">
+        <ArticleTitle>第二十条の二</ArticleTitle>
+        <Paragraph Num="1"><ParagraphNum>１</ParagraphNum><Item Num="1">
+          <ItemTitle>一</ItemTitle><Subitem1 Num="1"><Subitem1Title>イ</Subitem1Title>
+            <Subitem2 Num="1"><Subitem2Title>（１）</Subitem2Title>
+              <Subitem2Sentence><Sentence>次の式によつて計算する。</Sentence></Subitem2Sentence>
+              <List><ListSentence><Sentence><ArithFormula>Ａ<Sub>ｖ</Sub>＝Ａ<Sub>ｆ</Sub>／（２５０√ｈ）</ArithFormula></Sentence></ListSentence></List>
+            </Subitem2>
+          </Subitem1>
+        </Item></Paragraph>
+      </Article></MainProvision></LawBody></Law>`;
+
+    const formulaItem = parseLawXml(xml, context).nodes.find(
+      (node) => node.level === "subitem2",
+    );
+
+    expect(formulaItem?.text).toContain("Ａ_ｖ＝Ａ_ｆ／（２５０√ｈ）");
+  });
+
   it("第10条の2を挿入しても第11条のkeyを維持する", () => {
     const before = parseLawXml(makeMinimalLawXml(["10", "11"]), context);
     const after = parseLawXml(makeMinimalLawXml(["10", "10_2", "11"]), context);
@@ -160,6 +181,42 @@ describe("parseLawXml durable keys", () => {
     expect(() => parseLawXml(xml, context)).toThrow(
       /Duplicate durable node fingerprint/,
     );
+  });
+
+  it("セル情報の復元用では重複見出しがあっても全ノードを読み取れる", () => {
+    const xml = `
+      <Law><LawBody><MainProvision>
+        <Chapter><ChapterTitle>総則</ChapterTitle></Chapter>
+        <Chapter><ChapterTitle>総則</ChapterTitle></Chapter>
+      </MainProvision></LawBody></Law>`;
+
+    expect(() => parseLawXml(xml, {
+      ...context,
+      tolerateDuplicateDurableKeys: true,
+    })).not.toThrow();
+  });
+
+  it("同一番号の列を繰り返すリストでも安定キーを一意にする", () => {
+    const xml = `
+      <Law><LawBody><MainProvision>
+        <Article Num="1"><ArticleTitle>第一条</ArticleTitle>
+          <Paragraph Num="1"><ParagraphSentence><Sentence>本文</Sentence></ParagraphSentence>
+            <Item Num="1"><ItemTitle>一</ItemTitle><ItemSentence><Sentence>項目</Sentence></ItemSentence>
+              <ListSentence>
+                <Column Num="1"><Sentence>甲</Sentence></Column>
+                <Column Num="1"><Sentence>乙</Sentence></Column>
+              </ListSentence>
+            </Item>
+          </Paragraph>
+        </Article>
+      </MainProvision></LawBody></Law>`;
+
+    const columns = parseLawXml(xml, context).nodes.filter(
+      (node) => node.level === "column",
+    );
+
+    expect(columns).toHaveLength(2);
+    expect(new Set(columns.map((node) => node.durableNodeKey)).size).toBe(2);
   });
 
   it("附則の挿入後も改正法令番号配下の条keyを維持する", () => {

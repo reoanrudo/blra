@@ -35,7 +35,9 @@ S0（Corpus Feasibility）は完了済み（[ADR-024](docs/adr/ADR-024-s0-exit.m
 
 S1 と並行して進める項目（いずれも S1 を止めない）:
 
-- [ ] U-1（実務者ヒアリング）。案B の価値提案が成立するかを検証する → [user-research/](user-research/README.md)
+- [ ] 一級建築士「学科Ⅲ（法規）」の学習120問・未見評価30問を Search Evaluation Harness へ反映する → [user-research/](user-research/README.md)
+  - [x] 150問マニフェスト、公式正答肢、学習／未見評価の分離、評価器を実装 → [web/benchmarks/](web/benchmarks/README.md)
+  - [ ] 全選択肢由来の派生論点・根拠条文セット・統合判断を確認して投入（令和3年30問は正答主要論点のみの部分データ、複合問題としての検証済み 0 / 150問）
 - [ ] ゲート検査者の確保（8〜16時間・任意）→ [docs/domain-reviewer-role.md](docs/domain-reviewer-role.md)
 
 ## 開発環境

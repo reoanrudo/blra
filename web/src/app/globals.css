@@ -157,6 +157,70 @@
     overflow-wrap: anywhere;
   }
 
+  .law-node__text--arith-formula {
+    align-items: flex-start;
+    padding-left: 1em;
+  }
+
+  .law-arith-formula {
+    display: block;
+    min-width: 0;
+  }
+
+  .law-arith-formula__introduction {
+    display: block;
+  }
+
+  .law-arith-formula__expression {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0.35rem auto 0.45rem;
+    color: #1f1b17;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    font-size: 1.04em;
+    letter-spacing: 0.06em;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .law-arith-formula__definitions {
+    display: grid;
+    grid-template-columns: 0.55em minmax(0, 1fr) 0.55em;
+    column-gap: 0.18em;
+    align-items: stretch;
+    margin: 0.15rem 0 0.25rem 0.7rem;
+  }
+
+  .law-arith-formula__definitions::before,
+  .law-arith-formula__definitions::after {
+    align-self: stretch;
+    color: #302b25;
+    display: flex;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    font-size: 2.65em;
+    line-height: 0.8;
+    transform: scaleY(1.8) scaleX(0.72);
+  }
+
+  .law-arith-formula__definitions::before {
+    content: "(";
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .law-arith-formula__definitions::after {
+    content: ")";
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .law-arith-formula__definitions-text {
+    display: block;
+    min-width: 0;
+    white-space: pre-line;
+  }
+
   .law-node__label {
     flex: 0 0 auto;
     color: #302b25;
@@ -339,6 +403,12 @@
     background: transparent;
     border-bottom: 1px solid #a3a3a3;
     font-weight: inherit;
+  }
+
+  /* 縦結合した割合セルなどは、DB側の途中行に下辺情報がなくても
+     結合範囲の末尾で罫線を閉じる。 */
+  .law-table--legacy .law-table__cell[rowspan] {
+    border-bottom: 1px solid #a3a3a3;
   }
 
   .law-table--legacy .law-table__cell--nowrap {

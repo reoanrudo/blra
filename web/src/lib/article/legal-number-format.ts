@@ -12,19 +12,28 @@ import { kanjiToArabic } from "@/lib/article/normalize-article";
 /**
  * 漢数字の文字セット。
  */
-const KANJI_DIGITS = "一二三四五六七八九十百千万億";
+const KANJI_DIGITS = "零〇一二三四五六七八九十百千万億";
 
 /**
  * 漢数字を含むかどうかの判定。
  */
 function containsKanjiNumber(text: string): boolean {
-  return /[一二三四五六七八九十百千万億]/.test(text);
+  return new RegExp(`[${KANJI_DIGITS}]`).test(text);
 }
 
 /**
  * 万・億の単位文字。これらは算用数字にせず単位文字を残す（設計書§4.2）。
  */
 const SCALE_UNITS = new Set(["万", "億"]);
+
+/** 公布番号に使われる法令種別の末尾。所管省庁名などの接頭語は問わない。 */
+const PROMULGATION_TYPE = "(?:法律|政令|勅令|内閣令|省令|府令|庁令|告示|布告|規則)";
+const PROMULGATION_NUMBER_SUFFIX = new RegExp(
+  `${PROMULGATION_TYPE}第[一二三四五六七八九十百千]+号`,
+);
+const ERA_PROMULGATION_NUMBER = new RegExp(
+  `(?:明治|大正|昭和|平成|令和)[一二三四五六七八九十百千]+年[^\\s第（）()、。]*${PROMULGATION_TYPE}第[一二三四五六七八九十百千]+号`,
+);
 
 /**
  * 万・億を含む数値を「1万」「1億」形式に変換する。
@@ -43,7 +52,7 @@ function convertScaledNumber(kanjiNum: string): string {
     if (ch === "億" || ch === "万") {
       // 直前のバッファが係数。空の場合は「1」とする。
       // 係数も4桁（千）になり得るため、3桁ごとのカンマを付ける。
-      const coeff = buffer ? kanjiToArabic(buffer) : "1";
+      const coeff = buffer ? normalizeKanjiDigits(buffer) : "1";
       result += `${applyCommaToLowerDigits(coeff)}${ch}`;
       buffer = "";
     } else {
@@ -53,11 +62,16 @@ function convertScaledNumber(kanjiNum: string): string {
 
   // バッファの残りは万・億より下位の桁
   if (buffer) {
-    const lowerDigits = kanjiToArabic(buffer);
+    const lowerDigits = normalizeKanjiDigits(buffer);
     result += applyCommaToLowerDigits(lowerDigits);
   }
 
   return result;
+}
+
+/** 「〇」「零」のみからなる数も含めて、漢数字を算用数字に正規化する。 */
+function normalizeKanjiDigits(kanjiNum: string): string {
+  return kanjiToArabic(kanjiNum).replace(/[零〇]/g, "0");
 }
 
 /**
@@ -84,7 +98,7 @@ export function formatKanjiQuantity(text: string): string {
   // ただし、直後に「種」「級」「条」「項」「号」「年」「回」「次」「類」「号」が続く場合は除外
   // これらは isKanjiNumberPart で事前除外するため、ここでは純粋な数量のみ処理
   const result = text.replace(
-    /[一二三四五六七八九十百千万億]+/g,
+    /[零〇一二三四五六七八九十百千万億]+/g,
     (match, _offset: number, _full: string) => {
       // 直前・直後の文脈で除外判定
       return convertScaledNumber(match);
@@ -105,7 +119,7 @@ export function formatKanjiQuantity(text: string): string {
  */
 export function formatFraction(text: string): string {
   // <漢数字>分の<漢数字> パターンをマッチ
-  const fractionPattern = /([一二三四五六七八九十百千万億]+)分の([一二三四五六七八九十百千万億]+)/g;
+  const fractionPattern = /([零〇一二三四五六七八九十百千万億]+)分の([零〇一二三四五六七八九十百千万億]+)/g;
 
   return text.replace(fractionPattern, (_match, denomKanji: string, numerKanji: string) => {
     const denominator = kanjiToArabic(denomKanji);
@@ -122,7 +136,7 @@ export function formatFraction(text: string): string {
  * これらの文脈では漢数字を算用数字化しない。
  *
  * 本文中の条・項参照（第二条、第二項等）は設計書§4.1の算用数字化対象なので除外しない。
- * 号番号・区分・等級・年号・公布番号のみ除外する。
+ * 号番号・区分・等級・年号のみ除外する。本文中の法令番号は年・号数を算用数字化する。
  *
  * module scope で一度だけコンパイル（設計書§10）。
  */
@@ -133,14 +147,18 @@ const EXCLUSION_PATTERNS: readonly RegExp[] = Object.freeze([
   /[一二三四五六七八九十]+級/,
   // 固有の用途名: 百貨店
   /百貨店/,
+  // 数量ではない一般語（漢数字を含む熟語）
+  /一般|一部|一方|一時|一層|一切|一定|一体|一団|一環|一律|一例|五十音/,
+  // 「十分の〜」は分数として先に処理するため、形容・副詞用法のみ除外する
+  /十分(?:な|に|で)/,
+  // 数量ではない熟語
+  /二重|三角形/,
   // 号参照: 第N号、N号（号番号・公布番号）
   /第?[一二三四五六七八九十百]+号/,
   // 号番号の参照: 「一の建築物」（＝一号の建築物）等
   /[一二三四五六七八九十百]の[建築物]/,
-  // 年号: 昭和NN年、平成NN年、令和NN年
-  /(?:昭和|平成|令和)[一二三四五六七八九十]+年/,
-  // 公布番号: 法律第NN号、政令第NN号、省令第NN号
-  /(?:法律|政令|省令|告示|内閣令)第[一二三四五六七八九十百]+号/,
+  // 年号: 昭和NN年、平成NN年、令和NN年。ただし後続する法令番号は表示用に変換する。
+  /(?:昭和|平成|令和)[一二三四五六七八九十]+年(?!(?:法律|政令|省令|告示|内閣令)第)/,
   // 回数: 第N回
   /第[一二三四五六七八九十]+回/,
 ]);
@@ -153,7 +171,34 @@ const EXCLUSION_PATTERNS: readonly RegExp[] = Object.freeze([
  * @param text 判定対象のテキスト
  * @returns true: 変換除外（漢数字を維持）、false: 変換対象
  */
-export function isKanjiNumberPart(text: string): boolean {
+export function isKanjiNumberPart(
+  text: string,
+  position?: { before: string; after: string },
+): boolean {
+  // 本文中の法令番号は、年・号数を算用数字化する（例: 昭和25年法律第202号）。
+  // この例外を先に判定し、一般の「第二号」除外規則とは区別する。
+  if (
+    ERA_PROMULGATION_NUMBER.test(text) ||
+    PROMULGATION_NUMBER_SUFFIX.test(text)
+  ) {
+    return false;
+  }
+
+  // 号番号そのものは漢数字を維持する。ただし、同じ周辺文脈にある
+  // 「第二条」や「第三項」まで除外しないよう、現在の数値の直前・直後で判定する。
+  if (position?.before.endsWith("第") && position.after.startsWith("号")) {
+    return true;
+  }
+  if (
+    position?.before.endsWith("第") &&
+    /^(条|項|章|節|款|編|部)/.test(position.after)
+  ) {
+    return false;
+  }
+  if (/(?:条|項)の$/.test(position?.before ?? "")) {
+    return false;
+  }
+
   for (const pattern of EXCLUSION_PATTERNS) {
     if (pattern.test(text)) return true;
   }

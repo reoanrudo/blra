@@ -7,8 +7,12 @@ type FullLawDocumentResponse = {
   }>;
 };
 
-test.describe("法令全文印刷", () => {
-  test("印刷ボタンからブラウザ標準の印刷を呼び出す", async ({ page }) => {
+const ARTICLE_82_ID = "art_325co0000000338_20260101_000945";
+const ARTICLE_82_ITEM_3_ID = "art_325co0000000338_20260101_000986";
+const ARTICLE_82_ITEM_4_ID = "art_325co0000000338_20260101_000987";
+
+test.describe("法令印刷", () => {
+  test("条文の右クリックメニューからブラウザ標準の印刷を呼び出す", async ({ page }) => {
     await page.addInitScript(() => {
       const state = window as Window & { __printCalled?: boolean };
       state.__printCalled = false;
@@ -20,7 +24,15 @@ test.describe("法令全文印刷", () => {
     await page.goto(`/articles/${TEST_ARTICLE_ID}`);
     await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
 
-    await page.getByRole("button", { name: "印刷", exact: true }).click();
+    await page
+      .locator(`[data-print-article-id="${TEST_ARTICLE_ID}"]`)
+      .click({ button: "right" });
+    await expect(
+      page.getByRole("menuitem", { name: "🖨 この条を印刷", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("menuitem", { name: "🖨 この条を印刷", exact: true })
+      .click();
 
     const printCalled = await page.evaluate(
       () => (window as Window & { __printCalled?: boolean }).__printCalled,
@@ -28,7 +40,122 @@ test.describe("法令全文印刷", () => {
     expect(printCalled).toBe(true);
   });
 
-  test("印刷時は操作UIを隠し法令の末尾まで出力対象にする", async ({ page }) => {
+  test("既存ハイライトの右クリックには条印刷を表示しない", async ({ page }) => {
+    await page.goto(`/articles/${TEST_ARTICLE_ID}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+    await page.locator('[data-full-law-ready="true"]').evaluate((viewer) => {
+      const mark = document.createElement("mark");
+      mark.dataset.highlightId = "existing-highlight";
+      mark.className = "user-highlight user-highlight--yellow";
+      mark.textContent = "既存ハイライト";
+      viewer.appendChild(mark);
+    });
+
+    await page
+      .locator('mark[data-highlight-id="existing-highlight"]')
+      .click({ button: "right" });
+
+    await expect(
+      page.getByRole("menuitem", { name: "🗑 ハイライトを削除", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: "🖨 この条を印刷", exact: true }),
+    ).toHaveCount(0);
+  });
+
+  test("印刷時は選択した条だけを表とともに出力する", async ({ page }) => {
+    await page.goto(`/articles/${TEST_ARTICLE_ID}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+    const printTargetId = await page
+      .locator("[data-print-article-id]")
+      .evaluateAll((blocks) =>
+        blocks.find((block) => block.querySelector("table"))?.getAttribute(
+          "data-print-article-id",
+        ),
+      );
+    expect(printTargetId).toBeTruthy();
+
+    const otherArticleId = await page
+      .locator("[data-print-article-id]")
+      .evaluateAll((blocks, targetId) => {
+        const other = blocks.find(
+          (block) => block.getAttribute("data-print-article-id") !== targetId,
+        );
+        return other?.getAttribute("data-print-article-id");
+      }, printTargetId);
+    expect(otherArticleId).toBeTruthy();
+
+    await page.evaluate((targetId) => {
+      const viewer = document.querySelector("[data-full-law-ready='true']");
+      const target = document.querySelector(
+        `[data-print-article-id="${targetId}"]`,
+      );
+      viewer?.setAttribute("data-print-current-article", "true");
+      target?.setAttribute("data-print-current", "true");
+    }, printTargetId);
+    await page.emulateMedia({ media: "print" });
+
+    await expect(
+      page.locator(`[data-print-article-id="${printTargetId}"]`),
+    ).toBeVisible();
+    await expect(
+      page.locator(`[data-print-article-id="${printTargetId}"] table`).first(),
+    ).toBeVisible();
+    const headerDisplay = await page
+      .locator(`[data-print-article-id="${printTargetId}"] thead`)
+      .evaluate((element) => getComputedStyle(element).display);
+    expect(headerDisplay).toBe("table-header-group");
+    await expect(
+      page.locator(`[data-print-article-id="${otherArticleId}"]`),
+    ).toBeHidden();
+    await expect(page.locator("[data-full-law-ready] > header").first()).toBeHidden();
+
+    await page.evaluate((targetId) => {
+      document
+        .querySelector(`[data-print-article-id="${targetId}"]`)
+        ?.removeAttribute("data-print-current");
+      document
+        .querySelector("[data-full-law-ready='true']")
+        ?.removeAttribute("data-print-current-article");
+    }, printTargetId);
+    await page.emulateMedia({ media: "screen" });
+
+    await expect(
+      page.locator(`[data-print-article-id="${otherArticleId}"]`),
+    ).toBeVisible();
+  });
+
+  test("長い表の後に続く号も印刷対象へ残す", async ({ page }) => {
+    await page.goto(`/articles/${ARTICLE_82_ID}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+    await page.evaluate((articleId) => {
+      document
+        .querySelector("[data-full-law-ready='true']")
+        ?.setAttribute("data-print-current-article", "true");
+      document
+        .querySelector(`[data-print-article-id="${articleId}"]`)
+        ?.setAttribute("data-print-current", "true");
+    }, ARTICLE_82_ID);
+    await page.emulateMedia({ media: "print" });
+
+    const tableWrapper = page.locator(
+      `[data-print-article-id="${ARTICLE_82_ID}"] .law-table-wrapper`,
+    );
+    await expect(tableWrapper).toBeVisible();
+    expect(
+      await tableWrapper.evaluate((element) => getComputedStyle(element).breakInside),
+    ).toBe("auto");
+    await expect(
+      page.locator(`[data-article-id="${ARTICLE_82_ITEM_3_ID}"]`),
+    ).toBeVisible();
+    await expect(
+      page.locator(`[data-article-id="${ARTICLE_82_ITEM_4_ID}"]`),
+    ).toBeVisible();
+  });
+
   for (const [label, articleId] of [
     ["施行令第82条", "art_325co0000000338_20260101_000945"],
     ["施行規則本文表", "art_325m50004000040_20260101_000015"],
@@ -76,6 +203,8 @@ test.describe("法令全文印刷", () => {
       expect(visibleOtherArticleIds).toEqual([]);
     });
   }
+
+  test("印刷時は操作UIを隠し法令の末尾まで出力対象にする", async ({ page }) => {
     await page.route("**/api/law-revisions/*/confirmed-relations", async (route) => {
       const revisionId = new URL(route.request().url()).pathname.split("/").at(-2);
       if (!revisionId) throw new Error("法令改正IDを取得できません");

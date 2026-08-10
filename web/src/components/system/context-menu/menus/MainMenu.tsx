@@ -73,40 +73,51 @@ export function MainMenu({ menu }: { menu: UseContextMenuReturn }) {
   }
 
   if (ctx.kind === "article") {
+    const itemOffset = ctx.printableArticleId ? 1 : 0;
+
     return (
       <>
+        {ctx.printableArticleId && (
+          <MenuButton
+            index={0}
+            focused={clampedIndex === 0}
+            onClick={menu.handlePrintCurrentArticle}
+          >
+            🖨 この条を印刷
+          </MenuButton>
+        )}
         <MenuButton
-          index={0}
-          focused={clampedIndex === 0}
+          index={itemOffset}
+          focused={clampedIndex === itemOffset}
           onClick={menu.handleAddCheckItem}
         >
           確認項目に追加
         </MenuButton>
         <MenuButton
-          index={1}
-          focused={clampedIndex === 1}
+          index={itemOffset + 1}
+          focused={clampedIndex === itemOffset + 1}
           onClick={menu.handleDrawingNoteCopy}
         >
           図面注記コピー
         </MenuButton>
         <MenuButton
-          index={2}
-          focused={clampedIndex === 2}
+          index={itemOffset + 2}
+          focused={clampedIndex === itemOffset + 2}
           onClick={menu.handleLinkToProject}
         >
           プロジェクトに紐付け
         </MenuButton>
         <MenuButton
-          index={3}
-          focused={clampedIndex === 3}
+          index={itemOffset + 3}
+          focused={clampedIndex === itemOffset + 3}
           onClick={menu.handleOpenEgov}
         >
           e-Govで開く
         </MenuButton>
         <div className="border-t border-neutral-100 my-1" />
         <MenuButton
-          index={4}
-          focused={clampedIndex === 4}
+          index={itemOffset + 4}
+          focused={clampedIndex === itemOffset + 4}
           onClick={() =>
             setState((prev) => ({
               ...prev,
@@ -119,8 +130,8 @@ export function MainMenu({ menu }: { menu: UseContextMenuReturn }) {
           🏷 タグ追加
         </MenuButton>
         <MenuButton
-          index={5}
-          focused={clampedIndex === 5}
+          index={itemOffset + 5}
+          focused={clampedIndex === itemOffset + 5}
           onClick={menu.handleOpenSettings}
         >
           ⚙ 設定

@@ -60,6 +60,10 @@ export function renderTokenNode(
 /**
  * トークン列を一括描画する（textOffset=0 の場合のショートカット）。
  */
-export function renderTokenNodes(tokens: LegalDisplayToken[], keyPrefix: string): ReactNode[] {
-  return tokens.map((token, i) => renderTokenNode(token, `${keyPrefix}-${i}`));
+export function renderTokenNodes(
+  tokens: LegalDisplayToken[],
+  keyPrefix: string,
+  textOffset: number = 0,
+): ReactNode[] {
+  return tokens.map((token, i) => renderTokenNode(token, `${keyPrefix}-${i}`, textOffset));
 }
