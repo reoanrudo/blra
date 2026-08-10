@@ -1,0 +1,495 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "examId": "1k-2021-gakka3-q01",
+      "category": "definition",
+      "query": "自動閉鎖式の防火戸は建築設備に含まれるか",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "2" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "2" }
+      ],
+      "exceptions": ["防火戸は防火設備として定義を確認する"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q02",
+      "category": "definition",
+      "query": "避雷設備の高さ判定で屋上塔屋を除外できるか",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "33" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "2" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "33" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "2" }
+      ],
+      "exceptions": [
+        "避雷設備の設置判定では高さ算定の塔屋不算入特例を適用しない"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q03",
+      "category": "procedure",
+      "query": "水泳場から体育館への用途変更に確認申請は必要か",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "87" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "137の18" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "87" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "137の18" }
+      ],
+      "exceptions": [
+        "類似用途相互間の用途変更",
+        "用途変更部分が200平方メートルを超える場合"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q04",
+      "category": "procedure",
+      "query": "病院の避難施設工事中の使用に仮使用認定と安全計画届出の両方が必要か",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "7の6" },
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "90の3" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "90の3" },
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "7の6" }
+      ],
+      "exceptions": [
+        "避難施設等に関する工事中の使用",
+        "仮使用認定と安全計画届出の適用場面を区別する"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q05",
+      "category": "fire-evacuation",
+      "query": "幅4メートルの客用傾斜路に中間手すりは必要か",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "25" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "26" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "26" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "25" }
+      ],
+      "exceptions": ["幅3メートルを超える階段・傾斜路の中間手すり"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q06",
+      "category": "fire-evacuation",
+      "query": "防火区画検証法は周囲の火災も検証対象にするか",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "108の3" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "108の3" }
+      ],
+      "exceptions": ["防火区画検証法は屋内火災を対象とする"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q07",
+      "category": "fire-evacuation",
+      "query": "特別避難階段の内装下地を準不燃材料にできるか",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "123" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "123" }
+      ],
+      "exceptions": ["特別避難階段の仕上げと下地はともに不燃材料"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q08",
+      "category": "fire-evacuation",
+      "query": "物品販売店舗の屋外避難階段を準耐火構造にできるか",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "122" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "123" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "122" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "123" }
+      ],
+      "exceptions": ["屋外避難階段は耐火構造とする"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q09",
+      "category": "fire-evacuation",
+      "query": "屋内避難階段の出入口に10分防火設備を使えるか",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "123" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "123" }
+      ],
+      "exceptions": ["屋内避難階段の出入口に必要な防火設備の性能"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q10",
+      "category": "structure",
+      "query": "エレベーター強度検証の常時応力度に動的係数は不要か",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "129の4" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "129の5" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "129の4" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "129の5" }
+      ],
+      "exceptions": ["昇降部分の固定荷重と積載荷重に動的係数を乗じる"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q11",
+      "category": "structure",
+      "query": "鉄筋コンクリート主筋の重ね継手を25dにできるか",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "73" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "73" }
+      ],
+      "exceptions": ["引張力が最小の部分でも重ね長さの下限がある"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q12",
+      "category": "structure",
+      "query": "2階建て木造住宅の必要壁量を地震力と風圧力から求める",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "46" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "46" }
+      ],
+      "exceptions": ["地震力と風圧力による必要壁量の大きい方を採用する"],
+      "unsupportedSources": ["昭和56年建設省告示第1100号"],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q13",
+      "category": "structure",
+      "query": "公会堂固定席の積載荷重を柱の支える床数で低減できるか",
+      "targetProvisions": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "85" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "85" }
+      ],
+      "exceptions": ["固定席の客席は柱が支える床数による低減対象外"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q14",
+      "category": "fire-evacuation",
+      "query": "50平方メートルの事務所で換気有効開口3平方メートルなら換気設備は必要か",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "28" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "28" }
+      ],
+      "exceptions": ["換気有効開口は床面積の20分の1以上"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q15",
+      "category": "collective-regulations",
+      "query": "壁面線を越えるひさしに許可は必要か",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "47" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "47" }
+      ],
+      "exceptions": ["壁面線制限の対象は建築物の壁・柱等である"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q16",
+      "category": "collective-regulations",
+      "query": "工業地域に1日当たり120トンのがれき破砕施設を新築できるか",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "51" },
+        {
+          "egovLawId": "325CO0000000338",
+          "articleNumberNormalized": "130の2の2"
+        }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "51" },
+        {
+          "egovLawId": "325CO0000000338",
+          "articleNumberNormalized": "130の2の2"
+        }
+      ],
+      "exceptions": [
+        "がれき類破砕施設は1日当たりの処理能力が100トンを超える場合を区別する"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q17",
+      "category": "collective-regulations",
+      "query": "複数用途地域にまたがる敷地の容積率上限を求める",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "52" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "52" }
+      ],
+      "exceptions": ["用途地域ごとの敷地部分の面積で加重平均する"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q18",
+      "category": "collective-regulations",
+      "query": "二以上の前面道路がある商業地域の道路斜線高さを求める",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "56" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "132" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "56" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "132" }
+      ],
+      "exceptions": ["二以上の前面道路がある場合の幅員緩和"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q19",
+      "category": "collective-regulations",
+      "query": "防火地域と準防火地域にまたがる一団の建築物の防火性能を判定する",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "61" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "136の2" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "61" },
+        { "egovLawId": "325CO0000000338", "articleNumberNormalized": "136の2" }
+      ],
+      "exceptions": [
+        "敷地が防火地域等の内外にまたがる場合",
+        "建築物ごとに適用区域を判定する"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q20",
+      "category": "collective-regulations",
+      "query": "地区計画の予定道路を許可なく前面道路とみなせるか",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "68の7" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "68の7" }
+      ],
+      "exceptions": ["予定道路を前面道路とみなすには特定行政庁の許可が必要"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q21",
+      "category": "definition",
+      "query": "土台の過半を修繕すると大規模の修繕になるか",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "2" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "2" }
+      ],
+      "exceptions": ["土台は主要構造部の列挙に含まれない"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q22",
+      "category": "other-laws",
+      "query": "構造設計一級建築士にも構造計算安全性証明書の交付義務があるか",
+      "targetProvisions": [
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "20" },
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "20の2" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "20" },
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "20の2" }
+      ],
+      "exceptions": ["構造設計一級建築士本人が行う構造設計の特例"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q23",
+      "category": "other-laws",
+      "query": "複数都道府県で設計する建築士事務所は各都道府県で登録が必要か",
+      "targetProvisions": [
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "23" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "23" }
+      ],
+      "exceptions": ["登録先は建築士事務所の所在地で決まる"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q24",
+      "category": "other-laws",
+      "query": "帳簿・設計図書の保存義務は確認申請対象建築物だけか",
+      "targetProvisions": [
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "24の4" },
+        { "egovLawId": "325M50004000038", "articleNumberNormalized": "21" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC1000000202", "articleNumberNormalized": "24の4" },
+        { "egovLawId": "325M50004000038", "articleNumberNormalized": "21" }
+      ],
+      "exceptions": [
+        "確認申請の要否にかかわらず事務所業務として作成した図書が対象"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q25",
+      "category": "other-laws",
+      "query": "市街地開発事業等予定区域で既存敷地に木造平屋の附属車庫を建てる許可は必要か",
+      "targetProvisions": [
+        { "egovLawId": "343AC0000000100", "articleNumberNormalized": "52の2" },
+        { "egovLawId": "344CO0000000158", "articleNumberNormalized": "36の8" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "343AC0000000100", "articleNumberNormalized": "52の2" },
+        { "egovLawId": "344CO0000000158", "articleNumberNormalized": "36の8" }
+      ],
+      "exceptions": ["既存敷地内の附属建築物", "木造2階以下かつ地階なし"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q26",
+      "category": "other-laws",
+      "query": "遊技場と飲食店の複合用途建物で地階900平方メートルならガス漏れ火災警報設備は必須か",
+      "targetProvisions": [
+        { "egovLawId": "323AC1000000186", "articleNumberNormalized": "17" },
+        { "egovLawId": "336CO0000000037", "articleNumberNormalized": "21の2" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "323AC1000000186", "articleNumberNormalized": "17" },
+        { "egovLawId": "336CO0000000037", "articleNumberNormalized": "21の2" }
+      ],
+      "exceptions": [
+        "複合用途防火対象物の用途区分",
+        "地階床面積1000平方メートル以上等の面積要件"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q27",
+      "category": "other-laws",
+      "query": "既存1500平方メートルの老人ホームを500平方メートル増築するとバリアフリー基準適合義務が生じるか",
+      "targetProvisions": [
+        { "egovLawId": "418AC0000000091", "articleNumberNormalized": "14" },
+        { "egovLawId": "418CO0000000379", "articleNumberNormalized": "9" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "418AC0000000091", "articleNumberNormalized": "14" },
+        { "egovLawId": "418CO0000000379", "articleNumberNormalized": "9" }
+      ],
+      "exceptions": [
+        "増築に係る部分の床面積で対象規模を判定する",
+        "特別特定建築物の対象規模は2000平方メートル以上"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q28",
+      "category": "cross-law",
+      "query": "認定低炭素建築物の容積率不算入は延べ面積の何分の一までか",
+      "targetProvisions": [
+        { "egovLawId": "424AC0000000084", "articleNumberNormalized": "60" },
+        { "egovLawId": "424CO0000000286", "articleNumberNormalized": "13" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "424AC0000000084", "articleNumberNormalized": "60" },
+        { "egovLawId": "424CO0000000286", "articleNumberNormalized": "13" }
+      ],
+      "exceptions": ["不算入できる床面積は延べ面積の20分の1が上限"],
+      "unsupportedSources": ["低炭素建築物の床面積を定める国土交通省告示"],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q29",
+      "category": "collective-regulations",
+      "query": "第一種中高層住居専用地域に400平方メートルのスーパーマーケットを設けるのに許可は必要か",
+      "targetProvisions": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "48" },
+        {
+          "egovLawId": "325CO0000000338",
+          "articleNumberNormalized": "130の5の3"
+        }
+      ],
+      "navigationPath": [
+        { "egovLawId": "325AC0000000201", "articleNumberNormalized": "48" },
+        {
+          "egovLawId": "325CO0000000338",
+          "articleNumberNormalized": "130の5の3"
+        }
+      ],
+      "exceptions": [
+        "店舗部分は500平方メートル以内",
+        "3階以上を店舗用途にしない"
+      ],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    },
+    {
+      "examId": "1k-2021-gakka3-q30",
+      "category": "other-laws",
+      "query": "土砂災害特別警戒区域で自己居住用住宅の開発に許可は必要か",
+      "targetProvisions": [
+        { "egovLawId": "412AC0000000057", "articleNumberNormalized": "9" },
+        { "egovLawId": "412AC0000000057", "articleNumberNormalized": "10" }
+      ],
+      "navigationPath": [
+        { "egovLawId": "412AC0000000057", "articleNumberNormalized": "9" },
+        { "egovLawId": "412AC0000000057", "articleNumberNormalized": "10" }
+      ],
+      "exceptions": ["自己居住用住宅は制限用途に含まれない"],
+      "unsupportedSources": [],
+      "rationaleStatus": "draft"
+    }
+  ]
+}

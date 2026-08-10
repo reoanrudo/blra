@@ -1,5 +1,9 @@
 # U-2 Baseline 計測プロトコル
 
+> **廃止（2026-08-09）**: ADR-031 により参加者の所要時間を使う Baseline は廃止した。
+> 現行の未見評価は [architect-law-exam-protocol.md](architect-law-exam-protocol.md) を参照する。
+> 本文書は判断履歴としてのみ残す。
+
 Pilot 時の比較基準線を作る。設計書 §14.4 の North Star「有効条文到達時間の中央値短縮率」は、**ここで測った値を分母とする。** 測り方が揺れると Pilot の成否判定が揺れる。
 
 ---

@@ -14,7 +14,11 @@ export interface ProjectItem {
 }
 
 export type MenuContext =
-  | { kind: "article"; articleId: string }
+  | {
+      kind: "article";
+      articleId: string;
+      printableArticleId: string | null;
+    }
   | {
       kind: "selection";
       articleId: string;

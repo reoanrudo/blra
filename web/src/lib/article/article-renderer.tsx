@@ -12,6 +12,7 @@ import { renderLinkSegments, renderToElements } from "@/lib/link/link-renderer";
 import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 import { formatRawTableCellText } from "@/lib/article/raw-table-text-format";
+import { splitArithFormulaLayout } from "@/lib/article/arith-formula-layout";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
 import { renderTokenNode, renderTokenNodes } from "@/lib/article/legal-token-renderer";
 import {
@@ -93,11 +94,32 @@ function borderClasses(style: TableCellStyle): string {
  * これにより任意の文字列選択が原文座標へ逆変換でき、ハイライトが機能する（設計書§6.2, §6.3）。
  * 分数トークンは縦分数表示（.law-fraction）として描画される。
  */
-function renderDisplayTokens(text: string): ReactNode {
+function renderDisplayTokens(text: string, textOffset: number = 0): ReactNode {
   const tokens = formatLegalText(text);
   if (tokens.length === 0) return null;
 
-  return renderTokenNodes(tokens, "tok");
+  return renderTokenNodes(tokens, "tok", textOffset);
+}
+
+function renderArithFormula(text: string): ReactNode | null {
+  const layout = splitArithFormulaLayout(text);
+  if (!layout) return null;
+
+  return (
+    <span className="law-arith-formula">
+      <span className="law-arith-formula__introduction">
+        {renderDisplayTokens(layout.introduction, layout.introductionStart)}
+      </span>
+      <span className="law-arith-formula__expression">
+        {renderDisplayTokens(layout.formula, layout.formulaStart)}
+      </span>
+      <span className="law-arith-formula__definitions">
+        <span className="law-arith-formula__definitions-text">
+          {renderDisplayTokens(layout.definitions, layout.definitionsStart)}
+        </span>
+      </span>
+    </span>
+  );
 }
 
 /**
@@ -283,7 +305,10 @@ export function ArticleNode({
   const halfWidthText = (row.text ?? "").replace(/（/g, "(").replace(/）/g, ")").replace(/[０-９Ａ-Ｚａ-ｚ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
   const displayText = stripDuplicatedLeadingLabel(halfWidthText, label);
 
-  const renderedText =
+  const arithFormula = displayText && outgoingLinks.length === 0
+    ? renderArithFormula(displayText)
+    : null;
+  const renderedText = arithFormula ?? (
     displayText && outgoingLinks.length > 0
       ? renderToElements(
           renderLinkSegments(displayText, outgoingLinks),
@@ -292,7 +317,8 @@ export function ArticleNode({
         )
       : displayText
         ? renderDisplayTokens(displayText)
-        : null;
+        : null
+  );
 
   return (
     <div
@@ -304,7 +330,7 @@ export function ArticleNode({
       {row.level === "article" && row.caption && (
         <p className="law-node__caption">{row.caption}</p>
       )}
-      <p className="law-node__text">
+      <p className={`law-node__text${arithFormula ? " law-node__text--arith-formula" : ""}`}>
         {label && (
           <span className={["subitem1", "subitem2", "subitem3"].includes(row.level) ? "law-node__label law-node__label--sub" : "law-node__label"}>
             {label}
@@ -315,7 +341,11 @@ export function ArticleNode({
             {/* ラベルがある場合、ラベルと本文の間に全角1字のスペース。
                 ラベルがない段落（第1項等）は本文先頭に全角1字のインデント。 */}
             {label ? (
-              ["paragraph", "item", "subitem1", "subitem2", "subitem3"].includes(row.level) ? <span>{"　"}</span> : null
+              arithFormula
+                ? null
+                : ["paragraph", "item", "subitem1", "subitem2", "subitem3"].includes(row.level)
+                  ? <span>{"　"}</span>
+                  : null
             ) : (
               <span>{"　"}</span>
             )}
@@ -453,6 +483,9 @@ export function TableBlock({
                 lawName: tableNode.lawName,
                 stableNodeKey: tableNode.stableNodeKey,
                 isSymbolColumn: tableLayout.columns[index]?.kind === "symbol",
+                hasParenthesizedItem: tableLayoutRows.some((row) =>
+                  /^[(（][^()（）]{1,8}[)）]$/.test((row[index] ?? "").trim()),
+                ),
               }),
             );
             const colPcts: number[] = [];

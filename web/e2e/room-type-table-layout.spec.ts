@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures";
 
 const ARTICLE_19_ID = "art_325co0000000338_20260101_000225";
+const ARTICLE_20_2_ID = "art_325co0000000338_20260101_000311";
 const ARTICLE_20_7_ID = "art_325co0000000338_20260101_000370";
 const REGULATION_BODY_TABLE_ARTICLE_ID = "art_325m50004000040_20260101_000015";
 const REGULATION_APPENDIX_TABLE_ARTICLE_ID = "art_325m50004000040_20260101_014122";
@@ -76,6 +77,38 @@ test("施行令の（1）（2）欄は35pxで、説明列を圧迫しない", as
 
   expect(widths[0]).toBe(35);
   expect(widths[1]).toBeGreaterThan(widths[0]);
+});
+
+test("第20条の2第1項イ(1)で次の式と記号の説明を表示する", async ({ page }) => {
+  await page.goto(`/articles/${ARTICLE_20_2_ID}`);
+  await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+  const item = page.locator(
+    '[data-original-text*="排気筒の有効断面積"]',
+  ).first();
+  await expect(item).toContainText(
+    "(1)排気筒の有効断面積(平方メートルで表した面積とする。)",
+  );
+  await expect(item.locator(".law-node__text")).toHaveCSS("padding-left", "15px");
+  await expect(item).toContainText("A_v＝A_f／(250√h)");
+  await expect(item).toContainText("必要有効断面積");
+
+  const formula = item.locator(".law-arith-formula");
+  await expect(formula).toBeVisible();
+  await expect(formula.locator(".law-arith-formula__expression")).toHaveCSS("display", "block");
+  await expect(formula.locator(".law-arith-formula__definitions")).toHaveCSS("display", "grid");
+  const positions = await formula.locator(
+    ".law-arith-formula__introduction, .law-arith-formula__expression, .law-arith-formula__definitions",
+  ).evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
+  expect(positions[0]).toBeLessThan(positions[1]!);
+  expect(positions[1]).toBeLessThan(positions[2]!);
+});
+
+test("第20条から続けて読んでも第20条の2の算式を表示する", async ({ page }) => {
+  await page.goto("/articles/art_325co0000000338_20260101_000271");
+  await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+  await expect(page.getByText("A_v＝A_f／(250√h)", { exact: false })).toBeVisible();
 });
 
 test("第20条の7の換気回数表でDBのセル結合情報を表示する", async ({ page }) => {

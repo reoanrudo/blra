@@ -43,6 +43,15 @@ describe("legal-display-format（設計書§3, §4）", () => {
       const displayText = tokens.map((t) => t.displayText).join("");
       expect(displayText).toBe("3m");
     });
+
+    it.each([
+      ["一三四〇日分", "1,340日分"],
+      ["二時間三〇分", "2時間30分"],
+      ["零下二〇度", "零下20度"],
+    ])("〇・零を含む数量 %s を %s へ変換する", (source, expected) => {
+      expect(formatLegalText(source).map((token) => token.displayText).join(""))
+        .toBe(expected);
+    });
   });
 
   describe("formatLegalText: 小数変換（設計書§4.2）", () => {
@@ -141,6 +150,11 @@ describe("legal-display-format（設計書§3, §4）", () => {
       expect(displayText).toBe("質量は5kg");
     });
 
+    it("「リットル」を「L」に変換する（直前に数量あり）", () => {
+      expect(formatLegalText("五リットル").map((token) => token.displayText).join(""))
+        .toBe("5L");
+    });
+
     it("単独単位は直前に数量がない場合は変換しない（設計書§4.4）", () => {
       // 「プログラム」の「グラム」は変換しない
       const tokens = formatLegalText("プログラム");
@@ -189,6 +203,12 @@ describe("legal-display-format（設計書§3, §4）", () => {
       expect(displayText).toBe("百貨店及び100m²");
     });
 
+    it.each([
+      "一般", "一部", "一方", "一時", "一時的", "一層", "一切", "一定", "一体", "一団地", "一団の建築物", "一環", "一律", "一例", "五十音", "十分な設備", "十分に行う", "十分である", "二重壁", "三角形",
+    ])("通常語 %s の漢数字は変換しない", (source) => {
+      expect(formatLegalText(source).map((token) => token.displayText).join("")).toBe(source);
+    });
+
     it("「第二条」の条文参照は算用数字化する", () => {
       const tokens = formatLegalText("第二条の規定により");
       const displayText = tokens.map((t) => t.displayText).join("");
@@ -201,10 +221,39 @@ describe("legal-display-format（設計書§3, §4）", () => {
       expect(displayText).toBe("第2項の規定");
     });
 
-    it("「法律第七十二号」の公布番号は変換しない", () => {
-      const tokens = formatLegalText("昭和四十八年法律第七十二号");
+    it("条番号と号番号が連続するとき、条だけを算用数字化する", () => {
+      const tokens = formatLegalText("下水道法第二条第六号");
       const displayText = tokens.map((t) => t.displayText).join("");
-      expect(displayText).toBe("昭和四十八年法律第七十二号");
+      expect(displayText).toBe("下水道法第2条第六号");
+    });
+
+    it("条の枝番と号番号が連続するとき、条と枝番だけを算用数字化する", () => {
+      const tokens = formatLegalText("第百五十条の三第一号");
+      const displayText = tokens.map((t) => t.displayText).join("");
+      expect(displayText).toBe("第150条の3第一号");
+    });
+
+    it("法令番号は年・号数を算用数字化し、号番号は漢数字のまま残す", () => {
+      const tokens = formatLegalText("昭和二十五年法律第二百二号及び第二号");
+      const displayText = tokens.map((t) => t.displayText).join("");
+      expect(displayText).toBe("昭和25年法律第202号及び第二号");
+      expect(
+        formatLegalText("昭和二十五年政令第三百三十八号")
+          .map((token) => token.displayText)
+          .join(""),
+      ).toBe("昭和25年政令第338号");
+    });
+
+    it("省令・勅令・布告などの公布番号も年・号数を算用数字化する", () => {
+      const cases = [
+        ["昭和二十五年厚生労働省令第百二号", "昭和25年厚生労働省令第102号"],
+        ["大正十年勅令第二号", "大正10年勅令第2号"],
+        ["明治二十年太政官布告第一号", "明治20年太政官布告第1号"],
+      ];
+
+      for (const [source, expected] of cases) {
+        expect(formatLegalText(source).map((token) => token.displayText).join("")).toBe(expected);
+      }
     });
   });
 

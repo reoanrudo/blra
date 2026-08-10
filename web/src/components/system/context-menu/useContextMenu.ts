@@ -10,7 +10,12 @@ import { useProject } from "@/lib/practice/project-context";
 import { buildEgovDocumentUrl } from "@/lib/system/e-gov";
 import { getSelectionContext } from "@/lib/highlight/text-selection";
 import { buildArticleHrefFromSearchParams } from "@/lib/applicability/applicability-context";
-import { useApplicability } from "@/contexts/ApplicabilityContext";
+import { useOptionalApplicability } from "@/contexts/ApplicabilityContext";
+import { todayInJapan } from "@/lib/applicability/applicability-context";
+import {
+  findPrintableArticleId,
+  printCurrentArticle,
+} from "@/lib/article/current-article-print";
 
 import type { ContextMenuState, MenuContext, TemplateItem } from "./types";
 import { INITIAL_STATE } from "./constants";
@@ -30,7 +35,12 @@ export function useContextMenu() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const tagInputRef = useRef<HTMLInputElement>(null);
   const { activeProjectId } = useProject();
-  const applicability = useApplicability();
+  const applicability = useOptionalApplicability();
+  const applicabilitySnapshot = applicability?.snapshot ?? {
+    applicabilityAnchor: "TODAY" as const,
+    applicabilityDate: todayInJapan(),
+    snapshotLawRevisionId: null,
+  };
   const router = useRouter();
 
   const close = useCallback(() => {
@@ -117,12 +127,15 @@ export function useContextMenu() {
 
       // 3. Fallback to article context
       const articleEl = target.closest("[data-article-id]");
-      if (articleEl) {
+      const printableArticleId = findPrintableArticleId(target);
+      const articleId = articleEl?.getAttribute("data-article-id") ?? printableArticleId;
+      if (articleId) {
         e.preventDefault();
-        const articleId = articleEl.getAttribute("data-article-id");
-        if (articleId) {
-          setPositionAndOpen(e, { kind: "article", articleId });
-        }
+        setPositionAndOpen(e, {
+          kind: "article",
+          articleId,
+          printableArticleId,
+        });
         return;
       }
 
@@ -133,7 +146,7 @@ export function useContextMenu() {
       let x = e.clientX;
       let y = e.clientY;
       const menuWidth = 220;
-      const menuHeight = 280;
+      const menuHeight = 320;
       if (x + menuWidth > window.innerWidth) {
         x = window.innerWidth - menuWidth - 8;
       }
@@ -222,7 +235,7 @@ export function useContextMenu() {
       await createCheckItem(
         activeProjectId,
         state.context.articleId,
-        applicability.snapshot,
+        applicabilitySnapshot,
       );
       showToast("確認項目を追加しました", "success");
       close();
@@ -232,7 +245,7 @@ export function useContextMenu() {
   }, [
     state.context,
     activeProjectId,
-    applicability.snapshot,
+    applicabilitySnapshot,
     showToast,
     close,
   ]);
@@ -296,7 +309,7 @@ export function useContextMenu() {
         await createCheckItem(
           projectId,
           state.context.articleId,
-          applicability.snapshot,
+          applicabilitySnapshot,
         );
         showToast("プロジェクトに紐付けました", "success");
         close();
@@ -304,7 +317,7 @@ export function useContextMenu() {
         showToast("紐付けに失敗しました", "error");
       }
     },
-    [state.context, applicability.snapshot, showToast, close],
+    [state.context, applicabilitySnapshot, showToast, close],
   );
 
   const handleOpenEgov = useCallback(async () => {
@@ -330,6 +343,18 @@ export function useContextMenu() {
     }
   }, [state.context, showToast, close]);
 
+  const handlePrintCurrentArticle = useCallback(() => {
+    if (
+      state.context?.kind !== "article" ||
+      !state.context.printableArticleId
+    ) {
+      return;
+    }
+
+    close();
+    printCurrentArticle(state.context.printableArticleId);
+  }, [state.context, close]);
+
   // ── Highlight / Tag handlers ──────────────────────────────────
 
   const handleHighlight = useCallback(
@@ -344,7 +369,7 @@ export function useContextMenu() {
           exactQuote: selectedText,
           color,
           type,
-          ...applicability.snapshot,
+          ...applicabilitySnapshot,
         });
         // Bridge to UserHighlightContext via custom event (crosses context boundary)
         window.dispatchEvent(
@@ -361,7 +386,7 @@ export function useContextMenu() {
         );
       }
     },
-    [state.context, applicability.snapshot, showToast, close],
+    [state.context, applicabilitySnapshot, showToast, close],
   );
 
   const handleUnderline = useCallback(async () => {
@@ -482,7 +507,9 @@ export function useContextMenu() {
         ? 4 // open, copy, e-gov, separator+settings
         : state.context?.kind === "highlight"
           ? 3 // delete, copy text, settings
-          : 6 // check item, drawing note, project, e-gov, separator, settings
+          : state.context?.printableArticleId
+            ? 7 // print, check item, drawing note, project, e-gov, tag, settings
+            : 6 // check item, drawing note, project, e-gov, tag, settings
     : state.menuType === "highlight_picker"
       ? 7 // back + 6 colors
       : state.menuType === "tag_input"
@@ -529,6 +556,7 @@ export function useContextMenu() {
     handleLinkToProject,
     handleProjectPick,
     handleOpenEgov,
+    handlePrintCurrentArticle,
     handleHighlight,
     handleUnderline,
     handleBracket,

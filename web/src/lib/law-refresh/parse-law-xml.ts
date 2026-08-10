@@ -36,11 +36,6 @@ const TAG_TO_LEVEL: Record<string, ArticleLevel> = {
 };
 
 const SKIP_LEVEL_TAGS = new Set([
-  "List",
-  "ListSentence",
-  "ArithFormula",
-  "Sub",
-  "Sup",
   // Ruby は parseLawXml の前処理（stripRuby）で親字に展開済み。
   // Rt は万が一残った場合の安全網として読み仮名を除外する。
   "Rt",
@@ -353,6 +348,21 @@ function stripRuby(xml: string): string {
   return xml.replace(RUBY_PATTERN, "$1");
 }
 
+/**
+ * fast-xml-parser は preserveOrder: false のとき、算式内の添字・上付き文字を
+ * 本文の末尾へまとめてしまい、位置を復元できない。パース前にプレーンテキストの
+ * 表記へ置換して、算式そのものと添字の対応を維持する。
+ */
+function preserveArithFormulaMarkup(xml: string): string {
+  return xml.replace(
+    /<ArithFormula>([\s\S]*?)<\/ArithFormula>/g,
+    (_formula, contents: string) =>
+      `<ArithFormula>${contents
+        .replace(/<Sub>([\s\S]*?)<\/Sub>/g, "_$1")
+        .replace(/<Sup>([\s\S]*?)<\/Sup>/g, "^$1")}</ArithFormula>`,
+  );
+}
+
 export function parseLawXml(
   xml: string,
   context: ParseLawContext,
@@ -365,7 +375,7 @@ export function parseLawXml(
     textNodeName: "#text",
     preserveOrder: false,
   });
-  const parsed = parser.parse(stripRuby(xml)) as unknown;
+  const parsed = parser.parse(preserveArithFormulaMarkup(stripRuby(xml))) as unknown;
   if (!isRecord(parsed)) throw new Error("XML root must be an object");
 
   const dataRoot = isRecord(parsed.DataRoot) ? parsed.DataRoot : null;
@@ -518,7 +528,12 @@ export function parseLawXml(
         const usedSegments = siblingSegments.get(siblingKey) ?? new Set<string>();
         let durableNodeKey = `${parentDurableKey}/${segment}`;
         if (usedSegments.has(segment)) {
-          if (level !== "table_row" && level !== "table_column") {
+          const canDisambiguateDuplicate =
+            level === "table_row" ||
+            level === "table_column" ||
+            level === "column" ||
+            context.tolerateDuplicateDurableKeys === true;
+          if (!canDisambiguateDuplicate) {
             throw new Error(
               `Duplicate durable node fingerprint under ${parentDurableKey}: ${segment}`,
             );
@@ -546,7 +561,12 @@ export function parseLawXml(
         } else {
           usedSegments.add(segment);
           siblingSegments.set(siblingKey, usedSegments);
-          if (level === "table_row" || level === "table_column") {
+          if (
+            level === "table_row" ||
+            level === "table_column" ||
+            level === "column" ||
+            context.tolerateDuplicateDurableKeys === true
+          ) {
             duplicateTableGroups.set(`${siblingKey}\u0000${segment}`, {
               count: 1,
             });

@@ -34,10 +34,11 @@ export default function ContextMenuProvider({
           <div
             ref={menuRef}
             role="menu"
+            data-print-hidden="true"
             className="fixed bg-white rounded-lg shadow-xl border border-neutral-200 py-1 min-w-[220px] max-h-[80vh] overflow-y-auto"
             style={{
-              top: adjustMenuPosition(220, 280).y,
-              left: adjustMenuPosition(220, 280).x,
+              top: adjustMenuPosition(220, 320).y,
+              left: adjustMenuPosition(220, 320).x,
             }}
             onClick={(e) => e.stopPropagation()}
           >

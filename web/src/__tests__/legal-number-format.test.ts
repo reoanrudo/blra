@@ -114,8 +114,8 @@ describe("legal-number-format（設計書§4.2, §4.3）", () => {
       expect(isKanjiNumberPart("昭和四十八年")).toBe(true);
     });
 
-    it("「法律第七十二号」は除外される（公布番号）", () => {
-      expect(isKanjiNumberPart("法律第七十二号")).toBe(true);
+    it("「法律第七十二号」は表示用に算用数字化する", () => {
+      expect(isKanjiNumberPart("法律第七十二号")).toBe(false);
     });
 
     it("「一万」は除外されない（数量）", () => {

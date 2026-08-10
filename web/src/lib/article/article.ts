@@ -114,8 +114,11 @@ function toHalfWidth(s: string): string {
 
 export function articleLabel(row: ArticleRow): string {
   switch (row.level) {
-    case "article":
-      return `第${formatStructuredNumber(row.articleNumber)}条`;
+    case "article": {
+      const formatted = formatStructuredNumber(row.articleNumber) ?? "";
+      const [main, ...branches] = formatted.split("の");
+      return `第${main}条${branches.length > 0 ? `の${branches.join("の")}` : ""}`;
+    }
     case "paragraph":
       return toHalfWidth(row.paragraphNumber ?? "");
     case "item":

@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [blra] recent context, 2026-08-04 3:59pm GMT+9
+# [blra] recent context, 2026-08-10 7:43pm GMT+9
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 11 obs (2,905t read) | 0t work
+Stats: 14 obs (3,299t read) | 0t work
 
 ### Jul 30, 2026
 5839 10:43a 🔵 BLRAプロジェクトのS0完了とS1準備完了状態
@@ -29,11 +29,8 @@ S778 地域おこし協力隊における副業・起業規定と支援制度の
 S782 法令データベースシステムの引継ぎ完了確認と適用時点機能の実装スコープ合意 (Jul 31 at 6:23 PM)
 S780 法令データベースシステムの引継ぎ完了確認と適用時点機能の実装スコープ合意 (Jul 31 at 6:23 PM)
 S783 法令データベースシステムの引継ぎ完了確認と適用時点機能の実装スコープ合意 (Jul 31 at 6:27 PM)
-**Investigated**: HANDOFF.md、design-spec.md、Git履歴の全文確認。現行のweb/と独立src/の主要実装・データ経路を調査。稼働状態・DB件数・TypeScript型検査・既存テストを実行し検証。ルートテスト136件の全件成功を確認。Webテストのモジュール解決問題を特定。DB状態とTypeScriptコンパイルの正常性を検証。
-
-**Learned**: Webテスト基盤はvitest実行環境が`@/`エイリアスを解決できず、20スイートが起動不能。民法（抄）のArticle Rangeテストが期待する61条が空配列で失敗。`hourei_rag`データベースは120法令・153,896条文・16,588参照で稼働中。TypeScript検査は両ディレクトリでパス。`src/`の136テストは全件成功。実装はsuperpowers:brainstormingスキルの設計承認ゲートに従い、適用時点機能の初回スコープ合意を待機中。
-
-**Completed**: 引継ぎ資料の全文確認と現状調査完了。ルートテスト136件の全件成功を検証。DB件数と型検査のパスを確認。計画更新により引継ぎ調査完了と適用時点機能の初回スコープ合意待ちの状態へ移行。
-
-**Next Steps**: superpowers:brainstormingの設計承認ゲートに従い、適用時点機能の初回実装スコープを合意。提案された3つの選択肢（Webテスト基盤修正含む全5要件一括実装、TODAY/CUSTOMのみ先行実装、5要件まとめて設計）から方針を決定し、設計文書作成と実装計画へ進む。
+### Aug 10, 2026
+5862 7:52a 🔴 法令テーブルの表示形式不統一を40,557セル分で修正
+5863 8:41a 🔄 法令表の冊子型高密度レイアウトを実装し横あふれを解消
+5864 11:16a 🔵 法令引用における数字フォーマット要件の明確化
 </claude-mem-context>

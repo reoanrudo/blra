@@ -61,6 +61,7 @@ const RAW_UNIT_ENTRIES: UnitEntry[] = [
   // 体積
   { from: "立方メートル", to: "m³", isCompound: false },
   { from: "立方センチメートル", to: "cm³", isCompound: false },
+  { from: "リットル", to: "L", isCompound: false },
 
   // 長さ
   { from: "キロメートル", to: "km", isCompound: false },

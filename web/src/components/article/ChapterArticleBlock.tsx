@@ -14,6 +14,8 @@ import type { ArticleRow } from "@/lib/article/article";
 import type { OutgoingLinkRow } from "@/lib/link/link";
 import { articleLabel } from "@/lib/article/article";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
+import { formatLegalText } from "@/lib/article/legal-display-format";
+import { renderTokenNode } from "@/lib/article/legal-token-renderer";
 import type { ConfirmedRelation } from "@/lib/relations/confirmed-relation";
 import ConfirmedRelationList from "@/components/article/ConfirmedRelationList";
 
@@ -189,16 +191,22 @@ function CaptionWithArticleLinks({
  * 本文中の「政令」という単語を太字にする。
  * 法令集（冊子）では「政令」が強調表示されることが多い。
  */
-function emphasizeCabinetOrder(text: string): ReactNode {
-  if (!text.includes("政令")) return text;
+function renderInlineFirstParagraph(text: string): ReactNode {
   const parts = text.split(/(政令)/g);
-  return parts.map((part, i) =>
-    part === "政令" ? (
-      <strong key={i} style={{ fontWeight: 700 }}>政令</strong>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
-  );
+  let textOffset = 0;
+
+  return parts.map((part, i) => {
+    const partOffset = textOffset;
+    textOffset += part.length;
+
+    if (part === "政令") {
+      return <strong key={i} style={{ fontWeight: 700 }}>政令</strong>;
+    }
+
+    return formatLegalText(part).map((token, tokenIndex) =>
+      renderTokenNode(token, `inline-${i}-${tokenIndex}`, partOffset),
+    );
+  });
 }
 
 interface ChapterArticleBlockProps {
@@ -264,7 +272,10 @@ export default function ChapterArticleBlock({
     : segments;
 
   return (
-    <div className="chapter-article-block">
+    <div
+      className="chapter-article-block"
+      data-print-article-id={articleRoot.id}
+    >
       {/* Sentinel for IntersectionObserver tracking */}
       <div
         id={fullLawAnchorId(articleRoot.id)}
@@ -306,7 +317,7 @@ export default function ChapterArticleBlock({
                 <span className="law-node__label--article-inline">{label}</span>
                 <span className="law-node__article-inline-body">
                   <span>{"　"}</span>
-                  {emphasizeCabinetOrder(inlineFirstParaText ?? "")}
+                  {renderInlineFirstParagraph(inlineFirstParaText ?? "")}
                 </span>
               </p>
             </div>

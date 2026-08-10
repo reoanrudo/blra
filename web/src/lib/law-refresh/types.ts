@@ -4,6 +4,11 @@ export interface ParseLawContext {
   lawId: string;
   egovLawId: string;
   revisionId: string;
+  /**
+   * 既存DBのセル情報を復元する読み取り専用処理でのみ使用する。
+   * 原典XMLにある重複見出しをoccurrenceで区別し、全セルを走査する。
+   */
+  tolerateDuplicateDurableKeys?: boolean;
 }
 
 /**
