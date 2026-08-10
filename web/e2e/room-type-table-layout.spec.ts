@@ -177,3 +177,25 @@ for (const [label, articleId] of [
     expect(invalidTables).toEqual([]);
   });
 }
+
+for (const [label, articleId] of [
+  ["指定検定機関等省令第16条", "art_411m50004000013_20260101_000143"],
+  ["指定検定機関等省令第17条", "art_411m50004000013_20260101_000323"],
+] as const) {
+  test(`${label} の表は別表準拠で横あふれを出さない`, async ({ page }) => {
+    await page.setViewportSize({ width: 480, height: 900 });
+    await page.goto(`/articles/${articleId}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+    const invalid = await page.locator(".law-table-wrapper").evaluateAll((wrappers) =>
+      wrappers.flatMap((wrapper, index) => {
+        const table = wrapper.querySelector("table.law-table");
+        return !table || !table.classList.contains("law-table--legacy") ||
+          wrapper.scrollWidth > wrapper.clientWidth || table.scrollWidth > table.clientWidth
+          ? [index] : [];
+      }),
+    );
+
+    expect(invalid).toEqual([]);
+  });
+}
