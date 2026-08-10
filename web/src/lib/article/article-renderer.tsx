@@ -11,8 +11,19 @@ import {
 import { renderLinkSegments, renderToElements } from "@/lib/link/link-renderer";
 import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
+import { formatRawTableCellText } from "@/lib/article/raw-table-text-format";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
 import { renderTokenNode, renderTokenNodes } from "@/lib/article/legal-token-renderer";
+import {
+  preferredLeadingColumnWidthPx,
+  preferredTrailingColumnWidthPx,
+  supplementalRoomTypeTableCellLayout,
+} from "@/lib/article/table-column-width";
+import {
+  deriveTableLayout,
+  expandTableRows,
+  usesLegacyLawTableLayout,
+} from "@/lib/article/table-layout";
 export { buildSegments } from "@/lib/article/article-segments";
 import type { TableCellStyle } from "@/lib/law-refresh/types";
 import type { ReactNode } from "react";
@@ -99,142 +110,12 @@ function renderDisplayTokensForTable(text: string): ReactNode {
   return renderTokenNodes(tokens, "ttok");
 }
 
-/**
- * テーブルセル用の表示トークン描画。
- * 「政令」を太字にする。
- */
-/**
- * 法令番号・条項番号・階数・数量の漢数字をアラビア数字に変換し、
- * 単位を記号化する（formatLegalText相当の変換をrawモードで実行）。
- */
-function convertLawNumber(text: string): string {
-  let result = text;
-
-  // 全角括弧を半角に変換
-  result = result.replace(/（/g, "(").replace(/）/g, ")");
-
-  // 法令番号: 元号+漢数字+年法律第+漢数字+号
-  result = result.replace(
-    /([明治大正昭和平成令和])([一二三四五六七八九十百千零〇]+)年法律第([一二三四五六七八九十百千零〇]+)号/g,
-    (_m, era, year, num) => `${era}${kanjiToNumber(year)}年法律第${kanjiToNumber(num)}号`,
-  );
-
-  // 条項号: 第+漢数字+(条|項|号|章|節|款|編|部)
-  result = result.replace(
-    /第([一二三四五六七八九十百千零〇]+)(条|項|号|章|節|款|編|部)/g,
-    (_m, num, unit) => `第${kanjiToNumber(num)}${unit}`,
-  );
-
-  // 括弧付き番号: (一)(二)(四の二)… → (1)(2)(4の2)…
-  // ※全角括弧は前段（114行目）で半角に変換済み
-  result = result.replace(
-    /\(([一二三四五六七八九十百零〇]+(?:の[一二三四五六七八九十百零〇]+)?)\)/g,
-    (_m, num) => {
-      const parts = num.split("の");
-      const converted = parts.map((p: string) => String(kanjiToNumber(p))).join("の");
-      return `(${converted})`;
-    },
-  );
-
-  // 単独の小数表記: 一・五→1.5、一・二五→1.25、〇・七五→0.75
-  const decMap: Record<string, string> = {
-    "〇": "0", "零": "0", "一": "1", "二": "2", "三": "3",
-    "四": "4", "五": "5", "六": "6", "七": "7", "八": "8", "九": "9",
-  };
-  result = result.replace(
-    /([〇零一二三四五六七八九])[・.]([〇零一二三四五六七八九]+)/g,
-    (_m, intPart: string, decPart: string) => {
-      return (decMap[intPart] ?? "0") + "." + decPart.split("").map((ch: string) => decMap[ch] ?? ch).join("");
-    },
-  );
-
-  // 階数: 漢数字+階 → 数字+階
-  result = result.replace(
-    /([一二三四五六七八九十百零〇]+)階/g,
-    (_m, num) => `${kanjiToNumber(num)}階`,
-  );
-
-  // 単位の記号化（長い順に処理して部分置換を防ぐ）
-  const unitMap: [string, string][] = [
-    ["平方メートル", "m²"],
-    ["立方メートル", "m³"],
-    ["ミリメートル", "mm"],
-    ["センチメートル", "cm"],
-    ["キロワット", "kW"],
-    ["リットル", "L"],
-    ["メートル", "m"],
-  ];
-  for (const [from, to] of unitMap) {
-    result = result.replaceAll(from, to);
-  }
-
-  // 数量+単位: 漢数字または「〇・七五」等の小数表記+(m²|m³|kW|L|m) → 数字+単位
-  // 「〇・七五」→0.75、「一・五」→1.5
-  // 10000以上は「万」表記（10000→1万、15000→1.5万）
-  result = result.replace(
-    /([一二三四五六七八九十百千万零〇・]+)(m²|m³|kW|L|m)/g,
-    (_m, num: string, unit: string) => {
-      // 小数表記（「〇・七五」等）の処理
-      if (num.includes("・")) {
-        const [intPart, decPart] = num.split("・");
-        const intNum = kanjiToNumber(intPart);
-        // 小数部の各桁を数字に変換
-        const decMap: Record<string, string> = {
-          "零": "0", "〇": "0", "一": "1", "二": "2", "三": "3",
-          "四": "4", "五": "5", "六": "6", "七": "7", "八": "8", "九": "9",
-        };
-        const decStr = decPart.split("").map((ch: string) => decMap[ch] ?? ch).join("");
-        return `${intNum}.${decStr}${unit}`;
-      }
-      const n = kanjiToNumber(num);
-      if (n >= 10000) {
-        const man = n / 10000;
-        return `${Number.isInteger(man) ? man : man.toFixed(1)}万${unit}`;
-      }
-      return `${n}${unit}`;
-    },
-  );
-
-  return result;
-}
-
-function kanjiToNumber(kanji: string): number {
-  // 「万」で区切って下位・上位に分けて処理
-  const parts = kanji.split("万");
-  if (parts.length === 2) {
-    const lower = parseKanjiSmall(parts[1] || "");
-    const upper = parseKanjiSmall(parts[0] || "一");
-    return upper * 10000 + lower;
-  }
-  return parseKanjiSmall(kanji);
-}
-
-function parseKanjiSmall(kanji: string): number {
-  const digitMap: Record<string, number> = {
-    "零": 0, "〇": 0, "一": 1, "二": 2, "三": 3, "四": 4,
-    "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
-  };
-  const unitMap: Record<string, number> = { "十": 10, "百": 100, "千": 1000 };
-  let result = 0;
-  let current = 0;
-  for (const ch of kanji) {
-    if (digitMap[ch] !== undefined) {
-      current = digitMap[ch];
-    } else if (unitMap[ch] !== undefined) {
-      if (current === 0) current = 1;
-      result += current * unitMap[ch];
-      current = 0;
-    }
-  }
-  return result + current;
-}
-
 function renderTableCellContent(text: string, raw?: boolean): ReactNode {
   // raw=true の場合は formatLegalText（半角変換等）をスキップして元のテキストを表示。
   // ただし法令番号（「昭和二十三年法律第百二十二号」等）の漢数字は
   // アラビア数字（「昭和23年法律第122号」）に変換する。
   if (raw) {
-    const converted = convertLawNumber(text);
+    const converted = formatRawTableCellText(text);
     // 行ごとに分割して、号番号（一　二　三　…）で始まる行をインデント付きで改行表示
     const lines = converted.split("\n").filter((l) => l.trim().length > 0);
     if (lines.length <= 1) {
@@ -453,11 +334,43 @@ export function TableBlock({
   rows: { row: ArticleRow; cells: ArticleRow[] }[];
   anchorRows: ArticleRow[];
 }) {
+  const tableLayoutRows = expandTableRows(
+    rows.map(({ cells }, rowIndex) =>
+      cells.flatMap((cell, cellIndex) => {
+        const supplementalLayout = supplementalRoomTypeTableCellLayout({
+          lawName: tableNode.lawName,
+          stableNodeKey: tableNode.stableNodeKey,
+          rows,
+          rowIndex,
+          cellIndex,
+        });
+        if (supplementalLayout?.hidden) return [];
+        const metadata = safeParseCellStyle(cell.tableMetadata);
+        return [{
+          text: cell.text ?? "",
+          colspan: supplementalLayout?.colSpan ?? metadata?.colspan ?? 1,
+          rowspan: supplementalLayout?.rowSpan ?? metadata?.rowspan ?? 1,
+        }];
+      }),
+    ),
+  );
+  const tableLayout = deriveTableLayout({
+    rows: tableLayoutRows,
+  });
+  // 建築基準法・施行令・施行規則の表は既存の法令集レイアウトを維持する。
+  // 対象外の法令表だけ、情報量に応じた均等配分を適用する。
+  const useLegacyLawTableLayout = usesLegacyLawTableLayout({
+    lawName: tableNode.lawName,
+    stableNodeKey: tableNode.stableNodeKey,
+  });
+  const useBalancedLayout = !useLegacyLawTableLayout;
+  const headerRow = useBalancedLayout ? rows[0] : undefined;
+
   return (
     <div
       id={fullLawAnchorId(tableNode.id)}
       data-article-id={tableNode.id}
-      className="law-table-wrapper my-4 scroll-mt-20"
+      className={`law-table-wrapper my-4 scroll-mt-20${useLegacyLawTableLayout ? " law-table-wrapper--legacy" : ""}`}
     >
       {anchorRows.map((anchor) => (
         <span
@@ -468,15 +381,32 @@ export function TableBlock({
           aria-hidden="true"
         />
       ))}
-      <table className="law-table border-collapse text-xs">
+      <table className={`law-table border-collapse text-xs${useLegacyLawTableLayout ? " law-table--legacy" : ""}`}>
         <colgroup>
-          {(() => {
+          {useBalancedLayout
+            ? tableLayout.columns.map((column, index) => (
+              <col key={index} style={{ width: `${column.widthPercent}%` }} />
+            ))
+            : (() => {
             if (!rows[0]) return null;
             // colspanを展開した実際のグリッド列数を計算
-            const numCols = rows[0].cells.reduce((sum, cell) => {
-              const meta = cell.tableMetadata ? safeParseCellStyle(cell.tableMetadata) : null;
-              return sum + (meta?.colspan ?? 1);
-            }, 0);
+            const numCols = useLegacyLawTableLayout
+              ? rows[0].cells.reduce((sum, cell) => {
+                const meta = cell.tableMetadata
+                  ? safeParseCellStyle(cell.tableMetadata)
+                  : null;
+                return sum + (meta?.colspan ?? 1);
+              }, 0)
+              : Math.max(
+                ...rows.map(({ cells }) =>
+                  cells.reduce((sum, cell) => {
+                    const meta = cell.tableMetadata
+                      ? safeParseCellStyle(cell.tableMetadata)
+                      : null;
+                    return sum + (meta?.colspan ?? 1);
+                  }, 0),
+                ),
+              );
             // 各列のデータ行（3行目以降）の最長テキスト長を計算。
             // データ行がない場合は全行から計算。
             const colDataLens: number[] = [];
@@ -495,8 +425,6 @@ export function TableBlock({
             // tableNode.stableNodeKey から appdx_table 番号で識別。
             const appdxMatch = (tableNode.stableNodeKey ?? "").match(/appdx_table:(\d+)/);
             const appdxNum = appdxMatch ? parseInt(appdxMatch[1], 10) : null;
-            // 欄記号列の幅（全別表共通）
-            const NARROW_COL_PX = 35;
             // 列幅: 列0=35px固定（全表共通）
             // すべてパーセンテージ指定（画面サイズが変わっても列幅比率を維持）
             const isTable1 = appdxNum === 128;
@@ -507,6 +435,16 @@ export function TableBlock({
             // スマホ(640px以下)は列0・列2を広めに設定
             // それ以外: 列0=4%、残りはテキスト長で比率配分
             const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
+            const preferredLeadingWidthPx = preferredLeadingColumnWidthPx({
+              lawName: tableNode.lawName,
+              stableNodeKey: tableNode.stableNodeKey,
+              isMobile,
+            });
+            const preferredTrailingWidthPx = preferredTrailingColumnWidthPx({
+              lawName: tableNode.lawName,
+              stableNodeKey: tableNode.stableNodeKey,
+              isMobile,
+            });
             const colPcts: number[] = [];
             if (isTable1 && numCols === 5) {
               colPcts.push(...(isMobile ? [8, 32, 18, 21, 21] : [4, 36, 14, 23, 23]));
@@ -527,6 +465,12 @@ export function TableBlock({
               }
             }
             return colPcts.map((pct, i) => {
+              if (i === 0 && preferredLeadingWidthPx !== null) {
+                return <col key={i} style={{ width: `${preferredLeadingWidthPx}px` }} />;
+              }
+              if (i === numCols - 1 && preferredTrailingWidthPx !== null) {
+                return <col key={i} style={{ width: `${preferredTrailingWidthPx}px` }} />;
+              }
               // 列0（欄記号）は全表共通で35px固定
               // 別表第三はrowspanで長文が列0に入るため強制的に35px
               if (i === 0 && (colDataLens[0] <= 4 || isTable3 || isTable4)) {
@@ -561,13 +505,16 @@ export function TableBlock({
                 return <col key={i} style={{ width: "120px" }} />;
               }
               // 残り列はテーブル幅から固定列を引いて比率配分
-              const fixedTotal = ((colDataLens[0] <= 4 || isTable3 || isTable4) ? 35 : 0)
+              const fixedTotal = (preferredLeadingWidthPx ?? ((colDataLens[0] <= 4 || isTable3 || isTable4) ? 35 : 0))
+                + (preferredTrailingWidthPx ?? 0)
                 + (isTable1 && !isMobile && numCols > 2 ? 120 : 0)
                 + (isTable2 && !isMobile && numCols > 1 ? 270 : 0)
                 + (isTable3 && !isMobile && numCols > 4 ? 240 : 0)
                 + (isTable4 && !isMobile ? 265 : 0)
                 + (isTable4 ? 70 : 0);
               const widePcts = colPcts.map((p, j) => {
+                if (j === 0 && preferredLeadingWidthPx !== null) return 0;
+                if (j === numCols - 1 && preferredTrailingWidthPx !== null) return 0;
                 if (j === 0 && (colDataLens[0] <= 4 || isTable3 || isTable4)) return 0;
                 if (isTable4 && (j === 2 || j === 5)) return 0;
                 if (isTable4 && !isMobile && (j === 1 || j === 2 || j === 3 || j === 4)) return 0;
@@ -582,11 +529,49 @@ export function TableBlock({
                 <col key={i} style={{ width: `calc((100% - ${fixedTotal}px) * ${ratio})` }} />
               );
             });
-          })()}
+            })()}
         </colgroup>
+        {headerRow && (
+          <thead>
+            <tr
+              id={fullLawAnchorId(headerRow.row.id)}
+              data-article-id={headerRow.row.id}
+              className="law-table__header-row"
+            >
+              {headerRow.cells.map((td, cellIdx) => {
+                const supplementalLayout = supplementalRoomTypeTableCellLayout({
+                  lawName: tableNode.lawName,
+                  stableNodeKey: tableNode.stableNodeKey,
+                  rows,
+                  rowIndex: 0,
+                  cellIndex: cellIdx,
+                });
+                if (supplementalLayout?.hidden) return null;
+                const style = parseTableCellStyle(td.tableMetadata);
+                const isTable2 = (tableNode.stableNodeKey ?? "").includes("appdx_table:129");
+                const cellClassName = style
+                  ? `law-table__cell ${borderClasses(style)} law-table__cell--body`
+                  : "law-table__cell border border-neutral-400 law-table__cell--body";
+                return (
+                  <td
+                    key={td.id}
+                    id={fullLawAnchorId(td.id)}
+                    data-article-id={td.id}
+                    className={cellClassName}
+                    colSpan={supplementalLayout?.colSpan ?? (style?.colspan && style.colspan > 1 ? style.colspan : undefined)}
+                    rowSpan={supplementalLayout?.rowSpan ?? (style?.rowspan && style.rowspan > 1 ? style.rowspan : undefined)}
+                  >
+                    {td.text && renderTableCellContent(td.text, isTable2)}
+                  </td>
+                );
+              })}
+            </tr>
+          </thead>
+        )}
         <tbody>
-          {rows.map((tr, rowIdx) => {
-            const isHeaderRow = rowIdx < 2;
+          {(useLegacyLawTableLayout ? rows : rows.slice(1)).map((tr, bodyRowIdx) => {
+            const rowIdx = useLegacyLawTableLayout ? bodyRowIdx : bodyRowIdx + 1;
+            const isHeaderRow = useLegacyLawTableLayout && rowIdx < 2;
             return (
             <tr
               id={fullLawAnchorId(tr.row.id)}
@@ -595,24 +580,37 @@ export function TableBlock({
               className={isHeaderRow ? "law-table__header-row" : undefined}
             >
               {tr.cells.map((td, cellIdx) => {
+                const supplementalLayout = supplementalRoomTypeTableCellLayout({
+                  lawName: tableNode.lawName,
+                  stableNodeKey: tableNode.stableNodeKey,
+                  rows,
+                  rowIndex: rowIdx,
+                  cellIndex: cellIdx,
+                });
+                if (supplementalLayout?.hidden) return null;
+
                 const isDataCell = !isHeaderRow;
                 const style = parseTableCellStyle(td.tableMetadata);
                 const cellIsMobile = typeof window !== "undefined" && window.innerWidth <= 640;
                 const trimmedText = (td.text ?? "").trim();
-                // 空セルは幅を最小限に圧縮する。
                 const isEmptyCell = trimmedText === "";
+                const columnKind = tableLayout.columns[cellIdx]?.kind ?? "body";
                 // 数値セル判定（括弧前改行の適用条件でも使用）
                 const hasRefText = trimmedText.includes("項") || trimmedText.includes("号");
                 // 別表第二（appdx_table:129）のセルは本文テキストを含むため数値判定から除外
                 const isTable2 = (tableNode.stableNodeKey ?? "").includes("appdx_table:129");
                 const isNumeric = !hasRefText && !isTable2 && (
-                  /[０-９0-9㎡²%]/.test(trimmedText) ||
-                  trimmedText.includes("平方メートル") ||
-                  trimmedText.includes("立方メートル") ||
-                  trimmedText.includes("キロワット") ||
-                  trimmedText.includes("時間") ||
-                  /^[一二三四五六七八九十百千万・]+メートル$/.test(trimmedText) ||
-                  /^[一二三四五六七八九十百千万・]+メートル以上$/.test(trimmedText)
+                  useLegacyLawTableLayout
+                    ? (
+                      /[０-９0-9㎡²%]/.test(trimmedText) ||
+                      trimmedText.includes("平方メートル") ||
+                      trimmedText.includes("立方メートル") ||
+                      trimmedText.includes("キロワット") ||
+                      trimmedText.includes("時間") ||
+                      /^[一二三四五六七八九十百千万・]+メートル$/.test(trimmedText) ||
+                      /^[一二三四五六七八九十百千万・]+メートル以上$/.test(trimmedText)
+                    )
+                    : columnKind === "numeric"
                 );
                 // テキスト内に改行（\n）を含むセルは pre-line で改行を保持。
                 const hasLineBreaks = (td.text ?? "").includes("\n") || (isNumeric && cellIsMobile);
@@ -625,7 +623,9 @@ export function TableBlock({
                   trimmedText.length <= 10 &&
                   !trimmedText.includes("\n");
                 // セルの水平配置をテキスト内容で判定
-                const isSymbol = /^[（(].+[）)]$/.test(trimmedText) || trimmedText.length <= 4;
+                const isSymbol = useLegacyLawTableLayout
+                  ? /^[（(].+[）)]$/.test(trimmedText) || trimmedText.length <= 4
+                  : columnKind === "symbol";
                 // 「階」を含む短いテキスト（三階以上の階 等）は中央揃え
                 // ※データ行のみ適用（ヘッダー行は除外）
                 // 「階」判定は先頭行のみ（長文の途中に「階」が含まれていても無視）
@@ -633,7 +633,13 @@ export function TableBlock({
                 const isFloorText = isDataCell && firstLine.includes("階") && !isNumeric && firstLine.length <= 10;
                 const shouldCenter = isSymbol || isFloorText;
                 // 数値セルは右揃え、欄記号は中央、本文は左揃え
-                const cellAlign = isNumeric ? "text-right" : shouldCenter ? "text-center" : "text-left";
+                const cellAlign = supplementalLayout?.textAlign === "center"
+                  ? "text-center"
+                  : isNumeric
+                    ? "text-right"
+                    : shouldCenter
+                      ? "text-center"
+                      : "text-left";
                 // 別表第二の列1は左揃え・上下中央
                 const isTable2Col1 = (tableNode.stableNodeKey ?? "").includes("appdx_table:129") && cellIdx === 1;
                 // 別表第三・別表第四は全セル上下中央（rowspan構造のためcellIdxが信頼できない）
@@ -650,20 +656,20 @@ export function TableBlock({
                   : isEmptyCell
                     ? " law-table__cell--empty"
                     : ` ${cellVAlign} ${cellAlign}${indentClass}`;
+                const roleClass = ` law-table__cell--${columnKind}`;
+                const legacyCellClass = ` px-2 py-1.5 leading-relaxed${preLine}${cellModifier}`;
                 const cellClassName = style
-                  ? `law-table__cell ${borderClasses(style)} px-2 py-1.5 leading-relaxed${preLine}${cellModifier}`
-                  : `law-table__cell border border-neutral-400 px-2 py-1.5 leading-relaxed${preLine}${cellModifier}`;
+                  ? `law-table__cell ${borderClasses(style)}${useLegacyLawTableLayout ? legacyCellClass : `${roleClass}${preLine}${cellModifier}`}`
+                  : `law-table__cell border border-neutral-400${useLegacyLawTableLayout ? legacyCellClass : `${roleClass}${preLine}${cellModifier}`}`;
                 return (
                   <td
                     key={td.id}
                     id={fullLawAnchorId(td.id)}
                     data-article-id={td.id}
                     className={cellClassName}
-                    colSpan={style?.colspan && style.colspan > 1 ? style.colspan : undefined}
-                    rowSpan={style?.rowspan && style.rowspan > 1 ? style.rowspan : undefined}
-                    style={
-                      isEmptyCell ? { width: "1%" } : undefined
-                    }
+                    colSpan={supplementalLayout?.colSpan ?? (style?.colspan && style.colspan > 1 ? style.colspan : undefined)}
+                    rowSpan={supplementalLayout?.rowSpan ?? (style?.rowspan && style.rowspan > 1 ? style.rowspan : undefined)}
+                    style={useLegacyLawTableLayout && isEmptyCell ? { width: "1%" } : undefined}
                   >
                     {td.text && renderTableCellContent(
                       (() => {
@@ -754,7 +760,7 @@ export function DefinitionNode({
               fontWeight: 600,
             }}
           >
-            {keyword}
+            {renderDisplayTokens(keyword)}
           </strong>
           {/* 定義語の後に全角1字のインデント */}
           <span>{"　"}</span>
