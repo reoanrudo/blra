@@ -19,6 +19,16 @@ export interface TableLayoutCellInput {
   rowspan: number;
 }
 
+/**
+ * 先頭行を thead に置くとき、縦結合セルを同じ行グループ内に保つための
+ * 見出し行数を返す。rowspan は thead と tbody をまたげない。
+ */
+export function getTableHeaderRowCount(rows: TableLayoutCellInput[][]): number {
+  const firstRow = rows[0] ?? [];
+  const rowspan = Math.max(1, ...firstRow.map((cell) => Math.max(1, cell.rowspan)));
+  return Math.min(rows.length, rowspan);
+}
+
 const LEGACY_TABLE_LAW_NAMES = new Set([
   "建築基準法",
   "建築基準法施行令",

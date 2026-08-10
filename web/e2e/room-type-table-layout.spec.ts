@@ -97,6 +97,20 @@ test("第20条の7の換気回数表でDBのセル結合情報を表示する", 
   ]);
 });
 
+test("第32条の縦結合見出しは同じthead内に置き、セルを欠損させない", async ({ page }) => {
+  await page.goto("/articles/art_325co0000000338_20260101_000554");
+  await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+  const table = page.locator("table.law-table").filter({
+    hasText: "尿浄化槽又は合併処理浄化槽を設ける区域",
+  }).first();
+  await expect(table).toBeVisible();
+
+  await expect(table.locator("thead tr")).toHaveCount(2);
+  await expect(table.locator("thead td[rowspan='2']")).toHaveCount(2);
+  await expect(table.locator("tbody tr").first().locator("td")).toHaveCount(4);
+});
+
 test("法令表を横あふれなしの冊子型組版で表示する", async ({ page }) => {
   await page.goto(`/articles/${ARTICLE_19_ID}`);
   await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
