@@ -318,7 +318,7 @@
   /* 建築基準法・施行令・施行規則の対象表は、従来の列幅・罫線・文字組を維持する。 */
   .law-table-wrapper--legacy {
     margin-block: 1rem;
-    overflow: visible;
+    overflow: clip;
   }
 
   .law-table--legacy {
@@ -343,6 +343,8 @@
 
   .law-table--legacy .law-table__cell--nowrap {
     white-space: nowrap;
+    padding-left: 2px;
+    padding-right: 2px;
   }
 
   .law-table--legacy .law-table__cell--empty {
