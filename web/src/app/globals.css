@@ -207,6 +207,8 @@
 
   .law-table-wrapper {
     break-inside: avoid;
+    margin-block: 0.875rem;
+    overflow: clip;
   }
 
   /* 分数の縦表示（法令集の冊子スタイル）。
@@ -239,40 +241,59 @@
     font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
     table-layout: fixed;
     width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: 1px solid #4a4742;
+    color: #25231f;
+    font-size: 0.8125rem;
+    line-height: 1.55;
   }
 
   .law-table__cell {
-    font-size: 13px;
-    /* 広幅テーブルのセル内で文字を折り返す。 */
-    word-break: break-word;
-    overflow-wrap: break-word;
+    padding: 0.35rem 0.45rem;
+    font-size: inherit;
+    overflow-wrap: anywhere;
+    word-break: normal;
   }
 
-  /* スマホは文字サイズ・列幅ともに比率で縮小 */
+  .law-table__header-row .law-table__cell {
+    border-bottom: 1px solid #a3a3a3;
+  }
+
+  .law-table__cell--symbol {
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .law-table__cell--numeric {
+    text-align: right;
+    vertical-align: middle;
+  }
+
+  .law-table__cell--body {
+    text-align: left;
+    vertical-align: top;
+  }
+
   @media (max-width: 640px) {
     .law-table__cell {
-      font-size: 11px;
-    }
-  }
-  @media (max-width: 480px) {
-    .law-table__cell {
-      font-size: 9px;
+      padding: 0.3rem;
+      font-size: 12px;
     }
   }
 
   /* 短い見出しセル（「（い）」「三階以上の階」等）は折り返さない。
      列幅はcolgroupで制御するため、ここでは幅指定しない。 */
   .law-table__cell--nowrap {
-    white-space: nowrap;
+    white-space: normal;
     text-align: center;
     vertical-align: middle;
   }
 
-  /* 空セルは幅を最小限に圧縮する（表の余白をなくす）。 */
+  /* 空セルの列幅はcolgroupの配分に従う。 */
   .law-table__cell--empty {
-    width: 1%;
-    padding-left: 2px;
-    padding-right: 2px;
+    padding: 0.35rem 0.45rem;
   }
 
   /* テキスト内の改行（\n）を保持して表示する。
@@ -289,23 +310,61 @@
     text-indent: -1em;
   }
 
-  /* ヘッダー行のセル（colspanなし、例「割合」）。字間1em。 */
-  .law-table__cell--header {
-    letter-spacing: 1em;
-    text-indent: 1em;
-  }
-
-  /* ヘッダー行のセル（colspanあり、例「居室の種類」）。字間2em。 */
-  .law-table__cell--header-wide {
-    letter-spacing: 2em;
-    text-indent: 2em;
-  }
-
-  /* 分数セル。padding を削って最小幅にする。 */
+  /* 分数セルは列幅に従って中央へ収める。 */
   .law-table__cell--fraction {
+    text-align: center;
+  }
+
+  /* 建築基準法・施行令・施行規則の対象表は、従来の列幅・罫線・文字組を維持する。 */
+  .law-table-wrapper--legacy {
+    margin-block: 1rem;
+    overflow: visible;
+  }
+
+  .law-table--legacy {
+    border: 0;
+    color: inherit;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .law-table--legacy .law-table__cell {
+    padding: 0.375rem 0.5rem;
+    font-size: 13px;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .law-table--legacy .law-table__header-row .law-table__cell {
+    background: transparent;
+    border-bottom: 1px solid #a3a3a3;
+    font-weight: inherit;
+  }
+
+  .law-table--legacy .law-table__cell--nowrap {
+    white-space: nowrap;
+  }
+
+  .law-table--legacy .law-table__cell--empty {
     padding-left: 2px;
     padding-right: 2px;
-    text-align: center;
+  }
+
+  .law-table--legacy .law-table__cell--fraction {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 640px) {
+    .law-table--legacy .law-table__cell {
+      font-size: 11px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .law-table--legacy .law-table__cell {
+      font-size: 9px;
+    }
   }
 
   /* 列説明ヘッダー行（2行目）のうち、短い見出しセル
@@ -453,5 +512,36 @@
   .law-article-caption a {
     color: inherit;
     text-decoration: none;
+  }
+
+  [data-full-law-ready="true"][data-print-current-article="true"] > :not([data-print-current="true"]) {
+    display: none !important;
+  }
+
+  [data-full-law-ready="true"][data-print-current-article="true"] > [data-print-current="true"] {
+    display: block !important;
+  }
+
+  [data-full-law-ready="true"][data-print-current-article="true"] .chapter-scroll-separator {
+    display: none !important;
+  }
+
+  .law-table-wrapper {
+    overflow: visible !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .law-table {
+    break-inside: auto;
+  }
+
+  .law-table thead {
+    display: table-header-group;
+  }
+
+  .law-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
