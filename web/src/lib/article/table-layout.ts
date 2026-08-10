@@ -26,6 +26,8 @@ const LEGACY_TABLE_LAW_NAMES = new Set([
   "建築基準法に基づく指定建築基準適合判定資格者検定機関等に関する省令",
 ]);
 
+const TABLE_NODE_KEY_PATTERN = /(?:^|\/)(?:table|appdx_table):[^/]+$/;
+
 export function usesLegacyLawTableLayout({
   lawName,
   stableNodeKey,
@@ -34,7 +36,7 @@ export function usesLegacyLawTableLayout({
   stableNodeKey: string | null;
 }): boolean {
   return (
-    stableNodeKey?.includes("table") === true &&
+    TABLE_NODE_KEY_PATTERN.test(stableNodeKey ?? "") &&
     LEGACY_TABLE_LAW_NAMES.has(lawName)
   );
 }
