@@ -16,6 +16,7 @@ import { fullLawAnchorId } from "@/lib/article/full-law-document";
 import { renderTokenNode, renderTokenNodes } from "@/lib/article/legal-token-renderer";
 import {
   preferredLeadingColumnWidthPx,
+  preferredOrderSymbolColumnWidthPx,
   preferredTrailingColumnWidthPx,
   supplementalRoomTypeTableCellLayout,
 } from "@/lib/article/table-column-width";
@@ -446,6 +447,14 @@ export function TableBlock({
               stableNodeKey: tableNode.stableNodeKey,
               isMobile,
             });
+            const preferredOrderSymbolWidths = Array.from(
+              { length: numCols },
+              (_, index) => preferredOrderSymbolColumnWidthPx({
+                lawName: tableNode.lawName,
+                stableNodeKey: tableNode.stableNodeKey,
+                isSymbolColumn: tableLayout.columns[index]?.kind === "symbol",
+              }),
+            );
             const colPcts: number[] = [];
             if (isTable1 && numCols === 5) {
               colPcts.push(...(isMobile ? [8, 32, 18, 21, 21] : [4, 36, 14, 23, 23]));
@@ -466,6 +475,9 @@ export function TableBlock({
               }
             }
             return colPcts.map((pct, i) => {
+              if (preferredOrderSymbolWidths[i] !== null) {
+                return <col key={i} style={{ width: `${preferredOrderSymbolWidths[i]}px` }} />;
+              }
               if (i === 0 && preferredLeadingWidthPx !== null) {
                 return <col key={i} style={{ width: `${preferredLeadingWidthPx}px` }} />;
               }
@@ -506,7 +518,14 @@ export function TableBlock({
                 return <col key={i} style={{ width: "120px" }} />;
               }
               // 残り列はテーブル幅から固定列を引いて比率配分
-              const fixedTotal = (preferredLeadingWidthPx ?? ((colDataLens[0] <= 4 || isTable3 || isTable4) ? 35 : 0))
+              const orderSymbolFixedTotal = preferredOrderSymbolWidths.reduce<number>(
+                (total, width) => total + (width ?? 0),
+                0,
+              );
+              const fixedTotal = orderSymbolFixedTotal
+                + (preferredOrderSymbolWidths[0] === null
+                  ? (preferredLeadingWidthPx ?? ((colDataLens[0] <= 4 || isTable3 || isTable4) ? 35 : 0))
+                  : 0)
                 + (preferredTrailingWidthPx ?? 0)
                 + (isTable1 && !isMobile && numCols > 2 ? 120 : 0)
                 + (isTable2 && !isMobile && numCols > 1 ? 270 : 0)
@@ -514,6 +533,7 @@ export function TableBlock({
                 + (isTable4 && !isMobile ? 265 : 0)
                 + (isTable4 ? 70 : 0);
               const widePcts = colPcts.map((p, j) => {
+                if (preferredOrderSymbolWidths[j] !== null) return 0;
                 if (j === 0 && preferredLeadingWidthPx !== null) return 0;
                 if (j === numCols - 1 && preferredTrailingWidthPx !== null) return 0;
                 if (j === 0 && (colDataLens[0] <= 4 || isTable3 || isTable4)) return 0;
