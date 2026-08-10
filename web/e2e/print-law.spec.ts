@@ -29,6 +29,53 @@ test.describe("法令全文印刷", () => {
   });
 
   test("印刷時は操作UIを隠し法令の末尾まで出力対象にする", async ({ page }) => {
+  for (const [label, articleId] of [
+    ["施行令第82条", "art_325co0000000338_20260101_000945"],
+    ["施行規則本文表", "art_325m50004000040_20260101_000015"],
+    ["指定検定機関等省令第16条", "art_411m50004000013_20260101_000143"],
+  ] as const) {
+    test(`${label} は表を含めて現在の条文だけを印刷する`, async ({ page }) => {
+      await page.goto(`/articles/${articleId}`);
+      await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+      await page.evaluate((id) => {
+        document
+          .querySelector("[data-full-law-ready='true']")
+          ?.setAttribute("data-print-current-article", "true");
+        document
+          .querySelector(`[data-print-article-id="${id}"]`)
+          ?.setAttribute("data-print-current", "true");
+      }, articleId);
+      await page.emulateMedia({ media: "print" });
+
+      const target = page.locator(`[data-print-article-id="${articleId}"]`);
+      const tables = target.locator(".law-table-wrapper");
+      const tableDisplays = await tables.evaluateAll((elements) =>
+        elements.map((element) => getComputedStyle(element).display),
+      );
+      expect(tableDisplays.length).toBeGreaterThan(0);
+      expect(tableDisplays).not.toContain("none");
+
+      const headers = target.locator("thead");
+      const headerDisplays = await headers.evaluateAll((elements) =>
+        elements.map((element) => getComputedStyle(element).display),
+      );
+      expect(headerDisplays.length).toBeGreaterThan(0);
+      expect(
+        headerDisplays.every((display) => display === "table-header-group"),
+      ).toBe(true);
+
+      const otherArticles = page.locator(
+        `[data-print-article-id]:not([data-print-article-id="${articleId}"])`,
+      );
+      const visibleOtherArticleIds = await otherArticles.evaluateAll((elements) =>
+        elements
+          .filter((element) => getComputedStyle(element).display !== "none")
+          .map((element) => element.getAttribute("data-print-article-id")),
+      );
+      expect(visibleOtherArticleIds).toEqual([]);
+    });
+  }
     await page.route("**/api/law-revisions/*/confirmed-relations", async (route) => {
       const revisionId = new URL(route.request().url()).pathname.split("/").at(-2);
       if (!revisionId) throw new Error("法令改正IDを取得できません");

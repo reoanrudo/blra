@@ -364,7 +364,7 @@ export function TableBlock({
     stableNodeKey: tableNode.stableNodeKey,
   });
   const useBalancedLayout = !useLegacyLawTableLayout;
-  const headerRow = useBalancedLayout ? rows[0] : undefined;
+  const headerRow = rows[0];
 
   return (
     <div
@@ -549,9 +549,34 @@ export function TableBlock({
                 if (supplementalLayout?.hidden) return null;
                 const style = parseTableCellStyle(td.tableMetadata);
                 const isTable2 = (tableNode.stableNodeKey ?? "").includes("appdx_table:129");
+                const trimmedText = (td.text ?? "").trim();
+                const isEmptyCell = trimmedText === "";
+                const hasRefText = trimmedText.includes("項") || trimmedText.includes("号");
+                const isNumeric = useLegacyLawTableLayout && !hasRefText && !isTable2 && (
+                  /[０-９0-9㎡²%]/.test(trimmedText) ||
+                  trimmedText.includes("平方メートル") ||
+                  trimmedText.includes("立方メートル") ||
+                  trimmedText.includes("キロワット") ||
+                  trimmedText.includes("時間") ||
+                  /^[一二三四五六七八九十百千万・]+メートル$/.test(trimmedText) ||
+                  /^[一二三四五六七八九十百千万・]+メートル以上$/.test(trimmedText)
+                );
+                const isSymbol = useLegacyLawTableLayout && (
+                  /^[（(].+[）)]$/.test(trimmedText) || trimmedText.length <= 4
+                );
+                const cellAlign = supplementalLayout?.textAlign === "center"
+                  ? "text-center"
+                  : isNumeric
+                    ? "text-right"
+                    : isSymbol
+                      ? "text-center"
+                      : "text-left";
+                const legacyCellClass = isEmptyCell
+                  ? " px-2 py-1.5 leading-relaxed law-table__cell--empty"
+                  : ` px-2 py-1.5 leading-relaxed align-middle ${cellAlign}`;
                 const cellClassName = style
-                  ? `law-table__cell ${borderClasses(style)} law-table__cell--body`
-                  : "law-table__cell border border-neutral-400 law-table__cell--body";
+                  ? `law-table__cell ${borderClasses(style)}${useLegacyLawTableLayout ? legacyCellClass : " law-table__cell--body"}`
+                  : `law-table__cell border border-neutral-400${useLegacyLawTableLayout ? legacyCellClass : " law-table__cell--body"}`;
                 return (
                   <td
                     key={td.id}
@@ -560,8 +585,14 @@ export function TableBlock({
                     className={cellClassName}
                     colSpan={supplementalLayout?.colSpan ?? (style?.colspan && style.colspan > 1 ? style.colspan : undefined)}
                     rowSpan={supplementalLayout?.rowSpan ?? (style?.rowspan && style.rowspan > 1 ? style.rowspan : undefined)}
+                    style={useLegacyLawTableLayout && isEmptyCell ? { width: "1%" } : undefined}
                   >
-                    {td.text && renderTableCellContent(td.text, isTable2)}
+                    {td.text && renderTableCellContent(
+                      isNumeric && typeof window !== "undefined" && window.innerWidth <= 640
+                        ? td.text.replace(/（/g, "\n（").replace(/）/g, "）\n")
+                        : td.text,
+                      isTable2,
+                    )}
                   </td>
                 );
               })}
@@ -569,8 +600,8 @@ export function TableBlock({
           </thead>
         )}
         <tbody>
-          {(useLegacyLawTableLayout ? rows : rows.slice(1)).map((tr, bodyRowIdx) => {
-            const rowIdx = useLegacyLawTableLayout ? bodyRowIdx : bodyRowIdx + 1;
+          {rows.slice(1).map((tr, bodyRowIdx) => {
+            const rowIdx = bodyRowIdx + 1;
             const isHeaderRow = useLegacyLawTableLayout && rowIdx < 2;
             return (
             <tr
