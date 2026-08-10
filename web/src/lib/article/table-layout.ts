@@ -19,6 +19,13 @@ export interface TableLayoutCellInput {
   rowspan: number;
 }
 
+const LEGACY_TABLE_LAW_NAMES = new Set([
+  "建築基準法",
+  "建築基準法施行令",
+  "建築基準法施行規則",
+  "建築基準法に基づく指定建築基準適合判定資格者検定機関等に関する省令",
+]);
+
 export function usesLegacyLawTableLayout({
   lawName,
   stableNodeKey,
@@ -26,8 +33,10 @@ export function usesLegacyLawTableLayout({
   lawName: string;
   stableNodeKey: string | null;
 }): boolean {
-  if (!stableNodeKey?.includes("table")) return false;
-  return ["建築基準法", "建築基準法施行令", "建築基準法施行規則"].includes(lawName);
+  return (
+    stableNodeKey?.includes("table") === true &&
+    LEGACY_TABLE_LAW_NAMES.has(lawName)
+  );
 }
 
 const SYMBOL_PATTERN = /^[（(][^（）()]{1,8}[）)]$/;
