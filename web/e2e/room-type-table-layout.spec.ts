@@ -186,6 +186,8 @@ for (const [label, articleId] of [
     await page.setViewportSize({ width: 480, height: 900 });
     await page.goto(`/articles/${articleId}`);
     await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+    const tables = page.locator("table.law-table");
+    await expect(tables.first()).toBeVisible();
 
     const invalid = await page.locator(".law-table-wrapper").evaluateAll((wrappers) =>
       wrappers.flatMap((wrapper, index) => {
