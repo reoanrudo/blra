@@ -62,7 +62,7 @@ describe("usesLegacyLawTableLayout", () => {
     ["建築基準法", "root/appdx_table:128@128", true],
     ["建築基準法施行令", "root/article:19@1/table:1@1", true],
     ["建築基準法施行規則", "root/appdx_table:1@1", true],
-    ["消防法施行令", "root/appdx_table:1@1", false],
+    ["消防法施行令", "root/appdx_table:1@1/table:1@1", false],
   ])("%s の表は旧レイアウトか", (lawName, stableNodeKey, expected) => {
     expect(usesLegacyLawTableLayout({ lawName, stableNodeKey })).toBe(expected);
   });
