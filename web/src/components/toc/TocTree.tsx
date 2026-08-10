@@ -12,8 +12,10 @@ import { useScrollActiveArticle } from "@/contexts/ScrollActiveArticleContext";
 import { useScrollContainer } from "@/contexts/ScrollContainerContext";
 import TocTreeNode from "./TocTreeNode";
 
-/** クリックジャンプ時の上部オフセット（固定ヘッダ回避・scroll-mt-20 に相当） */
-const SCROLL_OFFSET_PX = 80;
+/** クリックジャンプ時の上部オフセット。
+ * <main> は <nav> の下にあり自前スクロールするため、
+ * オフセット0で条文を <main> の最上部（nav直下）にピッタリ表示する。 */
+const SCROLL_OFFSET_PX = 0;
 
 /** 通常状態の className（isCurrent/isAncestor でないノード） */
 const TOC_NODE_CLASS_NORMAL =

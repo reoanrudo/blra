@@ -12,7 +12,7 @@ import { renderLinkSegments, renderToElements } from "@/lib/link/link-renderer";
 import { formatLegalText } from "@/lib/article/legal-display-format";
 import { formatStructuredNumber } from "@/lib/article/legal-number-format";
 import { formatRawTableCellText } from "@/lib/article/raw-table-text-format";
-import { splitArithFormulaLayout } from "@/lib/article/arith-formula-layout";
+import { splitArithFormulaLayout, splitFormulaFraction } from "@/lib/article/arith-formula-layout";
 import { fullLawAnchorId } from "@/lib/article/full-law-document";
 import { renderTokenNode, renderTokenNodes } from "@/lib/article/legal-token-renderer";
 import {
@@ -101,9 +101,87 @@ function renderDisplayTokens(text: string, textOffset: number = 0): ReactNode {
   return renderTokenNodes(tokens, "tok", textOffset);
 }
 
+/**
+ * 算術式テキスト内の `_`（下付き文字マーカー）と `^`（上付き文字マーカー）と
+ * `√`（平方根）を変換して描画する。
+ *
+ * 法令XMLの `<Sub>` はパース時に `_` に、`<Sup>` は `^` に変換されている。
+ * 例: "Ａ_ｆ" → A + <sub>f</sub>
+ *
+ * √記号に続く文字（例: √ｈ）は、上線（overline）で覆った平方根として描画する。
+ * 例: "√ｈ" → √<span style="overline">ｈ</span>
+ *
+ * ハイライトの座標（data-source-start/end）は元テキストの _ 含む位置を維持する。
+ */
+function renderSubSup(text: string, textOffset: number, keyPrefix: string): ReactNode {
+  // _ または ^ または √ で分割
+  const parts = text.split(/([_^√])/);
+  if (parts.length <= 1) {
+    return renderDisplayTokens(text, textOffset);
+  }
+
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let i = 0;
+  while (i < parts.length) {
+    const part = parts[i]!;
+    if (part === "_" || part === "^") {
+      // 次のパートが下付き/上付き文字の内容
+      const content = parts[i + 1] ?? "";
+      const start = textOffset + cursor;
+      const end = start + 1 + content.length; // _ または ^ + content
+      const Tag = part === "_" ? "sub" : "sup";
+      nodes.push(
+        <Tag
+          key={`${keyPrefix}-ss-${i}`}
+          data-source-start={start}
+          data-source-end={end}
+          className="law-arith-formula__subsup"
+        >
+          {content}
+        </Tag>,
+      );
+      cursor += 1 + content.length;
+      i += 2;
+    } else if (part === "√") {
+      // √ に続く次のパートが平方根の中身
+      const content = parts[i + 1] ?? "";
+      const start = textOffset + cursor;
+      const end = start + 1 + content.length; // √ + content
+      nodes.push(
+        <span
+          key={`${keyPrefix}-sqrt-${i}`}
+          data-source-start={start}
+          data-source-end={end}
+          className="law-arith-formula__sqrt"
+        >
+          <span className="law-arith-formula__sqrt-sign">√</span>
+          <span className="law-arith-formula__sqrt-radical">{content}</span>
+        </span>,
+      );
+      cursor += 1 + content.length;
+      i += 2;
+    } else if (part.length > 0) {
+      const start = textOffset + cursor;
+      nodes.push(
+        <span key={`${keyPrefix}-plain-${i}`} data-source-start={start} data-source-end={start + part.length}>
+          {renderDisplayTokens(part, start)}
+        </span>,
+      );
+      cursor += part.length;
+      i += 1;
+    } else {
+      i += 1;
+    }
+  }
+  return <>{nodes}</>;
+}
+
 function renderArithFormula(text: string): ReactNode | null {
   const layout = splitArithFormulaLayout(text);
   if (!layout) return null;
+
+  const fraction = splitFormulaFraction(layout.formula);
 
   return (
     <span className="law-arith-formula">
@@ -111,7 +189,22 @@ function renderArithFormula(text: string): ReactNode | null {
         {renderDisplayTokens(layout.introduction, layout.introductionStart)}
       </span>
       <span className="law-arith-formula__expression">
-        {renderDisplayTokens(layout.formula, layout.formulaStart)}
+        {fraction ? (
+          <>
+            {renderSubSup(fraction.leftSide, layout.formulaStart, "lhs")}
+            <span className="law-arith-formula__eq">＝</span>
+            <span className="law-arith-fraction">
+              <span className="law-arith-fraction__num">
+                {renderSubSup(fraction.numerator, layout.formulaStart + fraction.leftSide.length + 1, "num")}
+              </span>
+              <span className="law-arith-fraction__denom">
+                {renderSubSup(fraction.denominator, layout.formulaStart + fraction.leftSide.length + 1 + fraction.numerator.length + 1, "den")}
+              </span>
+            </span>
+          </>
+        ) : (
+          renderSubSup(layout.formula, layout.formulaStart, "formula")
+        )}
       </span>
       <span className="law-arith-formula__definitions">
         <span className="law-arith-formula__definitions-text">
