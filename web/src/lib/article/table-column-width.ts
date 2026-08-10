@@ -4,6 +4,12 @@ interface PreferredLeadingColumnWidthInput {
   isMobile: boolean;
 }
 
+interface PreferredOrderSymbolColumnWidthInput {
+  lawName: string;
+  stableNodeKey: string | null;
+  isSymbolColumn: boolean;
+}
+
 interface TableTextRow {
   cells: { text: string | null }[];
 }
@@ -25,6 +31,8 @@ export interface SupplementalTableCellLayout {
 
 const BUILDING_CODE_ORDER_ARTICLE_19_ROOM_TYPE_TABLE =
   "root/chapter:2@2/section:1@1/article:19@1/paragraph:3@3/table_struct:1@1/table:1@1";
+
+const TABLE_NODE_KEY_PATTERN = /(?:^|\/)(?:table|appdx_table):[^/]+$/;
 
 function isBuildingCodeOrderArticle19RoomTypeTable(
   lawName: string,
@@ -58,6 +66,26 @@ export function preferredTrailingColumnWidthPx({
 }: PreferredLeadingColumnWidthInput): number | null {
   if (isBuildingCodeOrderArticle19RoomTypeTable(lawName, stableNodeKey)) {
     return 70;
+  }
+
+  return null;
+}
+
+/**
+ * 施行令の「（1）」「（2）」等の欄記号だけを、全表で一定幅にする。
+ * 説明文が短いだけの列や、建築基準法・施行規則の列幅には適用しない。
+ */
+export function preferredOrderSymbolColumnWidthPx({
+  lawName,
+  stableNodeKey,
+  isSymbolColumn,
+}: PreferredOrderSymbolColumnWidthInput): number | null {
+  if (
+    lawName === "建築基準法施行令" &&
+    TABLE_NODE_KEY_PATTERN.test(stableNodeKey ?? "") &&
+    isSymbolColumn
+  ) {
+    return 35;
   }
 
   return null;

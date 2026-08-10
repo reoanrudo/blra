@@ -65,6 +65,19 @@ test("第19条の居室種類表で見出しと割合を正しい列へ結合す
   expect(layout.middleColumnWidth).toBeGreaterThan((layout.lastColumnWidth ?? 0) * 1.5);
 });
 
+test("施行令の（1）（2）欄は35pxで、説明列を圧迫しない", async ({ page }) => {
+  await page.goto(`/articles/${ARTICLE_19_ID}`);
+  await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+  const table = page.locator("table.law-table").filter({ hasText: "居室の種類" }).first();
+  const widths = await table.locator("col").evaluateAll((columns) =>
+    columns.map((column) => Math.round(column.getBoundingClientRect().width)),
+  );
+
+  expect(widths[0]).toBe(35);
+  expect(widths[1]).toBeGreaterThan(widths[0]);
+});
+
 test("第20条の7の換気回数表でDBのセル結合情報を表示する", async ({ page }) => {
   await page.goto(`/articles/${ARTICLE_20_7_ID}`);
   await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
