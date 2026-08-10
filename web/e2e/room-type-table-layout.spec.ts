@@ -2,6 +2,8 @@ import { expect, test } from "./fixtures";
 
 const ARTICLE_19_ID = "art_325co0000000338_20260101_000225";
 const ARTICLE_20_7_ID = "art_325co0000000338_20260101_000370";
+const REGULATION_BODY_TABLE_ARTICLE_ID = "art_325m50004000040_20260101_000015";
+const REGULATION_APPENDIX_TABLE_ARTICLE_ID = "art_325m50004000040_20260101_014122";
 
 test("建築基準法施行令の表は別表と同じ旧レイアウトを使う", async ({ page }) => {
   await page.goto("/articles/art_325co0000000338_20260101_000019");
@@ -125,21 +127,53 @@ for (const articleId of [
   "art_325co0000000338_20260101_000554",
   "art_325co0000000338_20260101_000945",
 ]) {
-  test(`${articleId} の全表に旧レイアウトを適用する`, async ({ page }) => {
+  test(`${articleId} の全表に旧レイアウトを適用し、横あふれを出さない`, async ({ page }) => {
     await page.goto(`/articles/${articleId}`);
     await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
 
-    const nonLegacyTables = await page
+    const invalidTables = await page
       .locator("table.law-table")
       .evaluateAll((tables) =>
         tables
           .map((table, index) => ({
             index,
             usesLegacyLayout: table.classList.contains("law-table--legacy"),
+            scrollWidth: table.scrollWidth,
+            clientWidth: table.clientWidth,
           }))
-          .filter((table) => !table.usesLegacyLayout),
+          .filter((table) =>
+            !table.usesLegacyLayout || table.scrollWidth > table.clientWidth,
+          ),
       );
 
-    expect(nonLegacyTables).toEqual([]);
+    expect(invalidTables).toEqual([]);
+  });
+}
+
+for (const [label, articleId] of [
+  ["本文表", REGULATION_BODY_TABLE_ARTICLE_ID],
+  ["別表", REGULATION_APPENDIX_TABLE_ARTICLE_ID],
+] as const) {
+  test(`建築基準法施行規則の${label}は旧レイアウトで横あふれを出さない`, async ({ page }) => {
+    await page.goto(`/articles/${articleId}`);
+    await expect(page.locator('[data-full-law-ready="true"]')).toBeVisible();
+
+    const tables = page.locator("table.law-table");
+    await expect(tables.first()).toBeVisible();
+
+    const invalidTables = await tables.evaluateAll((elements) =>
+      elements
+        .map((table, index) => ({
+          index,
+          usesLegacyLayout: table.classList.contains("law-table--legacy"),
+          scrollWidth: table.scrollWidth,
+          clientWidth: table.clientWidth,
+        }))
+        .filter((table) =>
+          !table.usesLegacyLayout || table.scrollWidth > table.clientWidth,
+        ),
+    );
+
+    expect(invalidTables).toEqual([]);
   });
 }

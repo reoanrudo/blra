@@ -615,17 +615,23 @@ export function TableBlock({
                 // テキスト内に改行（\n）を含むセルは pre-line で改行を保持。
                 const hasLineBreaks = (td.text ?? "").includes("\n") || (isNumeric && cellIsMobile);
                 const preLine = hasLineBreaks ? " whitespace-pre-line" : "";
-                // 改行なし・10文字以内のテキスト（「（い）」「三階以上の階」等）は
-                // 折り返さず1行で収める。
-                const isNoWrap =
-                  isDataCell &&
-                  trimmedText !== "" &&
-                  trimmedText.length <= 10 &&
-                  !trimmedText.includes("\n");
                 // セルの水平配置をテキスト内容で判定
                 const isSymbol = useLegacyLawTableLayout
                   ? /^[（(].+[）)]$/.test(trimmedText) || trimmedText.length <= 4
                   : columnKind === "symbol";
+                // 旧レイアウトは幅の狭い列で本文・数値セルが表の横幅を
+                // 押し広げないよう、短い括弧付き欄記号だけを非折返しにする。
+                // 対象外の法令表は従来どおり短いテキストを1行に保つ。
+                const isNoWrap = useLegacyLawTableLayout
+                  ? isDataCell &&
+                    trimmedText !== "" &&
+                    /^[（(].+[）)]$/.test(trimmedText) &&
+                    trimmedText.length <= 4 &&
+                    !trimmedText.includes("\n")
+                  : isDataCell &&
+                    trimmedText !== "" &&
+                    trimmedText.length <= 10 &&
+                    !trimmedText.includes("\n");
                 // 「階」を含む短いテキスト（三階以上の階 等）は中央揃え
                 // ※データ行のみ適用（ヘッダー行は除外）
                 // 「階」判定は先頭行のみ（長文の途中に「階」が含まれていても無視）
