@@ -108,8 +108,8 @@ function renderDisplayTokens(text: string, textOffset: number = 0): ReactNode {
  * 法令XMLの `<Sub>` はパース時に `_` に、`<Sup>` は `^` に変換されている。
  * 例: "Ａ_ｆ" → A + <sub>f</sub>
  *
- * √記号に続く文字（例: √ｈ）は、上線（overline）で覆った平方根として描画する。
- * 例: "√ｈ" → √<span style="overline">ｈ</span>
+ * √記号に続く文字（例: √ｈ）は、√記号の右上に上線を引いて覆う。
+ * √記号と上線は隙間なくくっつけて描画する。
  *
  * ハイライトの座標（data-source-start/end）は元テキストの _ 含む位置を維持する。
  */

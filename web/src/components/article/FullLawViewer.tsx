@@ -40,7 +40,8 @@ function FullLawViewerImpl({
   )?.article.root.id;
 
   const mainRef = useScrollContainer();
-  const { registerScrollContainer } = useScrollActiveArticle() ?? {};
+  const { registerScrollContainer, suppressScrollSyncOneFrame, activateArticle } =
+    useScrollActiveArticle() ?? {};
 
   // スクロールコンテナ（<main>）を登録し、scroll ベースのハイライト追従を有効化。
   // FullLawViewer は全文を一度に描画するため、章スクロールとは異なり
@@ -66,20 +67,34 @@ function FullLawViewerImpl({
   // リロード時に targetArticleId（URLのarticleId）に対応する条文へスクロール。
   // scroll-spy が DOM 描画完了後に最新の activeArticleId を URL に反映しているので、
   // リロード時は必ず URL の articleId = 最後に見ていた条文になる。
-  // useLayoutEffect → rAF の2段階で、DOM描画完了を待ってから scrollIntoView する。
+  //
+  // scrollIntoView ではなく scrollTop を直接設定する：
+  // useLayoutEffect（ペイント前）の段階でスクロール位置を確定できるため、
+  // リロード時に第一条が一瞬表示されるフラッシュを防げる。
+  //
+  // URL がターゲット条文からズレるのを防ぐ3つの対策：
+  // 1. suppressScrollSyncOneFrame で scroll イベントによる scroll-spy を一時停止
+  // 2. activateArticle でターゲット条文をアクティブ固定（ScrollUrlSync が URL を維持）
+  // 3. computeActiveFor の `<=` 比較で triggerY と同じ位置のセンチネルを「越えていない」と扱う
   useLayoutEffect(() => {
     const scrollToArticle = () => {
+      const container = mainRef?.current;
       const el = window.document.querySelector<HTMLElement>(
         fullLawTargetSelector(targetArticleId),
       );
-      if (el) {
-        el.scrollIntoView({ block: "start" });
+      if (container && el) {
+        suppressScrollSyncOneFrame?.();
+        // scrollTop 直接設定：ターゲット条文を <main> の最上部にピッタリ表示
+        const containerTop = container.getBoundingClientRect().top;
+        const elTop = el.getBoundingClientRect().top;
+        container.scrollTop += elTop - containerTop;
+        activateArticle?.(targetArticleId);
       }
     };
-    // 同期的に1回 + rAF で1回（レイアウト確定後）
+    // 同期的に1回（ペイント前にスクロール位置を確定）+ rAF で1回（レイアウト確定後の微調整）
     scrollToArticle();
     requestAnimationFrame(scrollToArticle);
-  }, [targetArticleId]);
+  }, [targetArticleId, suppressScrollSyncOneFrame, activateArticle, mainRef]);
 
   return (
     <div data-full-law-ready="true">
