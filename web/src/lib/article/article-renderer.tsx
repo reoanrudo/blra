@@ -177,6 +177,90 @@ function renderSubSup(text: string, textOffset: number, keyPrefix: string): Reac
   return <>{nodes}</>;
 }
 
+/**
+ * 定義部分の単位表記を記号に変換する。
+ * 例: 平方メートル → m²、立方メートル → m³、メートル → m
+ */
+function convertDefinitionUnits(text: string): string {
+  return text
+    .replace(/平方メートル/g, "m\u00b2")
+    .replace(/立方メートル/g, "m\u00b3")
+    .replace(/メートル/g, "m");
+}
+
+/**
+ * 定義部分の各行の変数名（Av、Af、h、V、N等）の後に
+ * 全角スペースでインデントを入れ、変数名と説明を分離する。
+ * 英字＋下付き文字（A_v）、または英字のみ（h）のいずれにも対応。
+ */
+function addDefinitionIndent(text: string): string {
+  // 各行の先頭の変数名（英字＋_1文字、または英字のみ）の後に全角スペース2つを入れる
+  return text.replace(
+    /^([A-Za-zＡ-Ｚａ-ｚ]+(?:_.)?)(?=[^\s\n])/gm,
+    "$1\u3000",
+  );
+}
+
+/**
+ * 定義部分の `_X`（Xは1文字）だけを下付き文字に変換する。
+ * renderSubSup と違い、`_` の後の1文字のみを <sub> にし、
+ * 残りのテキストは通常サイズで表示する。
+ * 定義部分は "Ａ_ｆ居室の床面積…" のように _ の後に長いテキストが続くため、
+ * renderSubSup では全体が小さくなってしまう問題を回避する。
+ *
+ * また、単位表記（平方メートル等）を記号（m²等）に変換し、
+ * 変数名の後に全角スペースでインデントを入れる。
+ */
+function renderDefinitionSub(text: string, textOffset: number, keyPrefix: string): ReactNode {
+  // 単位変換＋インデント挿入を先に行う（文字数が変わるため、textOffset の計算は変換後のテキスト基準）
+  const converted = addDefinitionIndent(convertDefinitionUnits(text));
+
+  const segments: { type: "plain" | "sub"; text: string; len: number }[] = [];
+  let pos = 0;
+
+  while (pos < converted.length) {
+    const idx = converted.indexOf("_", pos);
+    if (idx < 0 || idx + 1 >= converted.length) {
+      if (pos < converted.length) {
+        segments.push({ type: "plain", text: converted.slice(pos), len: converted.length - pos });
+      }
+      break;
+    }
+    if (idx > pos) {
+      segments.push({ type: "plain", text: converted.slice(pos, idx), len: idx - pos });
+    }
+    segments.push({ type: "sub", text: converted[idx + 1]!, len: 2 });
+    pos = idx + 2;
+  }
+
+  if (segments.length === 0 || (segments.length === 1 && segments[0].type === "plain")) {
+    return renderDisplayTokens(converted, textOffset);
+  }
+
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  segments.forEach((seg, i) => {
+    if (seg.type === "sub") {
+      nodes.push(
+        <sub key={`${keyPrefix}-ds-${i}`} className="law-arith-formula__subsup">
+          {seg.text}
+        </sub>,
+      );
+      cursor += seg.len;
+    } else {
+      const start = textOffset + cursor;
+      nodes.push(
+        <span key={`${keyPrefix}-dp-${i}`} data-source-start={start} data-source-end={start + seg.text.length}>
+          {renderDisplayTokens(seg.text, start)}
+        </span>,
+      );
+      cursor += seg.len;
+    }
+  });
+
+  return <>{nodes}</>;
+}
+
 function renderArithFormula(text: string): ReactNode | null {
   const layout = splitArithFormulaLayout(text);
   if (!layout) return null;
@@ -197,6 +281,7 @@ function renderArithFormula(text: string): ReactNode | null {
               <span className="law-arith-fraction__num">
                 {renderSubSup(fraction.numerator, layout.formulaStart + fraction.leftSide.length + 1, "num")}
               </span>
+              <span className="law-arith-fraction__bar" />
               <span className="law-arith-fraction__denom">
                 {renderSubSup(fraction.denominator, layout.formulaStart + fraction.leftSide.length + 1 + fraction.numerator.length + 1, "den")}
               </span>
@@ -208,7 +293,7 @@ function renderArithFormula(text: string): ReactNode | null {
       </span>
       <span className="law-arith-formula__definitions">
         <span className="law-arith-formula__definitions-text">
-          {renderDisplayTokens(layout.definitions, layout.definitionsStart)}
+          {renderDefinitionSub(layout.definitions, layout.definitionsStart, "def")}
         </span>
       </span>
     </span>

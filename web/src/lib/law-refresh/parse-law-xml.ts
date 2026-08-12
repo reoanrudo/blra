@@ -349,18 +349,18 @@ function stripRuby(xml: string): string {
 }
 
 /**
- * fast-xml-parser は preserveOrder: false のとき、算式内の添字・上付き文字を
+ * fast-xml-parser は preserveOrder: false のとき、添字・上付き文字を
  * 本文の末尾へまとめてしまい、位置を復元できない。パース前にプレーンテキストの
- * 表記へ置換して、算式そのものと添字の対応を維持する。
+ * 表記へ置換して、親字と添字の対応を維持する。
+ *
+ * <ArithFormula> 内だけでなく、定義部分（「この式において…」）など
+ * <ArithFormula> の外にある <Sub>/<Sup> も変換する。
+ * 例: Ａ<Sub>ｖ</Sub> → Ａ_ｖ
  */
 function preserveArithFormulaMarkup(xml: string): string {
-  return xml.replace(
-    /<ArithFormula>([\s\S]*?)<\/ArithFormula>/g,
-    (_formula, contents: string) =>
-      `<ArithFormula>${contents
-        .replace(/<Sub>([\s\S]*?)<\/Sub>/g, "_$1")
-        .replace(/<Sup>([\s\S]*?)<\/Sup>/g, "^$1")}</ArithFormula>`,
-  );
+  return xml
+    .replace(/<Sub>([\s\S]*?)<\/Sub>/g, "_$1")
+    .replace(/<Sup>([\s\S]*?)<\/Sup>/g, "^$1");
 }
 
 export function parseLawXml(

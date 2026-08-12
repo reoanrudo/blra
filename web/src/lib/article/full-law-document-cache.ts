@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { getFullLawDocument } from "@/lib/article/full-law-repository";
 import type { FullLawDocument } from "@/lib/article/full-law-document";
+// HMRトリガー用コメント（キャッシュクリア）
 
 /**
  * 法令全文ドキュメントのサーバーサイドメモリキャッシュ。
