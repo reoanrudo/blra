@@ -191,13 +191,16 @@
     border-right: 1px solid currentColor;
     border-radius: 0.6em;
     padding: 0.1em 0.6em;
-    margin: 0.15rem 0 0.25rem 0.7rem;
+    margin: 0.15rem 0 0.25rem 0;
   }
 
   .law-arith-formula__definitions-text {
     display: block;
     min-width: 0;
     white-space: pre-line;
+    /* 定義部分のテキストサイズを周囲と同じに固定し、
+       <sub> 要素のフォントサイズ継承で全体が小さくなるのを防ぐ */
+    font-size: inherit;
   }
 
   .law-node__label {
@@ -293,13 +296,15 @@
   }
   .law-arith-fraction__num {
     text-align: center;
-    padding-bottom: 0.15em;
+    padding-bottom: 1px;
+  }
+  .law-arith-fraction__bar {
+    width: 100%;
+    border-top: 1px solid currentColor;
   }
   .law-arith-fraction__denom {
     text-align: center;
-    padding-top: 2px;
-    border-top: 1px solid currentColor;
-    margin-top: 2px;
+    padding-top: 1px;
   }
 
   /* 算術式の下付き文字（_マーカー → <sub>）・上付き文字（^マーカー → <sup>）。

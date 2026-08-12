@@ -96,6 +96,14 @@ function FullLawViewerImpl({
     requestAnimationFrame(scrollToArticle);
   }, [targetArticleId, suppressScrollSyncOneFrame, activateArticle, mainRef]);
 
+  // HMR（開発時のホットリロード）後の再マウントで、scroll-spy が別の条文を
+  // アクティブ判定して URL を書き換えてしまうのを防ぐ。
+  // useEffect（ペイント後）で activateArticle を呼び、computeActiveFor の結果を
+  // 上書きして確実にターゲット条文をアクティブにする。
+  useEffect(() => {
+    activateArticle?.(targetArticleId);
+  }, [targetArticleId, activateArticle]);
+
   return (
     <div data-full-law-ready="true">
       {blocks.map((block) =>
