@@ -33,11 +33,14 @@ export interface FormulaFraction {
 }
 
 export function splitFormulaFraction(formula: string): FormulaFraction | null {
+  // ／ は全角のみ（半角化されない）。/ は数字分数で別用途のため除外。
   const slashCount = (formula.match(/／/g) ?? []).length;
   if (slashCount !== 1) return null;
 
-  const eqIndex = formula.indexOf("＝");
-  if (eqIndex < 0) return null;
+  // = は半角・全角両方に対応（displayText は半角化されている）
+  const eqMatch = formula.match(/[=＝]/);
+  if (!eqMatch || eqMatch.index == null) return null;
+  const eqIndex = eqMatch.index;
 
   const leftSide = formula.slice(0, eqIndex);
   const rightSide = formula.slice(eqIndex + 1);
@@ -48,7 +51,7 @@ export function splitFormulaFraction(formula: string): FormulaFraction | null {
   let numerator = rightSide.slice(0, slashIndex);
   let denominator = rightSide.slice(slashIndex + 1);
 
-  // 外側の括弧（…）を外す
+  // 外側の括弧（全角（）、半角()）を外す
   numerator = unwrapParens(numerator);
   denominator = unwrapParens(denominator);
 
@@ -61,31 +64,35 @@ export function splitFormulaFraction(formula: string): FormulaFraction | null {
 }
 
 /**
- * 文字列の先頭と末尾が全角括弧（…）で囲まれている場合、外側の括弧を1組だけ外す。
+ * 文字列の先頭と末尾が括弧（全角（）、半角()）で囲まれている場合、
+ * 外側の括弧を1組だけ外す。
+ * "(250√h)" → "250√h"
  * "（２５０√ｈ）" → "２５０√ｈ"
- * "２０Ａ_ｆ" → "２０Ａ_ｆ"（そのまま）
+ * "20A_f" → "20A_f"（そのまま）
  */
 function unwrapParens(s: string): string {
   const trimmed = s.trim();
-  if (
-    trimmed.length >= 2 &&
-    trimmed.startsWith("（") &&
-    trimmed.endsWith("）")
-  ) {
-    // 括弧のバランスを確認して、最初の （ と最後の ） が対応している場合のみ外す
-    let depth = 0;
-    let balanced = true;
-    for (let i = 0; i < trimmed.length; i++) {
-      if (trimmed[i] === "（") depth++;
-      else if (trimmed[i] === "）") depth--;
-      if (depth === 0 && i < trimmed.length - 1) {
-        balanced = false;
-        break;
-      }
+  const openChars = ["（", "("];
+  const closeChars = ["）", ")"];
+  if (trimmed.length < 2) return trimmed;
+
+  const startsWithOpen = openChars.includes(trimmed[0]!);
+  const endsWithClose = closeChars.includes(trimmed[trimmed.length - 1]!);
+  if (!startsWithOpen || !endsWithClose) return trimmed;
+
+  // 括弧のバランスを確認して、最初の開き括弧と最後の閉じ括弧が対応している場合のみ外す
+  let depth = 0;
+  let balanced = true;
+  for (let i = 0; i < trimmed.length; i++) {
+    if (openChars.includes(trimmed[i]!)) depth++;
+    else if (closeChars.includes(trimmed[i]!)) depth--;
+    if (depth === 0 && i < trimmed.length - 1) {
+      balanced = false;
+      break;
     }
-    if (balanced && depth === 0) {
-      return trimmed.slice(1, -1);
-    }
+  }
+  if (balanced && depth === 0) {
+    return trimmed.slice(1, -1);
   }
   return trimmed;
 }

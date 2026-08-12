@@ -60,6 +60,14 @@ describe("splitFormulaFraction", () => {
     });
   });
 
+  it("半角括弧・半角イコール（displayText半角化後）でも分母の括弧を外す", () => {
+    expect(splitFormulaFraction("A_v=A_f／(250√h)")).toEqual({
+      leftSide: "A_v",
+      numerator: "A_f",
+      denominator: "250√h",
+    });
+  });
+
   it("／ がない式は null（フォールバック）", () => {
     expect(splitFormulaFraction("Ａ＝Ｂ＋Ｃ")).toBeNull();
   });

@@ -103,12 +103,16 @@ export function ScrollActiveArticleProvider({
 
       const triggerY = el.getBoundingClientRect().top + ACTIVATION_OFFSET_PX;
 
-      // 判定帯を越えた最初の条文を二分探索で見つける
+      // 判定帯を越えた最初の条文を二分探索で見つける。
+      // `<=` で比較する：センチネルが triggerY と同じ位置にある場合、
+      // その条文は「判定帯より上（まだ越えていない）」と扱う。
+      // scrollIntoView + scroll-mt-20 でセンチネルが判定帯と同じ位置に来る
+      // ケースで、ターゲット条文自身がアクティブになるようにする。
       let lo = 0;
       let hi = ordered.length;
       while (lo < hi) {
         const mid = (lo + hi) >> 1;
-        if (ordered[mid].el.getBoundingClientRect().top < triggerY) {
+        if (ordered[mid].el.getBoundingClientRect().top <= triggerY) {
           lo = mid + 1;
         } else {
           hi = mid;
